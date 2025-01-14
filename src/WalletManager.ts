@@ -1,122 +1,67 @@
-import type { CreateKey, LocalStorage } from "./types";
-import { bufferFromHexString } from "./utils";
-import { Authentication } from "./Authentication";
+import { Wallet } from "ethers";
+import { convertToEthPk } from "./utils";
+import type { GunKeyPair, AccountData, WalletData, WalletResult } from "./types";
 
-// primary account management key for HD wallet
-// TODO - make these options that can be overridden
-const PATH = "m/44'/60'/0'/0/0";
-const hedgehogEntropyKey = "hedgehog-entropy-key";
-
-// Contains functions to help create and maintain user accounts client side
-// The reason many functions return both buffer and hex strings is because different
-// packages expect different formats. So if a value is used in multiple formats, all
-// the formats are returned by the generation function
 export class WalletManager {
-  static async createWalletObj(
-    password: string,
-    entropyOverride: string | null = null,
-    localStorage: LocalStorage,
-    createKey: CreateKey
-  ) {
-    let self = this;
-    let entropy;
-
-    if (!password) return new Error("Missing property: password");
-
-    const { ivBuffer, ivHex } = Authentication.createIV();
-    const { keyBuffer } = await createKey(password, ivHex);
-    if (!entropyOverride) {
-      entropy = Authentication.generateMnemonicAndEntropy()["entropy"];
-    } else {
-      entropy = entropyOverride;
+  static async createWalletFromGunKeyPair(keyPair: GunKeyPair): Promise<Wallet> {
+    try {
+      const ethPrivateKey = await convertToEthPk(keyPair.priv);
+      return new Wallet(ethPrivateKey);
+    } catch (error) {
+      console.error("Errore nella creazione del wallet:", error);
+      throw error;
     }
-    let walletObj = await Authentication.generateWalletFromEntropy(
-      entropy,
-      PATH
-    );
-    const { cipherTextHex } = Authentication.encrypt(
-      entropy,
-      ivBuffer,
-      keyBuffer
-    );
+  }
 
-    await self.setEntropyInLocalStorage(entropy, localStorage);
+  static async createWalletObj(keyPair: GunKeyPair): Promise<WalletResult | Error> {
+    try {
+      const wallet = await this.createWalletFromGunKeyPair(keyPair);
+      return {
+        walletObj: wallet,
+        entropy: keyPair.priv
+      };
+    } catch (error) {
+      return error as Error;
+    }
+  }
+
+  static async addWallet(accountData: AccountData, walletData: WalletData): Promise<AccountData> {
     return {
-      ivHex: ivHex,
-      cipherTextHex: cipherTextHex,
-      walletObj: walletObj,
-      entropy: entropy,
+      ...accountData,
+      wallets: {
+        ...accountData.wallets,
+        [walletData.address]: walletData
+      }
     };
   }
 
-  static async decryptCipherTextAndRetrieveWallet(
-    password: string,
-    ivHex: string,
-    cipherTextHex: string,
-    createKey: CreateKey
-  ) {
-    const { keyBuffer } = await createKey(password, ivHex);
-    const ivBuffer = bufferFromHexString(ivHex);
-    const decryptedEntrophy = Authentication.decrypt(
-      ivBuffer,
-      keyBuffer,
-      cipherTextHex
-    );
-    const walletObj = await Authentication.generateWalletFromEntropy(
-      decryptedEntrophy,
-      PATH
-    );
+  static async setSelectedWallet(accountData: AccountData, address: string): Promise<boolean> {
+    if (!accountData.wallets[address]) {
+      return false;
+    }
 
-    return { walletObj, entropy: decryptedEntrophy };
+    accountData.selectedWallet = address;
+    return true;
   }
 
-  static async createAuthLookupKey(
-    username: string,
-    password: string,
-    createKey: CreateKey
-  ) {
-    // lowercase username so the lookupKey is consistently generated to search in the database
-    username = username.toLowerCase();
-    // This iv is hardcoded because the auth lookup key should be deterministically
-    // generated given the same username and password
-    const ivHex = "0x4f7242b39969c3ac4c6712524d633ce9";
-    const { keyHex } = await createKey(username + ":::" + password, ivHex);
-    return keyHex;
+  static getSelectedWallet(accountData: AccountData): WalletData | null {
+    if (!accountData.selectedWallet || !accountData.wallets[accountData.selectedWallet]) {
+      return null;
+    }
+
+    return accountData.wallets[accountData.selectedWallet];
   }
 
-  static async getEntropyFromLocalStorage(localStorage: LocalStorage) {
-    let entropy = await localStorage.getItem(hedgehogEntropyKey);
+  static async removeWallet(accountData: AccountData, address: string): Promise<void> {
+    if (!accountData.wallets[address]) {
+      return;
+    }
 
-    // Sometimes the string 'undefined' was being written to localstorage
-    // this is an explicit check for that
-    if (entropy && entropy !== "undefined") {
-      return entropy;
-    } else return null;
-  }
+    const { [address]: _, ...remainingWallets } = accountData.wallets;
+    accountData.wallets = remainingWallets;
 
-  static async getWalletObjFromLocalStorageIfExists(
-    localStorage: LocalStorage
-  ) {
-    let entropy = await this.getEntropyFromLocalStorage(localStorage);
-    if (entropy) {
-      const walletObj = await Authentication.generateWalletFromEntropy(
-        entropy,
-        PATH
-      );
-
-      if (walletObj) return walletObj;
-      else return null;
-    } else return null;
-  }
-
-  static async setEntropyInLocalStorage(
-    entropy: string,
-    localStorage: LocalStorage
-  ) {
-    await localStorage.setItem(hedgehogEntropyKey, entropy);
-  }
-
-  static async deleteEntropyFromLocalStorage(localStorage: LocalStorage) {
-    await localStorage.removeItem(hedgehogEntropyKey);
+    if (accountData.selectedWallet === address) {
+      accountData.selectedWallet = null;
+    }
   }
 }

@@ -1,29 +1,58 @@
-export type LocalStorage = {
-  getItem: (key: string) => Promise<string | null> | string | null;
-  setItem: (key: string, value: string) => Promise<void> | void;
-  removeItem: (key: string) => Promise<void> | void;
-};
+import type { Wallet } from "ethers";
 
-export type CreateKey = (
-  encryptStr: string,
-  ivHex: string
-) => Promise<PrivateKey>;
+export interface GunInstance {
+  user(): any;
+  get(path: string): any;
+  off(): void;
+}
 
-export type PrivateKey = { keyHex: string; keyBuffer: Uint8Array };
+export interface GunKeyPair {
+  pub: string;
+  priv: string;
+  epriv: string;
+  epub: string;
+}
 
-export type GetFn = (params: {
-  lookupKey: string;
-}) =>
-  | Promise<{ iv: string; cipherText: string }>
-  | { iv: string; cipherText: string };
+export interface GunOptions {
+  file?: string;
+  web?: any;
+  s3?: {
+    key: string;
+    secret: string;
+    bucket: string;
+    region?: string;
+    fakes3?: any;
+  };
+  peers?: string[] | Record<string, {}>;
+  radisk?: boolean;
+  localStorage?: boolean;
+  uuid?: () => string;
+  memory?: boolean;
+  axe?: boolean;
+  multicast?: boolean;
+  ws?: boolean;
+  super?: boolean;
+  timeout?: number;
+  [key: string]: any;
+}
 
-export type SetAuthFn = (params: {
-  iv: string;
-  cipherText: string;
-  lookupKey: string;
-}) => any | Promise<any>;
+export interface GunAck {
+  err?: string;
+}
 
-export type SetUserFn = (params: {
-  walletAddress: string;
+export interface AccountData {
   username: string;
-}) => any | Promise<any>;
+  wallets: { [address: string]: WalletData };
+  selectedWallet: string | null;
+}
+
+export interface WalletData {
+  address: string;
+  entropy: string;
+  name: string;
+}
+
+export interface WalletResult {
+  walletObj: Wallet;
+  entropy: string;
+}

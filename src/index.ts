@@ -1,12 +1,5 @@
 export * from "./Hedgehog";
+export * from "./GunHedgehog";
 export * from "./WalletManager";
-export * from "./Authentication";
 export * from "./utils";
-export type {
-  GetFn,
-  SetAuthFn,
-  SetUserFn,
-  LocalStorage,
-  CreateKey,
-  PrivateKey,
-} from "./types";
+export type { GunKeyPair, GunInstance } from "./types";
