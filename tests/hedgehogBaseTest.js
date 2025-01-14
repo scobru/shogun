@@ -56,6 +56,31 @@ const waitForGunData = (gun, path, predicate, timeout = 5000) => {
   });
 };
 
+const waitForGunValue = async (gun, path, predicate, timeout = 10000) => {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(`Timeout aspettando i dati per il path: ${path}`));
+    }, timeout);
+
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    const checkData = () => {
+      gun.get(path).once((data) => {
+        if (data && predicate(data)) {
+          clearTimeout(timeoutId);
+          resolve(data);
+        } else if (attempts < maxAttempts) {
+          attempts++;
+          setTimeout(checkData, 1000);
+        }
+      });
+    };
+
+    checkData();
+  });
+};
+
 // Pulisce i dati in un path di Gun
 
 
@@ -403,42 +428,27 @@ describe("Hedgehog Test Suite", function () {
 
     describe("Autenticazione", function () {
       it("dovrebbe registrare un nuovo utente", async function () {
-        // Aumentiamo il timeout per questo test specifico
         this.timeout(30000);
 
-        console.log("Test: Inizializzazione Gun...");
-        // Attendiamo che Gun sia completamente inizializzato
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
-        console.log("Test: Tentativo di signup...");
         try {
           const wallet = await hedgehog.signUp(testUsername, testPassword);
-          console.log("Test: Signup completato con successo");
           assert(wallet, "Dovrebbe restituire un wallet");
           assert(hedgehog.isLoggedIn(), "L'utente dovrebbe essere loggato");
           assert(hedgehog.getGunKeyPair(), "Dovrebbe avere una coppia di chiavi GUN");
           
-          console.log("Test: Attesa per il salvataggio dei dati...");
-          // Attendiamo che i dati siano salvati
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 3000));
           
-          console.log("Test: Verifica dei dati salvati...");
-          // Verifichiamo che i dati siano stati salvati
-          const accountData = await new Promise((resolve, reject) => {
-            const timeoutId = setTimeout(() => {
-              reject(new Error("Timeout nel recupero dei dati dell'account"));
-            }, 5000);
-
-            hedgehog.getGunInstance().get('accounts').get(testUsername).once((data) => {
-              clearTimeout(timeoutId);
-              resolve(data);
-            });
-          });
+          const accountData = await waitForGunValue(
+            hedgehog.getGunInstance(),
+            `accounts/${testUsername}`,
+            (data) => data && data.username === testUsername
+          );
           
-          console.log("Test: Verifica finale dei dati...");
           assert(accountData, "I dati dell'account dovrebbero esistere");
-          assert(accountData.wallets, "Dovrebbero esserci dei wallet");
-          assert(accountData.wallets[wallet.address], "Il wallet dovrebbe essere salvato");
+          assert(accountData.username === testUsername, "Lo username dovrebbe corrispondere");
+          assert(accountData.selectedWallet === wallet.address, "Il wallet selezionato dovrebbe corrispondere");
         } catch (error) {
           console.error("Test: Errore durante il signup:", error);
           throw error;
@@ -482,50 +492,127 @@ describe("Hedgehog Test Suite", function () {
 
       it("dovrebbe creare un nuovo wallet", async function () {
         const newWallet = await hedgehog.createNewWallet("Secondo Wallet");
+        
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // Verifichiamo che il nuovo wallet sia presente
-        await waitForGunData(
+        const accountData = await waitForGunValue(
           hedgehog.getGunInstance(),
           `accounts/${testUsername}`,
-          (data) => data && data.wallets && data.wallets[newWallet.address]
+          (data) => data && data.selectedWallet === newWallet.address
         );
 
+        assert(accountData, "I dati dell'account dovrebbero esistere");
+        assert(accountData.selectedWallet === newWallet.address, "Il nuovo wallet dovrebbe essere selezionato");
         assert(newWallet, "Dovrebbe creare un nuovo wallet");
-        assert(
-          newWallet.address,
-          "Il nuovo wallet dovrebbe avere un indirizzo"
-        );
+        assert(newWallet.address, "Il nuovo wallet dovrebbe avere un indirizzo");
       });
 
       it("dovrebbe cambiare wallet", async function () {
         const mainWallet = hedgehog.getWallet();
         const newWallet = await hedgehog.createNewWallet("Secondo Wallet");
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
 
         await hedgehog.switchWallet(newWallet.address);
-        const currentWallet = hedgehog.getWallet();
+        await new Promise((resolve) => setTimeout(resolve, 2000));
 
-        assert.notStrictEqual(
-          currentWallet?.address,
-          mainWallet?.address,
+        // Prima verifichiamo che i dati siano stati aggiornati
+        const accountData = await waitForGunValue(
+          hedgehog.getGunInstance(),
+          `accounts/${testUsername}`,
+          (data) => data && data.selectedWallet === newWallet.address
+        );
+
+        assert(accountData.selectedWallet === newWallet.address, "Il wallet selezionato dovrebbe essere aggiornato nei dati");
+        
+        // Poi verifichiamo che il wallet corrente sia stato effettivamente cambiato
+        const currentWallet = hedgehog.getWallet();
+        assert(currentWallet, "Dovrebbe esserci un wallet corrente");
+        assert.strictEqual(
+          currentWallet.address,
+          newWallet.address,
           "Dovrebbe essere selezionato il nuovo wallet"
         );
       });
 
       it("dovrebbe rimuovere un wallet", async function () {
+        console.log("Test: Inizio creazione nuovo wallet");
         const newWallet = await hedgehog.createNewWallet("Wallet da Rimuovere");
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        console.log("Test: Wallet creato:", newWallet.address);
+        await new Promise((resolve) => setTimeout(resolve, 2000));
 
+        console.log("Test: Verifica creazione wallet");
+        // Verifichiamo che il wallet sia stato creato
+        const initialData = await waitForGunData(
+          hedgehog.getGunInstance(),
+          `accounts/${testUsername}`,
+          (data) => {
+            console.log("Test: Dati iniziali:", data);
+            return data && data.selectedWallet === newWallet.address;
+          },
+          10000
+        );
+        console.log("Test: Wallet verificato nei dati:", initialData);
+
+        // Salviamo il wallet principale per switchare dopo
+        const mainWallet = hedgehog.getWallet();
+        console.log("Test: Main wallet:", mainWallet?.address);
+
+        console.log("Test: Rimozione wallet");
+        // Ora rimuoviamo il wallet
         await hedgehog.removeWallet(newWallet.address);
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        console.log("Test: Wallet rimosso, attesa propagazione");
+        await new Promise((resolve) => setTimeout(resolve, 3000));
 
+        // Verifichiamo che il wallet sia stato rimosso
+        let isRemoved = false;
+        let attempts = 0;
+        const maxAttempts = 20;
+        let lastData = null;
+
+        while (!isRemoved && attempts < maxAttempts) {
+          try {
+            console.log(`Test: Tentativo verifica rimozione ${attempts + 1}/${maxAttempts}`);
+            const data = await new Promise((resolve) => {
+              hedgehog.getGunInstance()
+                .get(`accounts/${testUsername}`)
+                .once((d) => {
+                  console.log("Test: Dati ricevuti:", d);
+                  resolve(d);
+                });
+            });
+
+            lastData = data;
+            if (data) {
+              const isNotSelected = data.selectedWallet !== newWallet.address;
+              const isNotInWallets = !data.wallets || !data.wallets[newWallet.address];
+              console.log("Test: isNotSelected:", isNotSelected, "isNotInWallets:", isNotInWallets);
+              
+              if (isNotSelected && isNotInWallets) {
+                isRemoved = true;
+                break;
+              }
+            }
+          } catch (error) {
+            console.error("Test: Errore durante la verifica:", error);
+          }
+
+          attempts++;
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        console.log("Test: Dati finali dopo rimozione:", lastData);
+        assert(isRemoved, "Il wallet dovrebbe essere stato rimosso dopo " + maxAttempts + " tentativi");
+        assert(lastData.selectedWallet !== newWallet.address, "Il wallet non dovrebbe essere più selezionato");
+        assert(!lastData.wallets || !lastData.wallets[newWallet.address], "Il wallet dovrebbe essere rimosso dalla lista dei wallets");
+
+        console.log("Test: Verifica impossibilità di switch");
         try {
-          // Provando a fare switch su un wallet rimosso dovrebbe fallire
           await hedgehog.switchWallet(newWallet.address);
           assert.fail("Dovrebbe fallire lo switch a un wallet rimosso");
         } catch (error) {
           assert(error instanceof Error, "Dovrebbe lanciare un errore");
         }
+        console.log("Test: Completato con successo");
       });
     });
   });

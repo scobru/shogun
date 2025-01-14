@@ -17,17 +17,16 @@ export class GunHedgehog extends Hedgehog {
   private user: any;
   private gunKeyPair: GunKeyPair | null = null;
   private username: string | null = null;
-  private accountData: AccountData | null = null;
+  private accountData: AccountData | undefined = undefined;
 
   constructor() {
     super();
 
     // Configurazione di default per Gun
-    const defaultOptions: Partial<GunOptions> = { radisk: true , web: false};
+    const defaultOptions: Partial<GunOptions> = { };
 
     // Creiamo l'istanza di Gun
     try {
-      console.log("Inizializzazione Gun con opzioni:", defaultOptions);
       this.gun = new Gun(defaultOptions) as unknown as GunInstance;
       this.user = this.gun.user();
 
@@ -35,7 +34,6 @@ export class GunHedgehog extends Hedgehog {
       this.user.recall({ sessionStorage: true });
 
       this.ready = true;
-      console.log("Gun inizializzato con successo");
     } catch (error) {
       console.error("Errore nell'inizializzazione di Gun:", error);
       throw error;
@@ -77,7 +75,6 @@ export class GunHedgehog extends Hedgehog {
       throw new Error('Username o accountData non definiti');
     }
 
-    console.log('Salvataggio dati:', this.accountData);
 
     // Salviamo prima i wallet individualmente
     const walletPromises = Object.entries(this.accountData.wallets).map(([address, wallet]) => {
@@ -139,10 +136,8 @@ export class GunHedgehog extends Hedgehog {
             });
           });
 
-          console.log('Dati salvati con successo');
           resolve();
         } catch (saveError) {
-          console.log(`Tentativo di salvataggio fallito (${attempt}):`, saveError);
           if (attempt < 3) {
             setTimeout(() => attemptSave(attempt + 1), 1000);
           } else {
@@ -155,243 +150,64 @@ export class GunHedgehog extends Hedgehog {
     });
   }
 
-  private async verifyAccountData(
-    username: string,
-    walletAddress: string
-  ): Promise<boolean> {
-    console.log("Verifica dati salvati...");
+ 
 
-    try {
-      // Attendi un po' per assicurarsi che i dati siano propagati
-      await new Promise(resolve => setTimeout(resolve, 1000));
+  async signUp(username: string, password: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.user.create(username, password, async (ack: GunAck) => {
+        if (ack.err) {
+          reject(new Error(ack.err));
+          return;
+        }
 
-      // Verifica nel grafo pubblico
-      const publicData = await new Promise<AccountData>((resolve, reject) => {
-        let attempts = 0;
-        const maxAttempts = 5;
-        
-        const checkData = () => {
-          this.gun.get(`accounts/${username}`).once((data: any) => {
-            console.log("Dati pubblici ricevuti:", data);
-            if (data && data.username && typeof data.selectedWallet !== 'undefined') {
-              resolve(data as AccountData);
-            } else if (attempts < maxAttempts) {
-              attempts++;
-              setTimeout(checkData, 500);
-            } else {
-              reject(new Error("Dati pubblici non validi dopo multipli tentativi"));
-            }
-          });
-        };
-        
-        checkData();
+        try {
+          await this.login(username, password);
+
+          if (!this.gunKeyPair) {
+            throw new Error("Chiavi non trovate dopo il login");
+          }
+
+          // Creiamo il primo wallet
+          const walletResult = await WalletManager.createWalletObj(this.gunKeyPair, this.accountData);
+          if (walletResult instanceof Error) throw walletResult;
+
+          const walletData = {
+            address: walletResult.walletObj.address,
+            entropy: walletResult.entropy,
+            name: "Wallet Principale",
+          };
+
+          this.accountData = await WalletManager.addWallet(
+            this.accountData!,
+            walletData
+          );
+
+          await this.saveAccountData();
+          resolve();
+        } catch (error: any) {
+          console.error("Errore durante il signup:", error);
+          reject(error);
+        }
       });
-
-      // Verifica nel nodo utente
-      const userData = await new Promise<AccountData>((resolve, reject) => {
-        let attempts = 0;
-        const maxAttempts = 5;
-        
-        const checkData = () => {
-          this.user.get("accountData").once((data: any) => {
-            console.log("Dati utente ricevuti:", data);
-            if (data && data.username && typeof data.selectedWallet !== 'undefined') {
-              resolve(data as AccountData);
-            } else if (attempts < maxAttempts) {
-              attempts++;
-              setTimeout(checkData, 500);
-            } else {
-              reject(new Error("Dati utente non validi dopo multipli tentativi"));
-            }
-          });
-        };
-        
-        checkData();
-      });
-
-      // Verifica il wallet specifico nel grafo pubblico
-      const publicWallet = await new Promise<WalletData>((resolve, reject) => {
-        let attempts = 0;
-        const maxAttempts = 5;
-        
-        const checkWallet = () => {
-          this.gun
-            .get(`accounts/${username}/wallets/${walletAddress}`)
-            .once((data: any) => {
-              console.log("Wallet pubblico ricevuto:", data);
-              if (data && data.address && data.entropy && data.name) {
-                resolve(data as WalletData);
-              } else if (attempts < maxAttempts) {
-                attempts++;
-                setTimeout(checkWallet, 500);
-              } else {
-                reject(new Error("Wallet pubblico non valido dopo multipli tentativi"));
-              }
-            });
-        };
-        
-        checkWallet();
-      });
-
-      // Verifica il wallet specifico nel nodo utente
-      const userWallet = await new Promise<WalletData>((resolve, reject) => {
-        let attempts = 0;
-        const maxAttempts = 5;
-        
-        const checkWallet = () => {
-          this.user
-            .get("accountData")
-            .get("wallets")
-            .get(walletAddress)
-            .once((data: any) => {
-              console.log("Wallet utente ricevuto:", data);
-              if (data && data.address && data.entropy && data.name) {
-                resolve(data as WalletData);
-              } else if (attempts < maxAttempts) {
-                attempts++;
-                setTimeout(checkWallet, 500);
-              } else {
-                reject(new Error("Wallet utente non valido dopo multipli tentativi"));
-              }
-            });
-        };
-        
-        checkWallet();
-      });
-
-      // Verifica che il wallet sia selezionato correttamente
-      if (
-        publicData.selectedWallet !== walletAddress ||
-        userData.selectedWallet !== walletAddress
-      ) {
-        console.log("Wallet non selezionato correttamente");
-        return false;
-      }
-
-      // Verifica che i dati del wallet corrispondano
-      if (
-        publicWallet.address !== walletAddress ||
-        userWallet.address !== walletAddress
-      ) {
-        console.log("Indirizzo wallet non corrispondente");
-        return false;
-      }
-
-      if (
-        publicWallet.entropy !== userWallet.entropy ||
-        publicWallet.name !== userWallet.name
-      ) {
-        console.log(
-          "I dati del wallet non corrispondono tra pubblico e utente"
-        );
-        return false;
-      }
-
-      console.log("Verifica completata con successo");
-      return true;
-    } catch (error) {
-      console.error("Errore durante la verifica:", error);
-      return false;
-    }
+    });
   }
 
-  async signUp(username: string, password: string): Promise<Wallet> {
-    // Reset utente
-    if (this.user.is) {
-      console.log("Reset utente esistente...");
-      this.user.leave();
-      this.user = this.gun.user();
+  async createWallet(name: string): Promise<void> {
+    if (!this.username || !this.accountData || !this.gunKeyPair) {
+      throw new Error("Devi fare il login prima di creare un wallet");
     }
 
-    console.log("Creazione nuovo utente...");
-    // Creiamo l'utente e aspettiamo il completamento
-    await new Promise<void>((resolve, reject) => {
-      this.user.create(username, password, (ack: GunAck) => {
-        if (ack.err) {
-          reject(new Error(ack.err));
-          return;
-        }
-        resolve();
-      });
-    });
-
-    console.log("Autenticazione utente...");
-    // Autentichiamo e aspettiamo il callback
-    await new Promise<void>((resolve, reject) => {
-      this.user.auth(username, password, (ack: GunAck) => {
-        if (ack.err) {
-          reject(new Error(ack.err));
-          return;
-        }
-        resolve();
-      });
-    });
-
-    // Attendiamo un attimo che le chiavi siano caricate
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    console.log("Verifica chiavi...");
-    // Verifichiamo le chiavi
-    this.gunKeyPair = this.user._.sea;
-    this.username = username;
-
-    if (!this.gunKeyPair) {
-      throw new Error("Chiavi non trovate");
-    }
-
-    console.log("Creazione wallet...");
-    // Creiamo il wallet
-    const walletResult = await WalletManager.createWalletObj(this.gunKeyPair);
+    const walletResult = await WalletManager.createWalletObj(this.gunKeyPair, this.accountData);
     if (walletResult instanceof Error) throw walletResult;
 
-    // Salviamo i dati
-    this.accountData = {
-      username,
-      wallets: {},
-      selectedWallet: walletResult.walletObj.address,
-    };
-
-    const walletData: WalletData = {
+    const walletData = {
       address: walletResult.walletObj.address,
       entropy: walletResult.entropy,
-      name: "Wallet Principale",
+      name: name,
     };
 
-    console.log("Salvataggio dati account...");
-    this.accountData = await WalletManager.addWallet(
-      this.accountData,
-      walletData
-    );
-
-    // Salviamo i dati e verifichiamo
-    let retries = 3;
-    while (retries > 0) {
-      try {
-        await this.saveAccountData();
-        console.log("Dati salvati, attendo conferma...");
-
-        // Verifichiamo i dati
-        const verified = await this.verifyAccountData(
-          username,
-          walletResult.walletObj.address
-        );
-        if (verified) {
-          console.log("Verifica dati completata con successo");
-          break;
-        }
-
-        throw new Error("Verifica dati fallita");
-      } catch (error) {
-        console.log(`Tentativo di salvataggio fallito (${retries}):`, error);
-        retries--;
-        if (retries === 0) throw error;
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-      }
-    }
-
-    this.wallet = walletResult.walletObj;
-    console.log("Signup completato con successo");
-    return this.wallet;
+    this.accountData = await WalletManager.addWallet(this.accountData, walletData);
+    await this.saveAccountData();
   }
 
   async createNewWallet(name: string = "Nuovo Wallet"): Promise<Wallet> {
@@ -446,8 +262,50 @@ export class GunHedgehog extends Hedgehog {
       throw new Error("Devi fare il login prima di rimuovere un wallet");
     }
 
-    await WalletManager.removeWallet(this.accountData, address);
-    await this.saveAccountData();
+    console.log("Inizio rimozione wallet:", address);
+
+    try {
+      // Rimuoviamo localmente
+      await WalletManager.removeWallet(this.accountData, address);
+      console.log("Wallet rimosso localmente");
+
+      // Salviamo i dati aggiornati
+      await this.saveAccountData();
+      console.log("Dati account salvati");
+
+      // Attendiamo un momento per la propagazione
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Verifichiamo che i dati siano stati aggiornati
+      const accountRef = this.gun.get(`accounts/${this.username}`);
+      let maxRetries = 10;
+      let retryCount = 0;
+      
+      while (retryCount < maxRetries) {
+        const verifyData = await new Promise<any>((resolve) => {
+          accountRef.once((data: any) => {
+            console.log(`Tentativo ${retryCount + 1}/${maxRetries} - Dati verificati:`, JSON.stringify(data));
+            resolve(data);
+          });
+        });
+
+        // Se il wallet non è più presente e non è più selezionato, abbiamo finito
+        if (!verifyData.selectedWallet || verifyData.selectedWallet !== address) {
+          console.log("Rimozione wallet completata con successo");
+          return;
+        }
+
+        retryCount++;
+        if (retryCount < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      throw new Error("Il wallet non è stato rimosso correttamente dopo i tentativi massimi");
+    } catch (error) {
+      console.error("Errore durante la rimozione del wallet:", error);
+      throw error;
+    }
   }
 
   async login(username: string, password: string): Promise<Wallet> {
@@ -538,7 +396,7 @@ export class GunHedgehog extends Hedgehog {
 
   async logout() {
     if (this.username) {
-      this.accountData = null;
+      this.accountData = undefined;
     }
     this.user.leave();
     this.gunKeyPair = null;
