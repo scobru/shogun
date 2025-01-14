@@ -84,14 +84,14 @@ export class GunHedgehog extends Hedgehog {
       return Promise.all([
         // Nel nodo utente
         new Promise<void>((resolve, reject) => {
-          this.user.get('accountData').get('wallets').get(address).put(wallet, (ack: any) => {
+          this.user.get('accountData').get('wallets').get(address).put(wallet, (ack: GunAck) => {
             if (ack.err) reject(new Error(ack.err));
             else resolve();
           });
         }),
         // Nel grafo pubblico
         new Promise<void>((resolve, reject) => {
-          this.gun.get(`accounts/${this.username}/wallets/${address}`).put(wallet, (ack: any) => {
+          this.gun.get(`accounts/${this.username}/wallets/${address}`).put(wallet, (ack: GunAck) => {
             if (ack.err) reject(new Error(ack.err));
             else resolve();
           });
@@ -108,31 +108,51 @@ export class GunHedgehog extends Hedgehog {
       wallets: this.accountData.wallets
     };
 
-    await Promise.all([
-      new Promise<void>((resolve, reject) => {
-        this.user.get('accountData').put(accountDataToSave, (ack: any) => {
-          if (ack.err) {
-            console.error('Errore nel salvataggio dati utente:', ack.err);
-            reject(new Error(ack.err));
-          } else {
-            resolve();
-          }
-        });
-      }),
-      new Promise<void>((resolve, reject) => {
-        this.gun.get(`accounts/${this.username}`).put(accountDataToSave, (ack: any) => {
-          if (ack.err) {
-            console.error('Errore nel salvataggio dati pubblici:', ack.err);
-            reject(new Error(ack.err));
-          } else {
-            resolve();
-          }
-        });
-      })
-    ]);
+    return new Promise((resolve, reject) => {
+      const attemptSave = async (attempt: number) => {
+        try {
+          await Promise.all([
+            // Salva nel nodo utente
+            new Promise<void>((res, rej) => {
+              this.user.get('accountData').put(accountDataToSave, (ack: GunAck) => {
+                if (ack.err) rej(ack.err);
+                else res();
+              });
+            }),
+            // Salva nel grafo pubblico
+            new Promise<void>((res, rej) => {
+              this.gun.get(`accounts/${this.username}`).put(accountDataToSave, (ack: GunAck) => {
+                if (ack.err) rej(ack.err);
+                else res();
+              });
+            })
+          ]);
 
-    console.log('Dati salvati con successo');
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Attendiamo che i dati si propaghino
+          // Attendi 2 secondi per la propagazione dei dati
+          await new Promise(res => setTimeout(res, 2000));
+
+          // Verifica che i dati siano stati salvati correttamente
+          const savedData = await new Promise((res, rej) => {
+            this.gun.get(`accounts/${this.username}`).once((data: any) => {
+              if (!data) rej(new Error('Dati non trovati dopo il salvataggio'));
+              else res(data);
+            });
+          });
+
+          console.log('Dati salvati con successo');
+          resolve();
+        } catch (saveError) {
+          console.log(`Tentativo di salvataggio fallito (${attempt}):`, saveError);
+          if (attempt < 3) {
+            setTimeout(() => attemptSave(attempt + 1), 1000);
+          } else {
+            reject(saveError);
+          }
+        }
+      };
+
+      attemptSave(1);
+    });
   }
 
   private async verifyAccountData(
@@ -142,58 +162,101 @@ export class GunHedgehog extends Hedgehog {
     console.log("Verifica dati salvati...");
 
     try {
+      // Attendi un po' per assicurarsi che i dati siano propagati
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       // Verifica nel grafo pubblico
       const publicData = await new Promise<AccountData>((resolve, reject) => {
-        this.gun.get(`accounts/${username}`).once((data: any) => {
-          console.log("Dati pubblici ricevuti:", data);
-          if (!data || !data.username || !data.selectedWallet) {
-            reject(new Error("Dati pubblici non validi"));
-            return;
-          }
-          resolve(data as AccountData);
-        });
+        let attempts = 0;
+        const maxAttempts = 5;
+        
+        const checkData = () => {
+          this.gun.get(`accounts/${username}`).once((data: any) => {
+            console.log("Dati pubblici ricevuti:", data);
+            if (data && data.username && typeof data.selectedWallet !== 'undefined') {
+              resolve(data as AccountData);
+            } else if (attempts < maxAttempts) {
+              attempts++;
+              setTimeout(checkData, 500);
+            } else {
+              reject(new Error("Dati pubblici non validi dopo multipli tentativi"));
+            }
+          });
+        };
+        
+        checkData();
       });
 
       // Verifica nel nodo utente
       const userData = await new Promise<AccountData>((resolve, reject) => {
-        this.user.get("accountData").once((data: any) => {
-          console.log("Dati utente ricevuti:", data);
-          if (!data || !data.username || !data.selectedWallet) {
-            reject(new Error("Dati utente non validi"));
-            return;
-          }
-          resolve(data as AccountData);
-        });
+        let attempts = 0;
+        const maxAttempts = 5;
+        
+        const checkData = () => {
+          this.user.get("accountData").once((data: any) => {
+            console.log("Dati utente ricevuti:", data);
+            if (data && data.username && typeof data.selectedWallet !== 'undefined') {
+              resolve(data as AccountData);
+            } else if (attempts < maxAttempts) {
+              attempts++;
+              setTimeout(checkData, 500);
+            } else {
+              reject(new Error("Dati utente non validi dopo multipli tentativi"));
+            }
+          });
+        };
+        
+        checkData();
       });
 
       // Verifica il wallet specifico nel grafo pubblico
       const publicWallet = await new Promise<WalletData>((resolve, reject) => {
-        this.gun
-          .get(`accounts/${username}/wallets/${walletAddress}`)
-          .once((data: any) => {
-            console.log("Wallet pubblico ricevuto:", data);
-            if (!data || !data.address || !data.entropy || !data.name) {
-              reject(new Error("Wallet pubblico non valido"));
-              return;
-            }
-            resolve(data as WalletData);
-          });
+        let attempts = 0;
+        const maxAttempts = 5;
+        
+        const checkWallet = () => {
+          this.gun
+            .get(`accounts/${username}/wallets/${walletAddress}`)
+            .once((data: any) => {
+              console.log("Wallet pubblico ricevuto:", data);
+              if (data && data.address && data.entropy && data.name) {
+                resolve(data as WalletData);
+              } else if (attempts < maxAttempts) {
+                attempts++;
+                setTimeout(checkWallet, 500);
+              } else {
+                reject(new Error("Wallet pubblico non valido dopo multipli tentativi"));
+              }
+            });
+        };
+        
+        checkWallet();
       });
 
       // Verifica il wallet specifico nel nodo utente
       const userWallet = await new Promise<WalletData>((resolve, reject) => {
-        this.user
-          .get("accountData")
-          .get("wallets")
-          .get(walletAddress)
-          .once((data: any) => {
-            console.log("Wallet utente ricevuto:", data);
-            if (!data || !data.address || !data.entropy || !data.name) {
-              reject(new Error("Wallet utente non valido"));
-              return;
-            }
-            resolve(data as WalletData);
-          });
+        let attempts = 0;
+        const maxAttempts = 5;
+        
+        const checkWallet = () => {
+          this.user
+            .get("accountData")
+            .get("wallets")
+            .get(walletAddress)
+            .once((data: any) => {
+              console.log("Wallet utente ricevuto:", data);
+              if (data && data.address && data.entropy && data.name) {
+                resolve(data as WalletData);
+              } else if (attempts < maxAttempts) {
+                attempts++;
+                setTimeout(checkWallet, 500);
+              } else {
+                reject(new Error("Wallet utente non valido dopo multipli tentativi"));
+              }
+            });
+        };
+        
+        checkWallet();
       });
 
       // Verifica che il wallet sia selezionato correttamente
