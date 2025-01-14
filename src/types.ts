@@ -56,3 +56,22 @@ export interface WalletResult {
   walletObj: Wallet;
   entropy: string;
 }
+
+export interface AuthData {
+  keyPair: GunKeyPair;
+  passwordHash?: string;
+}
+
+export interface StorageProvider {
+  // Funzioni per l'autenticazione
+  getAuth(username: string): Promise<AuthData | null>;
+  setAuth(username: string, auth: AuthData): Promise<void>;
+  createAuth(username: string, password: string): Promise<AuthData>;
+  
+  // Funzioni per i dati utente
+  getUserData(username: string): Promise<AccountData | null>;
+  setUserData(username: string, data: AccountData): Promise<void>;
+  
+  // Funzione opzionale per la pulizia delle risorse
+  cleanup?(): Promise<void>;
+}
