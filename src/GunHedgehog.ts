@@ -23,7 +23,7 @@ export class GunHedgehog extends Hedgehog {
     super();
 
     // Configurazione di default per Gun
-    const defaultOptions: Partial<GunOptions> = { localStorage: true};
+    const defaultOptions: Partial<GunOptions> = { radisk: true , web: false};
 
     // Creiamo l'istanza di Gun
     try {
@@ -74,50 +74,65 @@ export class GunHedgehog extends Hedgehog {
 
   private async saveAccountData(): Promise<void> {
     if (!this.username || !this.accountData) {
-      throw new Error("Nessun account da salvare");
+      throw new Error('Username o accountData non definiti');
     }
 
     console.log('Salvataggio dati:', this.accountData);
-    
-    return new Promise((resolve, reject) => {
-      const maxRetries = 3;
-      let currentRetry = 0;
-      
-      const attemptSave = async () => {
-        try {
-          currentRetry++;
-          
-          // Salviamo i dati dell'account nel nodo utente
-          await new Promise<void>((res, rej) => {
-            this.user.get('accountData').put(this.accountData, (ack: any) => {
-              if (ack.err) rej(new Error(ack.err));
-              else res();
-            });
-          });
 
-          // Salviamo i dati dell'account nel grafo pubblico
-          await new Promise<void>((res, rej) => {
-            this.gun.get('accounts').get(this.username!).put(this.accountData, (ack: any) => {
-              if (ack.err) rej(new Error(ack.err));
-              else res();
-            });
+    // Salviamo prima i wallet individualmente
+    const walletPromises = Object.entries(this.accountData.wallets).map(([address, wallet]) => {
+      return Promise.all([
+        // Nel nodo utente
+        new Promise<void>((resolve, reject) => {
+          this.user.get('accountData').get('wallets').get(address).put(wallet, (ack: any) => {
+            if (ack.err) reject(new Error(ack.err));
+            else resolve();
           });
-
-          console.log('Dati salvati con successo');
-          resolve();
-        } catch (error) {
-          console.log(`Tentativo di salvataggio ${currentRetry} fallito:`, error);
-          
-          if (currentRetry < maxRetries) {
-            setTimeout(() => attemptSave(), 2000);
-          } else {
-            reject(new Error(`Impossibile salvare i dati dopo ${maxRetries} tentativi`));
-          }
-        }
-      };
-      
-      attemptSave();
+        }),
+        // Nel grafo pubblico
+        new Promise<void>((resolve, reject) => {
+          this.gun.get(`accounts/${this.username}/wallets/${address}`).put(wallet, (ack: any) => {
+            if (ack.err) reject(new Error(ack.err));
+            else resolve();
+          });
+        })
+      ]);
     });
+
+    await Promise.all(walletPromises);
+
+    // Poi salviamo l'account data
+    const accountDataToSave = {
+      username: this.accountData.username,
+      selectedWallet: this.accountData.selectedWallet,
+      wallets: this.accountData.wallets
+    };
+
+    await Promise.all([
+      new Promise<void>((resolve, reject) => {
+        this.user.get('accountData').put(accountDataToSave, (ack: any) => {
+          if (ack.err) {
+            console.error('Errore nel salvataggio dati utente:', ack.err);
+            reject(new Error(ack.err));
+          } else {
+            resolve();
+          }
+        });
+      }),
+      new Promise<void>((resolve, reject) => {
+        this.gun.get(`accounts/${this.username}`).put(accountDataToSave, (ack: any) => {
+          if (ack.err) {
+            console.error('Errore nel salvataggio dati pubblici:', ack.err);
+            reject(new Error(ack.err));
+          } else {
+            resolve();
+          }
+        });
+      })
+    ]);
+
+    console.log('Dati salvati con successo');
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Attendiamo che i dati si propaghino
   }
 
   private async verifyAccountData(
