@@ -20,15 +20,22 @@ export class GunHedgehog extends Hedgehog {
   private accountData: AccountData | undefined = undefined;
   private walletCache: Map<string, Wallet> = new Map();
 
-  constructor() {
+  constructor(options: Partial<GunOptions> = {}) {
     super();
 
     // Configurazione di default per Gun
-    const defaultOptions: Partial<GunOptions> = { };
+    const defaultOptions: Partial<GunOptions> = {
+      localStorage: true,
+      radisk: true,
+      peers: []
+    };
+
+    // Merge delle opzioni
+    const gunOptions = { ...defaultOptions, ...options };
 
     // Creiamo l'istanza di Gun
     try {
-      this.gun = new Gun(defaultOptions) as unknown as GunInstance;
+      this.gun = new Gun(gunOptions) as unknown as GunInstance;
       this.user = this.gun.user();
 
       // Richiamiamo eventuali sessioni precedenti
@@ -51,34 +58,58 @@ export class GunHedgehog extends Hedgehog {
         reject(new Error("Timeout nel caricamento dei dati dell'account"));
       }, 15000);
 
-      const accountRef = this.gun.get(`accounts/${this.username}`);
-      
-      accountRef.on(async (data: any) => {
-        if (!data) return;
+      const accountRef = this.gun.get(`accounts`).get(this.username);
+      let resolved = false;
+
+      const processData = async (data: any) => {
+        if (!data || resolved) return;
 
         try {
+          // Verifica base dei dati
+          if (!data.username || data.username !== this.username) {
+            return;
+          }
+
           // Se wallets è un riferimento, lo seguiamo
           if (data.wallets && typeof data.wallets === 'object' && data.wallets['#']) {
             const walletsRef = accountRef.get('wallets');
             await new Promise<void>((resolveWallets) => {
-              walletsRef.on((wallets: any) => {
-                if (!wallets) return;
-                
-                // Verifica se abbiamo tutti i dati dei wallet
-                const hasAllWalletData = Object.entries(wallets).every(([_, wallet]: [string, any]) => {
-                  return wallet && wallet.address && wallet.entropy;
-                });
+              let attempts = 0;
+              const maxAttempts = 10;
 
-                if (hasAllWalletData) {
-                  this.accountData = {
-                    ...data,
-                    wallets
-                  };
-                  clearTimeout(timeoutId);
-                  resolveWallets();
-                  resolve();
-                }
-              });
+              const checkWallets = () => {
+                walletsRef.once((wallets: any) => {
+                  if (!wallets) {
+                    if (attempts < maxAttempts) {
+                      attempts++;
+                      setTimeout(checkWallets, 500);
+                      return;
+                    }
+                    return;
+                  }
+
+                  // Verifica che tutti i wallet abbiano i dati necessari
+                  const hasAllWalletData = Object.entries(wallets).every(([_, wallet]: [string, any]) => {
+                    return wallet && wallet.address && wallet.entropy;
+                  });
+
+                  if (hasAllWalletData) {
+                    this.accountData = {
+                      ...data,
+                      wallets
+                    };
+                    resolved = true;
+                    clearTimeout(timeoutId);
+                    resolveWallets();
+                    resolve();
+                  } else if (attempts < maxAttempts) {
+                    attempts++;
+                    setTimeout(checkWallets, 500);
+                  }
+                });
+              };
+
+              checkWallets();
             });
           } else if (data.wallets) {
             // I wallet sono inline
@@ -88,15 +119,22 @@ export class GunHedgehog extends Hedgehog {
 
             if (hasAllWalletData) {
               this.accountData = data;
+              resolved = true;
               clearTimeout(timeoutId);
               resolve();
             }
           }
         } catch (error) {
-          clearTimeout(timeoutId);
-          reject(error);
+          if (!resolved) {
+            clearTimeout(timeoutId);
+            reject(error);
+          }
         }
-      });
+      };
+
+      // Sottoscrizione principale per i dati dell'account
+      accountRef.on(processData);
+      accountRef.once(processData);
     });
   }
 
@@ -113,45 +151,50 @@ export class GunHedgehog extends Hedgehog {
     };
 
     return new Promise((resolve, reject) => {
-      const attemptSave = async (attempt: number) => {
-        try {
-          // Salva nel nodo utente
-          await new Promise<void>((res, rej) => {
-            this.user.get('accountData').put(accountDataToSave, (ack: GunAck) => {
-              if (ack.err) rej(new Error(ack.err));
-              else res();
-            });
-          });
+      const timeoutId = setTimeout(() => {
+        reject(new Error('Timeout nel salvataggio dei dati'));
+      }, 15000);
 
-          // Attendi che i dati siano disponibili
-          await new Promise((res, rej) => {
-            let checked = false;
+      const accountRef = this.gun.get(`accounts`).get(this.username);
+      
+      // Salva i dati
+      accountRef.put(accountDataToSave, async (ack: GunAck) => {
+        if (ack.err) {
+          clearTimeout(timeoutId);
+          reject(new Error(ack.err));
+          return;
+        }
+
+        try {
+          // Verifica che i dati siano stati salvati correttamente
+          await new Promise<void>((res, rej) => {
+            let attempts = 0;
+            const maxAttempts = 10;
+            
             const checkData = () => {
-              this.user.get('accountData').once((data: any) => {
+              accountRef.once((data: any) => {
                 if (data && data.username === this.username && data.wallets) {
-                  checked = true;
-                  res(data);
-                } else if (attempt < 3) {
-                  setTimeout(checkData, 1000);
+                  clearTimeout(timeoutId);
+                  res();
+                } else if (attempts < maxAttempts) {
+                  attempts++;
+                  setTimeout(checkData, 500);
                 } else {
+                  clearTimeout(timeoutId);
                   rej(new Error('Dati non salvati correttamente'));
                 }
               });
             };
+            
             checkData();
           });
 
           resolve();
-        } catch (saveError) {
-          if (attempt < 3) {
-            setTimeout(() => attemptSave(attempt + 1), 1000);
-          } else {
-            reject(saveError);
-          }
+        } catch (error) {
+          clearTimeout(timeoutId);
+          reject(error);
         }
-      };
-
-      attemptSave(1);
+      });
     });
   }
 
