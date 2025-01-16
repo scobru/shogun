@@ -83,15 +83,61 @@ const waitForGunData = async (gun, username, expectedData = null, timeout = 5000
 
 // Funzione di utilità per attendere che un wallet sia salvato
 async function waitForWallet(gun, address, username) {
+  console.log(`🔄 Attendo wallet per ${username}, indirizzo: ${address}`);
+  
   return new Promise((resolve, reject) => {
-    const timeoutId = setTimeout(() => reject(new Error('Timeout nel caricamento del wallet')), 10000);
-    
-    gun.get('accounts').get(username).on((data) => {
-      if (data && data.wallets && (address in data.wallets)) {
-        clearTimeout(timeoutId);
-        resolve(data);
+    const timeoutId = setTimeout(() => {
+      console.log(`⚠️ TIMEOUT attendendo wallet per ${address}`);
+      reject(new Error('Timeout nel caricamento del wallet'));
+    }, 10000);
+
+    let lastData = null;
+    let resolved = false;
+
+    const checkWalletData = (accountData, walletsData, walletData) => {
+      console.log(`📥 Verifica dati wallet:`, { accountData, walletsData, walletData });
+      
+      if (!accountData || !walletsData || !walletData) return false;
+      if (!walletData.address || !walletData.entropy) return false;
+      if (walletData.address !== address) return false;
+      
+      return true;
+    };
+
+    const onData = (accountData) => {
+      if (!accountData) return;
+      console.log(`📥 Dati account ricevuti:`, accountData);
+
+      // Se i wallet sono un riferimento
+      if (accountData.wallets && accountData.wallets['#']) {
+        console.log(`👉 Seguendo riferimento wallets:`, accountData.wallets['#']);
+        gun.get('accounts').get(username).get('wallets').once((walletsData) => {
+          console.log(`📥 Dati wallets da riferimento:`, walletsData);
+          
+          if (walletsData && walletsData[address] && walletsData[address]['#']) {
+            console.log(`👉 Seguendo riferimento wallet:`, walletsData[address]['#']);
+            gun.get(walletsData[address]['#']).once((walletData) => {
+              console.log(`📥 Dati wallet da riferimento:`, walletData);
+              if (checkWalletData(accountData, walletsData, walletData) && !resolved) {
+                console.log(`✅ Wallet trovato (da riferimento completo)`);
+                resolved = true;
+                clearTimeout(timeoutId);
+                resolve({
+                  ...accountData,
+                  wallets: {
+                    [address]: walletData
+                  }
+                });
+              }
+            });
+          }
+        });
       }
-    });
+    };
+
+    const ref = gun.get('accounts').get(username);
+    ref.on(onData);
+    ref.once(onData);
   });
 }
 
