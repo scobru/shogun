@@ -124,8 +124,15 @@ class StealthChain {
       console.log("Receiver viewing keypair:", receiverViewingKeyPair);
       console.log("Receiver spending key:", receiverSpendingKey);
 
+      // Crea un keypair temporaneo per il ricevitore
+      const receiverKeyPair: KeyPair = {
+        epub: receiverViewingKeyPair.epriv,
+        epriv: receiverViewingKeyPair.epriv
+      };
+      console.log("Created receiver keypair:", receiverKeyPair);
+
       // Calcola il segreto condiviso usando le chiavi convertite
-      const sharedSecret = await deriveSharedKey(senderEphemeralPublicKey, receiverViewingKeyPair);
+      const sharedSecret = await deriveSharedKey(senderEphemeralPublicKey, receiverKeyPair);
       if (!sharedSecret) throw new Error("Impossibile calcolare il segreto condiviso");
       console.log("Calculated shared secret:", sharedSecret);
 
