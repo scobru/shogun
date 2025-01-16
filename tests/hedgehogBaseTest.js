@@ -85,58 +85,62 @@ const waitForGunData = async (gun, username, expectedData = null, timeout = 5000
 async function waitForWallet(gun, address, username) {
   console.log(`🔄 Attendo wallet per ${username}, indirizzo: ${address}`);
   
+  const getWalletData = (data) => {
+    if (!data || !data.wallets) return null;
+    return new Promise((resolve) => {
+      if (typeof data.wallets === 'object' && !data.wallets['#']) {
+        resolve(data.wallets[address]);
+        return;
+      }
+      
+      gun.get('accounts').get(username).get('wallets').get(address).once((walletData) => {
+        resolve(walletData);
+      });
+    });
+  };
+
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
       console.log(`⚠️ TIMEOUT attendendo wallet per ${address}`);
       reject(new Error('Timeout nel caricamento del wallet'));
     }, 10000);
 
-    let lastData = null;
     let resolved = false;
+    let lastData = null;
+    let unsubscribe = null;
 
-    const checkWalletData = (accountData, walletsData, walletData) => {
-      console.log(`📥 Verifica dati wallet:`, { accountData, walletsData, walletData });
+    const checkData = async (data) => {
+      lastData = data;
+      console.log(`📥 Dati ricevuti per ${username}:`, data);
       
-      if (!accountData || !walletsData || !walletData) return false;
+      if (!data) {
+        console.log(`❌ Dati nulli per ${username}`);
+        return false;
+      }
+
+      const walletData = await getWalletData(data);
+      console.log(`📥 Dati wallet:`, walletData);
+      
+      if (!walletData) return false;
       if (!walletData.address || !walletData.entropy) return false;
       if (walletData.address !== address) return false;
-      
+
       return true;
     };
 
-    const onData = (accountData) => {
-      if (!accountData) return;
-      console.log(`📥 Dati account ricevuti:`, accountData);
-
-      // Se i wallet sono un riferimento
-      if (accountData.wallets && accountData.wallets['#']) {
-        console.log(`👉 Seguendo riferimento wallets:`, accountData.wallets['#']);
-        gun.get('accounts').get(username).get('wallets').once((walletsData) => {
-          console.log(`📥 Dati wallets da riferimento:`, walletsData);
-          
-          if (walletsData && walletsData[address] && walletsData[address]['#']) {
-            console.log(`👉 Seguendo riferimento wallet:`, walletsData[address]['#']);
-            gun.get(walletsData[address]['#']).once((walletData) => {
-              console.log(`📥 Dati wallet da riferimento:`, walletData);
-              if (checkWalletData(accountData, walletsData, walletData) && !resolved) {
-                console.log(`✅ Wallet trovato (da riferimento completo)`);
-                resolved = true;
-                clearTimeout(timeoutId);
-                resolve({
-                  ...accountData,
-                  wallets: {
-                    [address]: walletData
-                  }
-                });
-              }
-            });
-          }
-        });
+    const onData = async (data) => {
+      console.log(`👉 onData chiamato per ${username}`);
+      if (await checkData(data) && !resolved) {
+        console.log(`✅ Dati validi trovati per ${username}`);
+        resolved = true;
+        if (unsubscribe) unsubscribe();
+        clearTimeout(timeoutId);
+        resolve(data);
       }
     };
 
     const ref = gun.get('accounts').get(username);
-    ref.on(onData);
+    unsubscribe = ref.on(onData);
     ref.once(onData);
   });
 }
