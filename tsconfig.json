@@ -4,8 +4,13 @@
     "lib": ["es2021", "dom"],
     "checkJs": false,
     "typeRoots": ["./node_modules/@types"],
-    "noEmit": true,
-    "declaration": true
+    "noEmit": false,
+    "declaration": true,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "allowJs": true,
+    "outDir": "./dist"
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "tests/**/*"]
 }
