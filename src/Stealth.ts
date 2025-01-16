@@ -1,135 +1,157 @@
-const { ethers } = require("ethers");
+import { ethers } from "ethers";
 import * as GunNamespace from "gun";
 require("gun/sea");
 
 const SEA = GunNamespace.SEA;
 
-// Costante per la curva secp256k1 usata da Ethereum
-const CURVE_N = BigInt("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
-
-interface SEAKeyPair {
+interface KeyPair {
   epub: string;
   epriv: string;
-  pub?: string;
 }
 
-interface SharedSecret {
-  epriv: string;
+async function deriveSharedKey(theirPub: string, myKeyPair: KeyPair): Promise<KeyPair> {
+  try {
+    console.log("🔑 Deriving shared key with:");
+    console.log("Their public key:", theirPub);
+    console.log("My keypair:", myKeyPair);
+
+    if (!theirPub) throw new Error("Chiave pubblica del destinatario non valida");
+    if (!myKeyPair || !myKeyPair.epriv || !myKeyPair.epub) {
+      throw new Error("Keypair non valido per la derivazione della chiave condivisa");
+    }
+
+    // Calcola il segreto condiviso usando solo le chiavi pubbliche
+    const theirPubHash = ethers.keccak256(ethers.toUtf8Bytes(theirPub));
+    const myPubHash = ethers.keccak256(ethers.toUtf8Bytes(myKeyPair.epub));
+    
+    console.log("Their public key hash:", theirPubHash);
+    console.log("My public key hash:", myPubHash);
+
+    const sharedKey = ethers.keccak256(
+      ethers.concat([
+        ethers.getBytes(theirPubHash),
+        ethers.getBytes(myPubHash)
+      ])
+    );
+
+    console.log("Derived shared key:", sharedKey);
+
+    return {
+      epub: theirPub,
+      epriv: sharedKey
+    };
+  } catch (error) {
+    console.error("❌ Error deriving shared key:", error);
+    throw error;
+  }
 }
 
-interface Wallet {
-  address: string;
+function deriveStealthPrivateKey(sharedSecretHex: string, receiverSpendingKeyHex: string): string {
+  console.log("🔐 Deriving stealth private key with:");
+  console.log("Shared secret:", sharedSecretHex);
+  console.log("Receiver spending key:", receiverSpendingKeyHex);
+
+  const stealthPrivateKey = ethers.keccak256(
+    ethers.concat([
+      ethers.getBytes(sharedSecretHex),
+      ethers.getBytes(receiverSpendingKeyHex),
+    ])
+  );
+
+  console.log("Derived stealth private key:", stealthPrivateKey);
+  return stealthPrivateKey;
 }
 
 class StealthChain {
-  constructor(private spendingKey: string) {}
+  constructor() {}
 
-  private async base64ToHex(base64: string): Promise<string> {
+  async generateStealthAddress(
+    receiverViewingKey: string,
+    receiverSpendingKey: string
+  ): Promise<{ stealthAddress: string; ephemeralPublicKey: string }> {
     try {
-      // Rimuovi eventuali parti dopo il punto (formato Gun)
-      const cleanBase64 = base64.split('.')[0];
-      if (!cleanBase64) {
-        throw new Error("Base64 non valido");
-      }
+      console.log("📤 Generating stealth address for:");
+      console.log("Receiver viewing key:", receiverViewingKey);
+      console.log("Receiver spending key:", receiverSpendingKey);
 
-      // Aggiungi padding se necessario
-      const padding = '='.repeat((4 - cleanBase64.length % 4) % 4);
-      const paddedBase64 = cleanBase64 + padding;
-      
-      // Converti da base64 a buffer
-      const buffer = Buffer.from(paddedBase64, 'base64');
-      
-      // Converti in hex e assicurati che sia lungo 64 caratteri
-      const hex = buffer.toString('hex').padStart(64, '0');
-      return '0x' + hex;
-    } catch (error) {
-      console.error("Errore nella conversione base64 a hex:", error);
-      throw error;
-    }
-  }
-
-  private deriveStealthPrivateKey(sharedSecretHex: string, spendingKeyHex: string): string {
-    const sharedSecretBigInt = BigInt(sharedSecretHex);
-    const spendingKeyBigInt = BigInt(spendingKeyHex);
-    const stealthPrivateKeyBigInt = (sharedSecretBigInt + spendingKeyBigInt) % CURVE_N;
-    return '0x' + stealthPrivateKeyBigInt.toString(16).padStart(64, '0');
-  }
-
-  async generateStealthAddress(receiverViewingKey: string, receiverSpendingKey: string): Promise<{ stealthAddress: string, ephemeralPublicKey: string }> {
-    try {
-      // Generiamo una nuova coppia di chiavi effimere ogni volta
+      // Genera una coppia di chiavi effimere
       const ephemeralKeyPair = await SEA.pair();
+      console.log("Generated ephemeral keypair:", ephemeralKeyPair);
       
-      // Calcoliamo il segreto condiviso usando la chiave effimera privata e la chiave pubblica di visualizzazione del ricevente
-      const sharedSecret = await SEA.secret(ephemeralKeyPair.epriv, { epriv: receiverViewingKey, epub: ephemeralKeyPair.epub }) as unknown as SharedSecret;
-      if (!sharedSecret || !sharedSecret.epriv) {
-        throw new Error("Impossibile calcolare il segreto condiviso");
-      }
+      // Crea un keypair temporaneo per il ricevitore
+      const receiverKeyPair: KeyPair = {
+        epub: receiverViewingKey,
+        epriv: receiverViewingKey
+      };
+      console.log("Created receiver keypair:", receiverKeyPair);
 
-      // Convertiamo le chiavi nel formato corretto
-      const sharedSecretHex = await this.base64ToHex(sharedSecret.epriv);
-      const receiverSpendingKeyHex = await this.base64ToHex(receiverSpendingKey);
+      // Calcola il segreto condiviso usando le chiavi convertite
+      const sharedSecret = await deriveSharedKey(ephemeralKeyPair.epub, receiverKeyPair);
+      if (!sharedSecret) throw new Error("Impossibile calcolare il segreto condiviso");
+      console.log("Calculated shared secret:", sharedSecret);
 
-      // Deriviamo la chiave privata stealth
-      const stealthPrivateKey = this.deriveStealthPrivateKey(sharedSecretHex, receiverSpendingKeyHex);
-      
-      // Creiamo il wallet dalla chiave privata stealth
-      const wallet = new ethers.Wallet(stealthPrivateKey);
+      // Deriva la chiave privata stealth
+      const stealthPrivateKey = deriveStealthPrivateKey(sharedSecret.epriv, receiverSpendingKey);
+      const stealthWallet = new ethers.Wallet(stealthPrivateKey);
+      console.log("Generated stealth wallet:", {
+        address: stealthWallet.address,
+        privateKey: stealthPrivateKey
+      });
 
       return {
-        stealthAddress: wallet.address,
+        stealthAddress: stealthWallet.address,
         ephemeralPublicKey: ephemeralKeyPair.epub
       };
     } catch (error) {
-      console.error("Errore nella generazione dell'indirizzo stealth:", error);
-      throw error;
-    }
-  }
-
-  async computeStealthPrivateKey(
-    receiverViewingPrivateKey: string,
-    senderEphemeralPublicKey: string
-  ): Promise<string> {
-    try {
-      // Calcoliamo il segreto condiviso usando la chiave privata di visualizzazione del ricevente e la chiave pubblica effimera del mittente
-      const sharedSecret = await SEA.secret(senderEphemeralPublicKey, { epriv: receiverViewingPrivateKey, epub: senderEphemeralPublicKey }) as unknown as SharedSecret;
-      if (!sharedSecret || !sharedSecret.epriv) {
-        throw new Error("Impossibile calcolare il segreto condiviso");
+      console.error("❌ Error generating stealth address:", error);
+      if (error instanceof Error) {
+        throw new Error("Impossibile generare l'indirizzo stealth: " + error.message);
       }
-
-      // Convertiamo le chiavi nel formato corretto
-      const sharedSecretHex = await this.base64ToHex(sharedSecret.epriv);
-      const spendingKeyHex = await this.base64ToHex(this.spendingKey);
-
-      // Deriviamo la chiave privata stealth
-      return this.deriveStealthPrivateKey(sharedSecretHex, spendingKeyHex);
-    } catch (error) {
-      console.error("Errore nel calcolo della chiave privata stealth:", error);
-      throw error;
+      throw new Error("Impossibile generare l'indirizzo stealth: errore sconosciuto");
     }
   }
 
   async openStealthAddress(
     stealthAddress: string,
     senderEphemeralPublicKey: string,
-    receiverViewingKeyPair: SEAKeyPair
-  ): Promise<Wallet> {
+    receiverViewingKeyPair: KeyPair,
+    receiverSpendingKey: string
+  ): Promise<ethers.Wallet> {
     try {
-      const privateKey = await this.computeStealthPrivateKey(
-        receiverViewingKeyPair.epriv,
-        senderEphemeralPublicKey
-      );
-      
-      const wallet = new ethers.Wallet(privateKey);
-      
-      if (wallet.address.toLowerCase() !== stealthAddress.toLowerCase()) {
+      console.log("📥 Opening stealth address:");
+      console.log("Stealth address:", stealthAddress);
+      console.log("Sender ephemeral public key:", senderEphemeralPublicKey);
+      console.log("Receiver viewing keypair:", receiverViewingKeyPair);
+      console.log("Receiver spending key:", receiverSpendingKey);
+
+      // Calcola il segreto condiviso usando le chiavi convertite
+      const sharedSecret = await deriveSharedKey(senderEphemeralPublicKey, receiverViewingKeyPair);
+      if (!sharedSecret) throw new Error("Impossibile calcolare il segreto condiviso");
+      console.log("Calculated shared secret:", sharedSecret);
+
+      // Deriva la chiave privata stealth
+      const stealthPrivateKey = deriveStealthPrivateKey(sharedSecret.epriv, receiverSpendingKey);
+      const derivedWallet = new ethers.Wallet(stealthPrivateKey);
+      console.log("Derived stealth wallet:", {
+        address: derivedWallet.address,
+        privateKey: stealthPrivateKey
+      });
+
+      // Verifica che l'indirizzo derivato corrisponda
+      if (derivedWallet.address.toLowerCase() !== stealthAddress.toLowerCase()) {
+        console.error("❌ Address mismatch:");
+        console.log("Expected:", stealthAddress.toLowerCase());
+        console.log("Got:", derivedWallet.address.toLowerCase());
         throw new Error("L'indirizzo stealth derivato non corrisponde all'indirizzo fornito");
       }
-      
-      return wallet;
+
+      return derivedWallet;
     } catch (error) {
-      console.error("Errore nell'apertura dell'indirizzo stealth:", error);
-      throw error;
+      console.error("❌ Error opening stealth address:", error);
+      if (error instanceof Error) {
+        throw new Error("Impossibile aprire l'indirizzo stealth: " + error.message);
+      }
+      throw new Error("Impossibile aprire l'indirizzo stealth: errore sconosciuto");
     }
   }
 }

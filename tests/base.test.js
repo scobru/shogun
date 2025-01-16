@@ -1,4 +1,4 @@
-const { describe, it, beforeEach, afterEach } = require("mocha");
+const { describe, it, before, beforeEach, afterEach } = require("mocha");
 const assert = require("assert");
 const SEA = require("gun/sea");
 const Gun = require("gun");
@@ -92,8 +92,12 @@ describe("WalletManager e StealthChain Test Suite", function () {
   let stealthChain;
   let receiverSpendingPrivateKey;
 
-  beforeEach(async function () {
+  // Inizializza WalletManager una sola volta per tutti i test
+  before(function () {
     walletManager = new WalletManager();
+  });
+
+  beforeEach(async function () {
     const wallet = ethers.Wallet.createRandom();
     receiverSpendingPrivateKey = wallet.privateKey;
     stealthChain = new StealthChain(receiverSpendingPrivateKey);
@@ -107,6 +111,9 @@ describe("WalletManager e StealthChain Test Suite", function () {
       length: 0,
       key: () => null
     };
+
+    // Logout per assicurarsi che ogni test parta da uno stato pulito
+    walletManager.logout();
   });
 
   describe("WalletManager", function () {

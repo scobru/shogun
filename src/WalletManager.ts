@@ -20,9 +20,12 @@ export class WalletManager {
   private user: any;
 
   constructor() {
-    // Inizializza Gun con le opzioni corrette
-    this.gun = Gun({
-      localStorage: true,
+    // Inizializza Gun con le opzioni corrette per i test
+    this.gun = new Gun({
+      peers: ['https://gun-relay.scobrudot.dev/gun'],
+      localStorage: false,
+      radisk: false,
+      store: false
     });
     this.user = this.gun.user();
   }
@@ -118,59 +121,37 @@ export class WalletManager {
   }
 
   /**
-   * Salva il wallet in localStorage (in formato JSON).
-   * I wallet vengono salvati come array per supportare più wallet per utente.
-   */
-  public async saveWalletLocally(wallet: Wallet, alias: string): Promise<void> {
-    try {
-      // Recupera la lista esistente o crea un nuovo array
-      const existingData = localStorage.getItem(`wallets_${alias}`);
-      const wallets: Wallet[] = existingData ? JSON.parse(existingData) : [];
-
-      // Aggiungi il nuovo wallet
-      wallets.push(wallet);
-
-      // Salva la lista aggiornata
-      localStorage.setItem(`wallets_${alias}`, JSON.stringify(wallets));
-    } catch (error) {
-      console.error(
-        "Errore nel salvataggio del wallet in localStorage:",
-        error
-      );
-    }
-  }
-
-  /**
-   * Salva il wallet su GunDB all'interno di `wallets/alias`.
-   * I wallet vengono salvati come array per supportare più wallet per utente.
+   * Salva il wallet su GunDB.
    */
   public async saveWalletToGun(wallet: Wallet, alias: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        // Recupera la lista esistente o crea un nuovo array
-        this.gun.get(`wallets/${alias}`).once(async (data: any) => {
-          const existingWallets = data
-            ? Array.isArray(data)
-              ? data
-              : [data]
-            : [];
-
-          // Aggiungi il nuovo wallet
-          existingWallets.push(wallet);
-
-          // Salva la lista aggiornata
-          this.gun.get(`wallets/${alias}`).put(existingWallets, (ack: any) => {
-            if (ack.err) {
-              reject(new Error(ack.err));
-              return;
-            }
-            resolve();
-          });
+        // Salva il wallet usando un percorso più semplice
+        this.gun.get('wallets').get(alias).set({
+          publicKey: wallet.publicKey,
+          entropy: wallet.entropy,
+          alias: alias,
+          timestamp: Date.now()
+        }, (ack: any) => {
+          if (ack.err) {
+            console.error("Errore nel salvataggio:", ack.err);
+            reject(new Error(ack.err));
+            return;
+          }
+          resolve();
         });
       } catch (error) {
+        console.error("Errore nel salvataggio:", error);
         reject(error);
       }
     });
+  }
+
+  /**
+   * Salva il wallet. Usa solo Gun, non più localStorage.
+   */
+  public async saveWalletLocally(wallet: Wallet, alias: string): Promise<void> {
+    return this.saveWalletToGun(wallet, alias);
   }
 
   /**
@@ -224,26 +205,23 @@ export class WalletManager {
   }
 
   /**
-   * Recupera tutti i wallet di un utente.
-   * Prima prova da localStorage, se non trova nulla cerca su GunDB.
+   * Recupera tutti i wallet di un utente da Gun.
    */
   public async retrieveWallets(alias: string): Promise<Wallet[]> {
     return new Promise<Wallet[]>((resolve) => {
-      try {
-        this.gun.get(`wallets/${alias}`).once((data: any) => {
-          if (!data) {
-            resolve([]);
-            return;
-          }
-
-          // Converti in array se è un singolo wallet
-          const wallets = Array.isArray(data) ? data : [data];
-          resolve(wallets.map((w: any) => new Wallet(w.publicKey, w.entropy)));
-        });
-      } catch (error) {
-        console.error("Errore nel recupero dei wallet:", error);
-        resolve([]);
-      }
+      const wallets: Wallet[] = [];
+      
+      this.gun.get('wallets').get(alias).map().once((data: any) => {
+        if (!data || !data.publicKey) return;
+        try {
+          wallets.push(new Wallet(data.publicKey, data.entropy));
+        } catch (error) {
+          console.error("Errore nel parsing del wallet:", error);
+        }
+      });
+      
+      // Risolvi dopo un breve timeout per dare tempo a Gun di recuperare i dati
+      setTimeout(() => resolve(wallets), 500);
     });
   }
 
