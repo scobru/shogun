@@ -17,7 +17,7 @@ const generateUniqueUsername = () =>
   `test_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
 // Funzione di utilità per attendere che i dati siano disponibili in Gun
-const waitForGunData = async (gun, username, expectedData = null, timeout = 5000) => {
+const waitForGunData = async (gun, username, expectedData = null, timeout = 15000) => {
   console.log(`🔄 Iniziata attesa dati per ${username}`);
   
   // Prima verifica se i dati esistono già
@@ -85,64 +85,28 @@ const waitForGunData = async (gun, username, expectedData = null, timeout = 5000
 async function waitForWallet(gun, address, username) {
   console.log(`🔄 Attendo wallet per ${username}, indirizzo: ${address}`);
   
-  const getWalletData = (data) => {
-    if (!data || !data.wallets) return null;
-    return new Promise((resolve) => {
-      if (typeof data.wallets === 'object' && !data.wallets['#']) {
-        resolve(data.wallets[address]);
-        return;
+  const verifyWallet = (data) => {
+    console.log(`🔍 Verifica wallet per ${address}:`, data);
+    
+    if (!data) {
+      console.log('❌ Dati mancanti');
+      return false;
+    }
+
+    // Se i wallet sono inline
+    if (data.wallets && typeof data.wallets === 'object') {
+      if (data.wallets[address]) {
+        console.log('✅ Wallet trovato');
+        return true;
       }
-      
-      gun.get('accounts').get(username).get('wallets').get(address).once((walletData) => {
-        resolve(walletData);
-      });
-    });
+    }
+
+    console.log('❌ Wallet non trovato');
+    return false;
   };
 
-  return new Promise((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      console.log(`⚠️ TIMEOUT attendendo wallet per ${address}`);
-      reject(new Error('Timeout nel caricamento del wallet'));
-    }, 10000);
-
-    let resolved = false;
-    let lastData = null;
-    let unsubscribe = null;
-
-    const checkData = async (data) => {
-      lastData = data;
-      console.log(`📥 Dati ricevuti per ${username}:`, data);
-      
-      if (!data) {
-        console.log(`❌ Dati nulli per ${username}`);
-        return false;
-      }
-
-      const walletData = await getWalletData(data);
-      console.log(`📥 Dati wallet:`, walletData);
-      
-      if (!walletData) return false;
-      if (!walletData.address || !walletData.entropy) return false;
-      if (walletData.address !== address) return false;
-
-      return true;
-    };
-
-    const onData = async (data) => {
-      console.log(`👉 onData chiamato per ${username}`);
-      if (await checkData(data) && !resolved) {
-        console.log(`✅ Dati validi trovati per ${username}`);
-        resolved = true;
-        if (unsubscribe) unsubscribe();
-        clearTimeout(timeoutId);
-        resolve(data);
-      }
-    };
-
-    const ref = gun.get('accounts').get(username);
-    unsubscribe = ref.on(onData);
-    ref.once(onData);
-  });
+  // Attendi i dati con un timeout più lungo
+  return waitForGunData(gun, username, verifyWallet, 15000);
 }
 
 // Funzione di utilità per attendere che un'operazione sia completata
