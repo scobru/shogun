@@ -11,6 +11,7 @@ import type {
 import type { Wallet } from "ethers";
 import { Hedgehog } from "./Hedgehog";
 import { WalletManager } from "./WalletManager";
+import SEA from "gun/sea";
 
 let d = true; // debug
 
@@ -35,14 +36,9 @@ export class GunHedgehog extends Hedgehog {
       this.gun = new Gun(gunOptions) as unknown as GunInstance;
       this.user = this.gun.user();
 
-      // Disabilitiamo il recall per i test
-      const isTestMode = !gunOptions.file && gunOptions.memory === true;
-      if (isTestMode) {
-        this.user.leave();
-      } else {
-        // Richiamiamo eventuali sessioni precedenti solo se non siamo in modalità test
-        this.user.recall({ sessionStorage: true });
-      }
+      
+      this.user.recall({ sessionStorage: true });
+    
 
       this.ready = true;
     } catch (error) {
@@ -61,36 +57,102 @@ export class GunHedgehog extends Hedgehog {
     return new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         reject(new Error("Timeout nel caricamento dei dati dell'account"));
-      }, 15000);
+      }, 30000);
 
       const accountRef = this.gun.get('accounts').get(this.username);
+      let hasResolved = false;
 
-      const processData = (data: any) => {
-        if (!data || !data.username || data.username !== this.username) {
+      const processData = async (data: any) => {
+        if (!data) {
+          console.log("Nessun dato ricevuto");
           return;
         }
 
-        // Se abbiamo i dati, li usiamo direttamente
-        if (data.wallets && Object.keys(data.wallets).length > 0) {
-          this.accountData = {
+        console.log("Account data ricevuto:", data);
+
+        if (data.username !== this.username) {
+          console.log("Username non corrispondente");
+          return;
+        }
+
+        // Se i dati contengono un riferimento ai wallet, seguilo
+        if (data.wallets && data.wallets['#']) {
+          const walletsRef = this.gun.get(data.wallets['#']);
+          return new Promise<void>((resolveWallets) => {
+            walletsRef.once(async (walletsData: any) => {
+              if (!walletsData) {
+                console.log("Nessun dato wallet trovato");
+                return;
+              }
+
+              // Crea una copia profonda dei dati
+              const accountData = {
+                username: data.username,
+                selectedWallet: data.selectedWallet,
+                wallets: {} as { [key: string]: WalletData }
+              };
+
+              // Carica i dati di ogni wallet
+              const walletPromises = Object.entries(walletsData)
+                .filter(([key]) => key !== '_')
+                .map(async ([address, walletRef]: [string, any]) => {
+                  if (!walletRef['#']) return;
+                  
+                  return new Promise<void>((resolveWallet) => {
+                    this.gun.get(walletRef['#']).once((walletData: any) => {
+                      if (walletData && walletData.address && walletData.entropy) {
+                        accountData.wallets[address] = walletData;
+                      }
+                      resolveWallet();
+                    });
+                  });
+                });
+
+              await Promise.all(walletPromises);
+
+              if (Object.keys(accountData.wallets).length > 0) {
+                this.accountData = accountData;
+                if (!hasResolved) {
+                  hasResolved = true;
+                  clearTimeout(timeoutId);
+                  resolve();
+                }
+              }
+            });
+          });
+        }
+
+        // Se i wallet sono inline
+        if (data.wallets && typeof data.wallets === 'object') {
+          const accountData = JSON.parse(JSON.stringify({
             username: data.username,
             selectedWallet: data.selectedWallet,
             wallets: data.wallets
-          };
+          }));
+
+          if (Object.keys(accountData.wallets).length > 0) {
+            this.accountData = accountData;
+            if (!hasResolved) {
+              hasResolved = true;
+              clearTimeout(timeoutId);
+              resolve();
+            }
+            return;
+          }
+        }
+
+        // Se abbiamo dati in memoria, li manteniamo
+        if (this.accountData?.wallets && Object.keys(this.accountData.wallets).length > 0) {
+          console.log("Usando dati dalla memoria");
+          if (!hasResolved) {
+            hasResolved = true;
             clearTimeout(timeoutId);
             resolve();
-            return;
           }
+          return;
+        }
 
-        // Se non abbiamo dati ma abbiamo accountData in memoria, lo manteniamo
-        if (this.accountData?.wallets && Object.keys(this.accountData.wallets).length > 0) {
-          clearTimeout(timeoutId);
-          resolve();
-            return;
-          }
-
-        // Se non abbiamo né dati né memoria, è un errore
-        reject(new Error("Nessun dato wallet trovato"));
+        console.log("Nessun wallet trovato");
       };
 
       accountRef.on(processData);
@@ -98,30 +160,162 @@ export class GunHedgehog extends Hedgehog {
     });
   }
 
-  private async saveAccountData(): Promise<void> {
+  private async saveAccountData(ack?: GunAck): Promise<void> {
     if (!this.username || !this.accountData) {
-      throw new Error('Username o accountData non definiti');
+      throw new Error("Dati account non disponibili");
     }
 
-    if (d) console.log("Salvataggio dati account per:", this.username, this.accountData);
+    console.log("Account data prima del salvataggio:", this.accountData);
 
-    const accountRef = this.gun.get('accounts').get(this.username);
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error("Timeout nel salvataggio dei dati dell'account"));
+      }, 30000);
 
-    // Invece di salvare i wallet separatamente, li salviamo come parte dell'account
-      const accountData = {
-      username: this.accountData.username,
-      selectedWallet: this.accountData.selectedWallet,
-      wallets: this.accountData.wallets
-    };
+      // Prima salviamo ogni wallet individualmente
+      const walletsRef = this.gun.get('accounts').get(this.username).get('wallets');
+      const walletPromises = Object.entries(this.accountData!.wallets).map(([address, walletData]) => {
+        return new Promise<void>((resolveWallet, rejectWallet) => {
+          const walletRef = walletsRef.get(address);
+          const retryAttempts = 3;
+          let currentAttempt = 0;
 
-    return new Promise<void>((resolve, reject) => {
-      accountRef.put(accountData, (ack: GunAck) => {
-        if (ack.err) {
-          reject(new Error(`Errore nel salvare i dati account: ${ack.err}`));
-        } else {
-          resolve();
-        }
+          const attemptSave = () => {
+            currentAttempt++;
+            walletRef.put(walletData, (ack: any) => {
+              if (ack.err) {
+                if (currentAttempt < retryAttempts) {
+                  console.log(`Tentativo ${currentAttempt} fallito per ${address}, riprovo...`);
+                  setTimeout(attemptSave, 1000);
+                } else {
+                  rejectWallet(new Error(`Errore nel salvare il wallet ${address} dopo ${retryAttempts} tentativi: ${ack.err}`));
+                }
+                return;
+              }
+
+              // Verifica che il wallet sia stato salvato correttamente
+              let verifyAttempts = 0;
+              const verifyData = () => {
+                verifyAttempts++;
+                walletRef.once((savedData: any) => {
+                  if (!savedData || !savedData.address || !savedData.entropy) {
+                    if (verifyAttempts < retryAttempts) {
+                      console.log(`Verifica ${verifyAttempts} fallita per ${address}, riprovo...`);
+                      setTimeout(verifyData, 1000);
+                    } else {
+                      rejectWallet(new Error(`Dati wallet non salvati correttamente per ${address} dopo ${retryAttempts} verifiche`));
+                    }
+                    return;
+                  }
+                  resolveWallet();
+                });
+              };
+              verifyData();
+            });
+          };
+          attemptSave();
+        });
       });
+
+      // Attendiamo che tutti i wallet siano salvati
+      Promise.all(walletPromises)
+        .then(() => {
+          // Verifica che tutti i wallet siano stati salvati
+          return new Promise<void>((resolveVerify, rejectVerify) => {
+            let verifyAttempts = 0;
+            const maxVerifyAttempts = 3;
+
+            const verifyWallets = () => {
+              verifyAttempts++;
+              walletsRef.once((walletsData: any) => {
+                if (!walletsData) {
+                  if (verifyAttempts < maxVerifyAttempts) {
+                    console.log(`Verifica wallet ${verifyAttempts} fallita, riprovo...`);
+                    setTimeout(verifyWallets, 1000);
+                    return;
+                  }
+                  rejectVerify(new Error("Nessun dato wallet trovato dopo il salvataggio"));
+                  return;
+                }
+
+                const savedAddresses = Object.keys(walletsData).filter(key => key !== '_');
+                const expectedAddresses = Object.keys(this.accountData!.wallets);
+
+                if (savedAddresses.length !== expectedAddresses.length) {
+                  if (verifyAttempts < maxVerifyAttempts) {
+                    console.log(`Verifica numero wallet ${verifyAttempts} fallita, riprovo...`);
+                    setTimeout(verifyWallets, 1000);
+                    return;
+                  }
+                  rejectVerify(new Error(`Numero di wallet salvati non corretto: ${savedAddresses.length} vs ${expectedAddresses.length}`));
+                  return;
+                }
+
+                resolveVerify();
+              });
+            };
+            verifyWallets();
+          });
+        })
+        .then(() => {
+          // Poi salviamo i dati dell'account con i riferimenti ai wallet
+          const accountData = {
+            username: this.accountData!.username,
+            selectedWallet: this.accountData!.selectedWallet,
+            wallets: walletsRef
+          };
+
+          let saveAttempts = 0;
+          const maxSaveAttempts = 3;
+
+          const saveAccount = () => {
+            saveAttempts++;
+            this.gun.get('accounts')
+              .get(this.username)
+              .put(accountData, (ack: any) => {
+                if (ack.err) {
+                  if (saveAttempts < maxSaveAttempts) {
+                    console.log(`Salvataggio account ${saveAttempts} fallito, riprovo...`);
+                    setTimeout(saveAccount, 1000);
+                    return;
+                  }
+                  clearTimeout(timeoutId);
+                  reject(new Error(`Errore nel salvare i dati account dopo ${maxSaveAttempts} tentativi: ${ack.err}`));
+                  return;
+                }
+
+                // Verifica finale che i dati siano stati salvati
+                let verifyAttempts = 0;
+                const verifyAccount = () => {
+                  verifyAttempts++;
+                  this.gun.get('accounts')
+                    .get(this.username)
+                    .once((savedData: any) => {
+                      if (!savedData || !savedData.username || !savedData.wallets) {
+                        if (verifyAttempts < maxSaveAttempts) {
+                          console.log(`Verifica account ${verifyAttempts} fallita, riprovo...`);
+                          setTimeout(verifyAccount, 1000);
+                          return;
+                        }
+                        clearTimeout(timeoutId);
+                        reject(new Error("Dati account non salvati correttamente"));
+                        return;
+                      }
+
+                      console.log("Salvataggio dati account completato per:", this.username, this.accountData);
+                      clearTimeout(timeoutId);
+                      resolve();
+                    });
+                };
+                verifyAccount();
+              });
+          };
+          saveAccount();
+        })
+        .catch(error => {
+          clearTimeout(timeoutId);
+          reject(error);
+        });
     });
   }
 
@@ -136,8 +330,6 @@ export class GunHedgehog extends Hedgehog {
           return;
         }
 
-        if (d) console.log("signUp", ack);
-
         try {
           // Effettua il login e attendi che sia completato
           await new Promise<void>((res, rej) => {
@@ -147,31 +339,47 @@ export class GunHedgehog extends Hedgehog {
             });
           });
 
-          // Attendi che le chiavi siano disponibili
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Aumentato il timeout per assicurarsi che le chiavi siano disponibili
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          // Verifica che le chiavi siano effettivamente disponibili
+          let attempts = 0;
+          while (!this.user._.sea && attempts < 10) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            attempts++;
+          }
 
           // Imposta i dati dell'utente
           this.username = username;
           this.gunKeyPair = await this.user._.sea;
 
-          if (d) console.log("signUp", this.gunKeyPair);
-
           if (!this.gunKeyPair) {
             throw new Error("Chiavi non trovate dopo il login");
           }
+
+          // generate 2 sea pairs
+          const seaPair1 = await SEA.pair();
+          const seaPair2 = await SEA.pair();
+
+          const stealthKeysObj = {
+            viewingPair: seaPair1,
+            spendingPair: seaPair2
+          };
+
+          // encrypt the stealth keys with the gun key pair
+          const encryptedStealthKeys = await SEA.encrypt(stealthKeysObj, this.gunKeyPair);
 
           // Inizializza l'account data
           this.accountData = {
             username: this.username,
             wallets: {},
+            encryptedStealthKeys: encryptedStealthKeys,
             selectedWallet: null
           };
 
           // Crea il primo wallet
           const walletResult = await WalletManager.createWalletObj(this.gunKeyPair);
           if (walletResult instanceof Error) throw walletResult;
-
-          if (d) console.log("signUp", walletResult);
 
           // Aggiungi il wallet ai dati dell'account
           const { walletObj, entropy } = walletResult;
@@ -184,9 +392,6 @@ export class GunHedgehog extends Hedgehog {
 
           // Salva i dati e attendi che siano effettivamente salvati
           await this.saveAccountData();
-
-          // Verifica che i dati siano stati salvati correttamente
-          await this.loadAccountData();
 
           // Aggiungi il wallet alla cache
           this.walletCache.set(walletObj.address, walletObj);
@@ -350,8 +555,6 @@ export class GunHedgehog extends Hedgehog {
       throw new Error("Devi fare il login prima di rimuovere un wallet");
     }
 
-    if (d) console.log("Inizio rimozione wallet:", address);
-
     try {
       // Ricarica i dati dell'account per assicurarsi di avere lo stato più recente
       await this.loadAccountData();
@@ -375,10 +578,7 @@ export class GunHedgehog extends Hedgehog {
 
       // Salviamo i dati aggiornati e attendiamo la propagazione
       await this.saveAccountData();
-      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Verifichiamo che i dati siano stati aggiornati
-      await this.loadAccountData();
 
       if (!this.accountData) {
         throw new Error("Dati dell'account persi dopo il salvataggio");
@@ -430,9 +630,7 @@ export class GunHedgehog extends Hedgehog {
           return;
         }
 
-        try {
-          if (d) console.log("Login riuscito, attendo chiavi...");
-          
+        try {          
           // Attendiamo che le chiavi siano caricate con un timeout più lungo
           let attempts = 0;
           while (!this.user._.sea && attempts < 20) {
@@ -448,8 +646,6 @@ export class GunHedgehog extends Hedgehog {
             throw new Error("Chiavi GUN non trovate dopo 10 secondi");
           }
 
-          if (d) console.log("Chiavi caricate, carico i dati dell'account...");
-
           // Carichiamo i dati dell'account
           await this.loadAccountData();
 
@@ -460,7 +656,6 @@ export class GunHedgehog extends Hedgehog {
           if (d) console.log("Dati account caricati:", this.accountData);
 
           if (!this.accountData.wallets || Object.keys(this.accountData.wallets).length === 0) {
-            if (d) console.log("Nessun wallet trovato, ne creo uno nuovo");
             // Se non ci sono wallet, ne creiamo uno nuovo
             const newWallet = await this.createNewWallet("Wallet Principale");
             return resolve(newWallet);
@@ -483,8 +678,6 @@ export class GunHedgehog extends Hedgehog {
 
           // Crea o recupera il wallet
           this.wallet = await this.getOrCreateWallet(walletAddress, walletData.entropy);
-
-          if (d) console.log("Wallet caricato:", this.wallet.address);
 
           // Se non c'era un wallet selezionato, impostiamo questo
           if (!this.accountData.selectedWallet) {

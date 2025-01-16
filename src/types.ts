@@ -1,4 +1,5 @@
 import type { Wallet } from "ethers";
+import { ISEAPair } from "gun";
 
 export interface GunInstance {
   user(): any;
@@ -43,6 +44,7 @@ export interface GunAck {
 export interface AccountData {
   username: string;
   wallets: { [address: string]: WalletData };
+  encryptedStealthKeys: string;
   selectedWallet: string | null;
 }
 

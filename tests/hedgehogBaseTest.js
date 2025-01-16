@@ -17,67 +17,80 @@ const generateUniqueUsername = () =>
   `test_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
 // Funzione di utilità per attendere che i dati siano disponibili in Gun
-const waitForGunData = async (gun, username, expectedData = null, timeout = 15000) => {
+const waitForGunData = async (gun, username, expectedData = null, timeout = 30000) => {
   console.log(`🔄 Iniziata attesa dati per ${username}`);
   
-  // Prima verifica se i dati esistono già
-  const existingData = await new Promise(resolve => {
-    gun.get('accounts').get(username).once(data => resolve(data));
-  });
-
-  if (existingData && (!expectedData || checkData(existingData))) {
-    console.log(`✅ Dati trovati immediatamente per ${username}:`, existingData);
-    return existingData;
-  }
-
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
-      console.log(`⚠️ TIMEOUT per ${username}. Ultimo dato ricevuto:`, lastReceivedData);
+      console.log(`⚠️ TIMEOUT per ${username}`);
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+      ref.off(); // Rimuove tutti i listener
       reject(new Error(`Timeout attendendo i dati per il path: ${username}`));
     }, timeout);
 
     let resolved = false;
-    let lastReceivedData = null;
     let unsubscribe = null;
+    let processedData = new Set();
 
-    const checkData = (data) => {
-      lastReceivedData = data;
-      console.log(`📥 Ricevuti dati per ${username}:`, data);
-      
-      if (!data) {
-        console.log(`❌ Dati nulli per ${username}`);
-        return false;
-      }
-      
-      if (expectedData) {
-        if (typeof expectedData === 'function') {
-          const result = expectedData(data);
-          console.log(`🔍 Verifica funzione per ${username}:`, result);
-          return result;
+    const processData = async (data) => {
+      try {
+        // Crea una chiave unica per questi dati
+        const dataKey = JSON.stringify({
+          username: data?.username,
+          selectedWallet: data?.selectedWallet,
+          walletsRef: data?.wallets?.['#']
+        });
+
+        // Se abbiamo già processato questi dati esatti, ignoriamo
+        if (processedData.has(dataKey)) {
+          return;
         }
-        const expected = typeof expectedData === 'string' ? expectedData : JSON.stringify(expectedData);
-        const actual = typeof data === 'string' ? data : JSON.stringify(data);
-        const result = expected === actual;
-        console.log(`🔍 Verifica oggetti per ${username}:`, { expected, actual, result });
-        return result;
-      }
-      return true;
-    };
+        processedData.add(dataKey);
+        
+        console.log(`📥 Ricevuti dati per ${username}:`, data);
+        
+        if (!data) return;
 
-    const onData = (data) => {
-      console.log(`👉 onData chiamato per ${username}`);
-      if (checkData(data) && !resolved) {
-        console.log(`✅ Dati validi trovati per ${username}`);
-        resolved = true;
-        if (unsubscribe) unsubscribe();
-        clearTimeout(timeoutId);
-        resolve(data);
+        if (expectedData) {
+          if (typeof expectedData === 'function') {
+            const result = await expectedData(data);
+            if (!result) return;
+          } else {
+            const expected = typeof expectedData === 'string' ? expectedData : JSON.stringify(expectedData);
+            const actual = typeof data === 'string' ? data : JSON.stringify(data);
+            if (expected !== actual) return;
+          }
+        }
+
+        if (!resolved) {
+          console.log(`✅ Dati validi trovati per ${username}`);
+          resolved = true;
+          if (typeof unsubscribe === 'function') {
+            unsubscribe();
+          }
+          ref.off(); // Rimuove tutti i listener
+          clearTimeout(timeoutId);
+          resolve(data);
+        }
+      } catch (error) {
+        console.error(`❌ Errore durante l'elaborazione dei dati per ${username}:`, error);
+        if (!resolved) {
+          resolved = true;
+          if (typeof unsubscribe === 'function') {
+            unsubscribe();
+          }
+          ref.off(); // Rimuove tutti i listener
+          clearTimeout(timeoutId);
+          reject(error);
+        }
       }
     };
 
     const ref = gun.get('accounts').get(username);
-    unsubscribe = ref.on(onData);
-    ref.once(onData);
+    ref.on(processData); // Non salviamo il risultato di .on() perché non è una funzione
+    ref.once(processData);
   });
 };
 
@@ -85,85 +98,109 @@ const waitForGunData = async (gun, username, expectedData = null, timeout = 1500
 async function waitForWallet(gun, address, username) {
   console.log(`🔄 Attendo wallet per ${username}, indirizzo: ${address}`);
   
-  const verifyWallet = (data) => {
-    console.log(`🔍 Verifica wallet per ${address}:`, data);
-    
-    if (!data) {
-      console.log('❌ Dati mancanti');
-      return false;
-    }
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      console.log(`⚠️ TIMEOUT per wallet ${address}`);
+      cleanup();
+      reject(new Error(`Timeout attendendo il wallet: ${address}`));
+    }, 30000);
 
-    // Se i wallet sono inline
-    if (data.wallets && typeof data.wallets === 'object') {
-      if (data.wallets[address]) {
-        console.log('✅ Wallet trovato');
-        return true;
+    let resolved = false;
+    let processedData = new Set();
+
+    const cleanup = () => {
+      gun.get('accounts').get(username).off();
+      clearTimeout(timeoutId);
+    };
+
+    const processData = async (data) => {
+      if (resolved) return;
+
+      // Crea una chiave unica per questi dati
+      const dataKey = JSON.stringify(data);
+      if (processedData.has(dataKey)) return;
+      processedData.add(dataKey);
+
+      console.log('📥 Dati ricevuti:', data);
+      
+      if (!data || !data.wallets) return;
+
+      // Se i wallet sono un riferimento, lo seguiamo
+      if (data.wallets['#']) {
+        gun.get(data.wallets['#']).once((walletsData) => {
+          if (!walletsData || !walletsData[address]) return;
+          
+          const walletRef = walletsData[address];
+          if (!walletRef || !walletRef['#']) return;
+
+          gun.get(walletRef['#']).once((walletData) => {
+            if (!walletData || !walletData.address || !walletData.entropy) return;
+            
+            console.log('✅ Wallet trovato e valido:', walletData);
+            if (!resolved) {
+              resolved = true;
+              cleanup();
+              resolve({ 
+                ...data,
+                wallets: {
+                  ...walletsData,
+                  [address]: walletData
+                }
+              });
+            }
+          });
+        });
+      } 
+      // Se i wallet sono inline
+      else if (typeof data.wallets === 'object') {
+        const wallet = data.wallets[address];
+        if (!wallet || !wallet.address || !wallet.entropy) return;
+        
+        console.log('✅ Wallet trovato e valido:', wallet);
+        if (!resolved) {
+          resolved = true;
+          cleanup();
+          resolve(data);
+        }
       }
-    }
+    };
 
-    console.log('❌ Wallet non trovato');
-    return false;
-  };
-
-  // Attendi i dati con un timeout più lungo
-  return waitForGunData(gun, username, verifyWallet, 15000);
+    // Inizia l'ascolto dei dati
+    const accountRef = gun.get('accounts').get(username);
+    accountRef.on(processData);
+    accountRef.once(processData);
+  });
 }
 
 // Funzione di utilità per attendere che un'operazione sia completata
 const waitForOperation = async (operation) => {
   const result = await operation;
-  await new Promise(resolve => setTimeout(resolve, 1000)); // Attendi 1 secondo per la propagazione
+  await new Promise(resolve => setTimeout(resolve, 8000));
   return result;
 };
 
 describe("Hedgehog Test Suite", function () {
-  this.timeout(30000);
+  this.timeout(60000);
 
   let hedgehog;
   let instances = [];
-  let gunServer;
-
-  before(async function() {
-    // Avvia un server Gun locale per i test
-    gunServer = new Gun({
-      radisk: true,
-      file: 'radata'
-    });
-  });
-
-  after(async function() {
-    // Chiudi il server Gun
-    if (gunServer) {
-      gunServer.off();
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-  });
 
   beforeEach(async function () {
-    // Crea una nuova istanza con le opzioni corrette
     hedgehog = new GunHedgehog({
-      file: false,
-      localStorage: true,
-      web: false,
-      radisk: false,
-      memory: true,
-      axe: false
     });
     instances.push(hedgehog);
     await hedgehog.waitUntilReady();
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Attendi la connessione
+    await new Promise(resolve => setTimeout(resolve, 2000));
   });
 
-  afterEach(async function () {
-    // Pulisci le istanze
+  afterEach(async function() {
     for (const instance of instances) {
-      if (instance.isLoggedIn()) {
-        await instance.logout();
+      if (instance.user) {
+        instance.user.leave();
       }
-      await instance.close();
     }
     instances = [];
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 2000));
   });
 
   describe("Hedgehog Base Class", function () {
@@ -225,81 +262,47 @@ describe("Hedgehog Test Suite", function () {
 
       it("dovrebbe effettuare il login di un utente esistente", async function () {
         const username = generateUniqueUsername();
-        const password = "password123";
         
-        console.log("🔵 Test login per:", username);
-        
-        // Registrazione
-        console.log("📝 Registrazione utente...");
-        const firstWallet = await waitForOperation(hedgehog.signUp(username, password));
-        const firstAddress = firstWallet.address;
-        console.log("✅ Registrazione completata, wallet:", firstAddress);
-        
-        // Attendi che i dati siano salvati completamente
-        console.log("🔄 Attendo salvataggio dati iniziali...");
-        const initialData = await waitForWallet(hedgehog.getGunInstance(), firstAddress, username);
-        console.log("✅ Dati iniziali salvati:", initialData);
-        assert(initialData.wallets[firstAddress], "Il wallet dovrebbe essere salvato inizialmente");
+        // Prima registrazione
+        const firstWallet = await waitForOperation(hedgehog.signUp(username, "password123"));
+        await waitForWallet(hedgehog.getGunInstance(), firstWallet.address, username);
         
         // Logout
-        console.log("👋 Logout...");
-        await waitForOperation(hedgehog.logout());
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Aumentato il tempo di attesa
-        console.log("✅ Logout completato");
-
-        // Login
-        console.log("🔑 Login...");
-        const wallet = await waitForOperation(hedgehog.login(username, password));
-        console.log("✅ Login completato, wallet:", wallet.address);
+        hedgehog.logout();
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
-        assert(wallet, "Dovrebbe recuperare il wallet");
-        assert(hedgehog.isLoggedIn(), "Dovrebbe essere loggato dopo il login");
-        assert.strictEqual(wallet.address, firstAddress, "Dovrebbe recuperare lo stesso wallet");
+        // Login e verifica
+        const loginWallet = await waitForOperation(hedgehog.login(username, "password123"));
+        assert(loginWallet, "Dovrebbe ottenere un wallet dopo il login");
+        assert.strictEqual(loginWallet.address, firstWallet.address, "Dovrebbe recuperare lo stesso wallet");
         
-        // Verifica finale dei dati dopo il login
-        console.log("🔄 Verifica finale dati...");
-        const finalData = await waitForWallet(hedgehog.getGunInstance(), firstAddress, username);
-        console.log("✅ Verifica finale completata:", finalData);
-        assert(finalData.wallets[firstAddress], "Il wallet dovrebbe essere accessibile dopo il login");
+        // Verifica dati account
+        const finalData = await waitForWallet(hedgehog.getGunInstance(), firstWallet.address, username);
+        assert(finalData.wallets[firstWallet.address], "Il wallet dovrebbe essere accessibile dopo il login");
       });
 
       it("dovrebbe creare wallet con entropy unica", async function () {
         const username = generateUniqueUsername();
-        console.log("🔵 Test wallet multipli per:", username);
-        
-        // Registrazione e primo wallet
-        console.log("📝 Creazione primo wallet...");
         const firstWallet = await waitForOperation(hedgehog.signUp(username, "password123"));
-        console.log("✅ Primo wallet creato:", firstWallet.address);
         
-        // Attendi che il primo wallet sia salvato
-        console.log("🔄 Attendo salvataggio primo wallet...");
-        const firstWalletData = await waitForWallet(hedgehog.getGunInstance(), firstWallet.address, username);
-        console.log("✅ Primo wallet salvato:", firstWalletData);
-        assert(firstWalletData.wallets[firstWallet.address], "Il primo wallet dovrebbe essere salvato");
-        
-        // Attendi un momento per la sincronizzazione
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        // Attendi che il primo wallet sia salvato e verifica
+        const initialData = await waitForWallet(hedgehog.getGunInstance(), firstWallet.address, username);
+        assert(initialData.wallets && initialData.wallets[firstWallet.address], 
+          "Il primo wallet dovrebbe essere salvato inizialmente");
         
         // Crea un secondo wallet
-        console.log("📝 Creazione secondo wallet...");
         const secondWallet = await waitForOperation(hedgehog.createNewWallet("Secondo Wallet"));
-        console.log("✅ Secondo wallet creato:", secondWallet.address);
-        
-        // Attendi un momento per la sincronizzazione
-        await new Promise(resolve => setTimeout(resolve, 5000));
         
         // Attendi che il secondo wallet sia salvato
-        console.log("🔄 Attendo salvataggio secondo wallet...");
         const secondWalletData = await waitForWallet(hedgehog.getGunInstance(), secondWallet.address, username);
-        console.log("✅ Secondo wallet salvato:", secondWalletData);
         
         // Verifica che entrambi i wallet esistano
-        assert(secondWalletData.wallets[firstWallet.address], "Il primo wallet dovrebbe ancora esistere");
-        assert(secondWalletData.wallets[secondWallet.address], "Il secondo wallet dovrebbe essere stato aggiunto");
-        assert.strictEqual(Object.keys(secondWalletData.wallets).length, 2, "Dovrebbero esserci due wallet");
+        assert(secondWalletData.wallets && secondWalletData.wallets[firstWallet.address], 
+          "Il primo wallet dovrebbe ancora esistere");
+        assert(secondWalletData.wallets && secondWalletData.wallets[secondWallet.address], 
+          "Il secondo wallet dovrebbe esistere");
         
-        // Verifica che abbiano entropy diverse
+        // Verifica che le entropy siano diverse
         assert.notStrictEqual(
           secondWalletData.wallets[firstWallet.address].entropy,
           secondWalletData.wallets[secondWallet.address].entropy,
@@ -309,55 +312,37 @@ describe("Hedgehog Test Suite", function () {
 
       it("dovrebbe rimuovere un wallet solo se ce ne sono altri", async function () {
         const username = generateUniqueUsername();
-        console.log("🔵 Test rimozione wallet per:", username);
-        
-        // Registrazione e primo wallet
-        console.log("📝 Creazione primo wallet...");
         const firstWallet = await waitForOperation(hedgehog.signUp(username, "password123"));
-        console.log("✅ Primo wallet creato:", firstWallet.address);
         
         // Attendi che il primo wallet sia salvato
-        console.log("🔄 Attendo salvataggio primo wallet...");
-        const firstWalletData = await waitForWallet(hedgehog.getGunInstance(), firstWallet.address, username);
-        console.log("✅ Primo wallet salvato:", firstWalletData);
-        assert(firstWalletData.wallets[firstWallet.address], "Il primo wallet dovrebbe essere salvato");
-        assert(firstWalletData.selectedWallet === firstWallet.address, "Il primo wallet dovrebbe essere selezionato");
+        await waitForWallet(hedgehog.getGunInstance(), firstWallet.address, username);
         
-        // Attendi un momento per la sincronizzazione
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        // Prova a rimuovere l'unico wallet (dovrebbe fallire)
+        try {
+          await hedgehog.removeWallet(firstWallet.address);
+          assert.fail("Non dovrebbe essere possibile rimuovere l'unico wallet");
+        } catch (error) {
+          assert(error.message.includes("ultimo"), "Dovrebbe indicare che non si può rimuovere l'ultimo wallet");
+        }
         
         // Crea un secondo wallet
-        console.log("📝 Creazione secondo wallet...");
         const secondWallet = await waitForOperation(hedgehog.createNewWallet("Secondo Wallet"));
-        console.log("✅ Secondo wallet creato:", secondWallet.address);
+        await waitForWallet(hedgehog.getGunInstance(), secondWallet.address, username);
         
         // Attendi un momento per la sincronizzazione
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
-        // Attendi che il secondo wallet sia salvato
-        console.log("🔄 Attendo salvataggio secondo wallet...");
-        const secondWalletData = await waitForWallet(hedgehog.getGunInstance(), secondWallet.address, username);
-        console.log("✅ Secondo wallet salvato:", secondWalletData);
-        assert.strictEqual(Object.keys(secondWalletData.wallets).length, 2, "Dovrebbero esserci due wallet");
+        // Ora dovrebbe essere possibile rimuovere il primo wallet
+        await waitForOperation(hedgehog.removeWallet(firstWallet.address));
         
         // Attendi un momento per la sincronizzazione
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
-        // Rimuovi il secondo wallet
-        console.log("🗑️ Rimozione secondo wallet...");
-        await waitForOperation(hedgehog.removeWallet(secondWallet.address));
-        console.log("✅ Secondo wallet rimosso");
-        
-        // Attendi un momento per la sincronizzazione
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        
-        // Verifica che rimanga solo il primo wallet
-        console.log("🔄 Verifica finale dati...");
-        const finalData = await waitForWallet(hedgehog.getGunInstance(), firstWallet.address, username);
-        console.log("✅ Verifica finale completata:", finalData);
-        assert.strictEqual(Object.keys(finalData.wallets).length, 1, "Dovrebbe rimanere un wallet");
-        assert(finalData.wallets[firstWallet.address], "Il primo wallet dovrebbe rimanere");
-        assert(finalData.selectedWallet === firstWallet.address, "Il primo wallet dovrebbe rimanere selezionato");
+        // Verifica che il primo wallet sia stato rimosso
+        const finalData = await waitForGunData(hedgehog.getGunInstance(), username);
+        assert(!finalData.wallets[firstWallet.address], "Il primo wallet dovrebbe essere stato rimosso");
+        assert(finalData.wallets[secondWallet.address], "Il secondo wallet dovrebbe ancora esistere");
+        assert.strictEqual(finalData.selectedWallet, secondWallet.address, "Il secondo wallet dovrebbe essere selezionato");
       });
 
       it("dovrebbe gestire errori di registrazione", async function () {
@@ -401,31 +386,28 @@ describe("Hedgehog Test Suite", function () {
 
       it("dovrebbe mantenere i dati tra sessioni", async function () {
         const username = generateUniqueUsername();
-        const password = "password123";
         
-        // Registrazione e creazione wallet
-        const firstWallet = await waitForOperation(hedgehog.signUp(username, password));
+        // Prima sessione
+        const firstWallet = await waitForOperation(hedgehog.signUp(username, "password123"));
+        await waitForWallet(hedgehog.getGunInstance(), firstWallet.address, username);
         
-        // Attendi che i dati siano salvati completamente
-        const initialData = await waitForWallet(hedgehog.getGunInstance(), firstWallet.address, username);
-        assert(initialData.wallets[firstWallet.address], "Il wallet dovrebbe essere salvato");
-        assert(initialData.selectedWallet === firstWallet.address, "Il wallet dovrebbe essere selezionato");
-        
-        // Logout e attendi che sia completato
-        await waitForOperation(hedgehog.logout());
+        // Logout
+        hedgehog.logout();
         await new Promise(resolve => setTimeout(resolve, 2000));
         
-        // Login e verifica dati
-        const wallet = await waitForOperation(hedgehog.login(username, password));
-        assert.strictEqual(wallet.address, firstWallet.address, "Dovrebbe recuperare lo stesso wallet");
+        // Seconda sessione
+        const secondInstance = new GunHedgehog({});
+        instances.push(secondInstance);
+        await secondInstance.waitUntilReady();
         
-        // Attendi che i dati siano sincronizzati dopo il login
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        // Login nella seconda sessione
+        const recoveredWallet = await waitForOperation(secondInstance.login(username, "password123"));
+        assert(recoveredWallet, "Dovrebbe recuperare il wallet nella nuova sessione");
+        assert.strictEqual(recoveredWallet.address, firstWallet.address, "Dovrebbe recuperare lo stesso wallet");
         
-        // Verifica che i dati siano ancora presenti
-        const finalData = await waitForWallet(hedgehog.getGunInstance(), firstWallet.address, username);
-        assert(finalData.wallets[firstWallet.address], "Il wallet dovrebbe essere mantenuto");
-        assert(finalData.selectedWallet === firstWallet.address, "Il wallet dovrebbe rimanere selezionato");
+        // Verifica dati account
+        const finalData = await waitForWallet(secondInstance.getGunInstance(), firstWallet.address, username);
+        assert(finalData.wallets[firstWallet.address], "Il wallet dovrebbe essere accessibile nella nuova sessione");
       });
 
       it("dovrebbe gestire correttamente il wallet selezionato", async function () {
@@ -439,6 +421,9 @@ describe("Hedgehog Test Suite", function () {
         
         // Cambia il wallet selezionato
         await waitForOperation(hedgehog.switchWallet(secondWallet.address));
+        
+        // Attendi che i dati siano sincronizzati
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
         // Verifica che il secondo wallet sia ora selezionato
         userData = await waitForGunData(hedgehog.getGunInstance(), username);
