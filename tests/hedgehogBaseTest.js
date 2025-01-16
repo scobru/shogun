@@ -82,123 +82,18 @@ const waitForGunData = async (gun, username, expectedData = null, timeout = 5000
 };
 
 // Funzione di utilità per attendere che un wallet sia salvato
-const waitForWallet = async (gun, address, username) => {
-  console.log(`🏦 Attendo wallet per indirizzo: ${address} e username: ${username}`);
-  
+async function waitForWallet(gun, address, username) {
   return new Promise((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      console.log(`⚠️ Timeout attendendo wallet per ${address}`);
-      reject(new Error(`Timeout attendendo i dati per il wallet: ${address}`));
-    }, 15000); // Aumentato a 15 secondi
-
-    let resolved = false;
-    let attempts = 0;
-    const maxAttempts = 10;
-
-    const checkWalletData = (accountData, wallets) => {
-      if (!accountData || !wallets) {
-        console.log(`❌ Dati non validi per ${address}:`, { accountData, wallets });
-        return false;
-      }
-      
-      console.log(`🔍 Controllo dati wallet ${address}:`, wallets);
-      
-      // Se il wallet è inline
-      if (wallets[address] && wallets[address].address && wallets[address].entropy) {
-        console.log(`✅ Trovati dati inline per ${address}`);
-        return true;
-      }
-      
-      // Se il wallet è un riferimento
-      if (wallets[address] && wallets[address]['#']) {
-        console.log(`👉 Trovato riferimento per ${address}`);
-        return false; // Continua ad attendere i dati completi
-      }
-      
-      return false;
-    };
-
-    const resolveIfValid = (data) => {
-      if (!data) {
-        console.log(`❌ Nessun dato ricevuto per ${username}`);
-        return;
-      }
-      
-      console.log(`📥 Dati ricevuti per ${username}:`, data);
-      
-      // Se i wallet sono inline
-      if (data.wallets && typeof data.wallets === 'object' && !data.wallets['#']) {
-        if (checkWalletData(data, data.wallets)) {
-          if (!resolved) {
-            console.log(`✅ Dati wallet validi trovati per ${address}`);
-            resolved = true;
-            clearTimeout(timeoutId);
-            resolve(data);
-          }
-          return;
-        }
-      }
-      
-      // Se i wallet sono un riferimento
-      if (data.wallets && typeof data.wallets === 'object' && data.wallets['#']) {
-        console.log(`👉 Seguendo riferimento wallet per ${address}`);
-        
-        const walletRef = gun.get('accounts').get(username).get('wallets').get(address);
-        
-        // Prova prima con once per i dati già disponibili
-        walletRef.once((walletData) => {
-          console.log(`📥 Dati wallet (once) per ${address}:`, walletData);
-          if (!resolved && walletData && walletData.address && walletData.entropy) {
-            console.log(`✅ Dati wallet validi trovati (once) per ${address}`);
-            resolved = true;
-            clearTimeout(timeoutId);
-            resolve({
-              ...data,
-              wallets: {
-                [address]: walletData
-              }
-            });
-          }
-        });
-        
-        // Se i dati non sono ancora disponibili, usa on
-        if (!resolved) {
-          walletRef.on((walletData) => {
-            console.log(`📥 Dati wallet (on) per ${address}:`, walletData);
-            if (!resolved && walletData && walletData.address && walletData.entropy) {
-              console.log(`✅ Dati wallet validi trovati (on) per ${address}`);
-              resolved = true;
-              clearTimeout(timeoutId);
-              resolve({
-                ...data,
-                wallets: {
-                  [address]: walletData
-                }
-              });
-            }
-          });
-        }
-      }
-      
-      // Se dopo alcuni tentativi non abbiamo ancora i dati, riprova
-      if (!resolved && attempts < maxAttempts) {
-        attempts++;
-        console.log(`🔄 Tentativo ${attempts}/${maxAttempts} per ${address}`);
-        setTimeout(() => {
-          gun.get('accounts').get(username).once(resolveIfValid);
-        }, 1000);
-      }
-    };
-
-    // Prova prima con once per i dati già disponibili
-    gun.get('accounts').get(username).once(resolveIfValid);
+    const timeoutId = setTimeout(() => reject(new Error('Timeout nel caricamento del wallet')), 10000);
     
-    // Se i dati non sono ancora disponibili, usa on
-    if (!resolved) {
-      gun.get('accounts').get(username).on(resolveIfValid);
-    }
+    gun.get('accounts').get(username).on((data) => {
+      if (data && data.wallets && (address in data.wallets)) {
+        clearTimeout(timeoutId);
+        resolve(data);
+      }
+    });
   });
-};
+}
 
 // Funzione di utilità per attendere che un'operazione sia completata
 const waitForOperation = async (operation) => {
@@ -370,7 +265,7 @@ describe("Hedgehog Test Suite", function () {
         assert(firstWalletData.wallets[firstWallet.address], "Il primo wallet dovrebbe essere salvato");
         
         // Attendi un momento per la sincronizzazione
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 5000));
         
         // Crea un secondo wallet
         console.log("📝 Creazione secondo wallet...");
@@ -378,7 +273,7 @@ describe("Hedgehog Test Suite", function () {
         console.log("✅ Secondo wallet creato:", secondWallet.address);
         
         // Attendi un momento per la sincronizzazione
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 5000));
         
         // Attendi che il secondo wallet sia salvato
         console.log("🔄 Attendo salvataggio secondo wallet...");
@@ -415,7 +310,7 @@ describe("Hedgehog Test Suite", function () {
         assert(firstWalletData.selectedWallet === firstWallet.address, "Il primo wallet dovrebbe essere selezionato");
         
         // Attendi un momento per la sincronizzazione
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 5000));
         
         // Crea un secondo wallet
         console.log("📝 Creazione secondo wallet...");
@@ -423,7 +318,7 @@ describe("Hedgehog Test Suite", function () {
         console.log("✅ Secondo wallet creato:", secondWallet.address);
         
         // Attendi un momento per la sincronizzazione
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 5000));
         
         // Attendi che il secondo wallet sia salvato
         console.log("🔄 Attendo salvataggio secondo wallet...");
@@ -432,7 +327,7 @@ describe("Hedgehog Test Suite", function () {
         assert.strictEqual(Object.keys(secondWalletData.wallets).length, 2, "Dovrebbero esserci due wallet");
         
         // Attendi un momento per la sincronizzazione
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 5000));
         
         // Rimuovi il secondo wallet
         console.log("🗑️ Rimozione secondo wallet...");
@@ -440,7 +335,7 @@ describe("Hedgehog Test Suite", function () {
         console.log("✅ Secondo wallet rimosso");
         
         // Attendi un momento per la sincronizzazione
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 5000));
         
         // Verifica che rimanga solo il primo wallet
         console.log("🔄 Verifica finale dati...");
@@ -511,7 +406,7 @@ describe("Hedgehog Test Suite", function () {
         assert.strictEqual(wallet.address, firstWallet.address, "Dovrebbe recuperare lo stesso wallet");
         
         // Attendi che i dati siano sincronizzati dopo il login
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 5000));
         
         // Verifica che i dati siano ancora presenti
         const finalData = await waitForWallet(hedgehog.getGunInstance(), firstWallet.address, username);

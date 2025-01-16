@@ -56,21 +56,21 @@ export class WalletManager {
   }
 
   static async addWallet(accountData: AccountData, walletData: WalletData): Promise<AccountData> {
+    // Verifichiamo che i dati del wallet siano validi
+    if (!walletData.address || !walletData.entropy || !walletData.name) {
+      throw new Error("Dati del wallet non validi");
+    }
+
     // Creiamo una copia profonda dell'oggetto accountData
-    const updatedData: AccountData = {
+    const updatedData: AccountData = JSON.parse(JSON.stringify({
       ...accountData,
-      wallets: { ...accountData.wallets },
+      wallets: accountData.wallets || {},
       selectedWallet: accountData.selectedWallet
-    };
+    }));
 
     // Verifichiamo che il wallet non esista già
     if (updatedData.wallets[walletData.address]) {
       throw new Error("Wallet già esistente con questo indirizzo");
-    }
-
-    // Verifichiamo che i dati del wallet siano validi
-    if (!walletData.address || !walletData.entropy || !walletData.name) {
-      throw new Error("Dati del wallet non validi");
     }
 
     // Aggiungiamo il nuovo wallet
@@ -117,27 +117,23 @@ export class WalletManager {
       throw new Error("Wallet non trovato");
     }
 
+    // Creiamo una copia profonda dell'oggetto
+    const updatedData: AccountData = JSON.parse(JSON.stringify({
+      ...accountData,
+      wallets: accountData.wallets || {},
+      selectedWallet: accountData.selectedWallet
+    }));
+
     // Verifichiamo che ci sia più di un wallet
-    const walletCount = Object.keys(accountData.wallets).length;
+    const walletCount = Object.keys(updatedData.wallets).length;
     if (walletCount <= 1) {
       throw new Error("Non puoi rimuovere l'ultimo wallet");
     }
 
-    // Creiamo una copia profonda dell'oggetto
-    const updatedData: AccountData = {
-      ...accountData,
-      wallets: { ...accountData.wallets },
-      selectedWallet: accountData.selectedWallet
-    };
-
     // Se era il wallet selezionato, troviamo un altro wallet prima di rimuoverlo
     if (updatedData.selectedWallet === address) {
       const remainingWallets = Object.keys(updatedData.wallets).filter(a => a !== address);
-      if (remainingWallets.length > 0) {
-        updatedData.selectedWallet = remainingWallets[0];
-      } else {
-        updatedData.selectedWallet = null;
-      }
+      updatedData.selectedWallet = remainingWallets.length > 0 ? remainingWallets[0] as string : null;
     }
 
     // Rimuoviamo il wallet
