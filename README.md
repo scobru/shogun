@@ -20,11 +20,12 @@
 <br />
 <br />
 
-**HUGO** is a decentralized version of Hedgehog that manages user wallets and private keys directly in the browser, using Gun.js as a decentralized database. It exposes a simple API that allows you to create an authentication system to enable users to register and access their wallet across multiple browsers and devices.
+**HUGO** è una versione decentralizzata di Hedgehog che gestisce user wallets e chiavi private direttamente nel browser, usando Gun.js come database decentralizzato. Espone una semplice API che permette di creare un sistema di autenticazione per consentire agli utenti di registrarsi e accedere al loro wallet su più browser e dispositivi.
 
-With HUGO:
+Con HUGO:
 
 * 😍 Gli utenti possono creare account nella tua DApp con username + password
+* 😍 Gli utenti possono usare il loro account Ethereum/Metamask esistente
 * 😱 Gli utenti non devono preoccuparsi delle chiavi private o delle frasi mnemoniche
 * 🔏 Puoi costruire sistemi che finanziano i wallet degli utenti e firmano transazioni, senza mai controllarli direttamente
 * 🌇 Puoi concentrarti sulla logica di business, invece che sulla gestione dei wallet
@@ -43,6 +44,8 @@ npm i ethers
 
 - **Gestione Account Decentralizzata**: Utilizza Gun.js per memorizzare e sincronizzare i dati degli account in modo decentralizzato
 - **Multi-Wallet**: Supporto per la creazione e gestione di più wallet per utente
+- **Integrazione Ethereum**: Supporto per login e registrazione con account Ethereum/Metamask
+- **Provider Personalizzato**: Possibilità di utilizzare RPC e chiavi private personalizzate
 - **Sicurezza**: Le chiavi private non lasciano mai il browser dell'utente
 - **Persistenza**: I dati vengono sincronizzati automaticamente tra dispositivi
 - **API Semplice**: Interfaccia intuitiva per l'integrazione nelle DApp
@@ -50,15 +53,15 @@ npm i ethers
 ## Esempio di Utilizzo Base
 
 ```typescript
-import { WalletManager, StealthChain } from 'hugo';
+import { WalletManager } from 'hugo';
 
 // Inizializza WalletManager
 const walletManager = new WalletManager();
 
-// Registrazione nuovo utente
+// Registrazione nuovo utente (metodo classico)
 await walletManager.createAccount('alice', 'password123');
 
-// Login utente esistente
+// Login utente esistente (metodo classico)
 const pubKey = await walletManager.login('alice', 'password123');
 
 // Creazione nuovo wallet
@@ -71,13 +74,58 @@ await walletManager.saveWalletToGun(walletObj, 'alice');
 // Recupero wallet
 const wallets = await walletManager.retrieveWallets('alice');
 console.log('I miei wallet:', wallets);
+```
 
-// Utilizzo indirizzi stealth
-const stealthChain = new StealthChain();
+## Utilizzo con Ethereum
+
+### Browser/Metamask
+
+```typescript
+import { WalletManager } from 'hugo';
+
+const walletManager = new WalletManager();
+const ethereumManager = walletManager.getEthereumManager();
+
+// Registrazione con Metamask
+const username = await ethereumManager.createAccountWithEthereum();
+console.log('Account creato con indirizzo:', username);
+
+// Login con Metamask
+const pubKey = await ethereumManager.loginWithEthereum();
+console.log('Login effettuato con chiave pubblica:', pubKey);
+```
+
+### Provider Personalizzato
+
+```typescript
+import { WalletManager } from 'hugo';
+
+const walletManager = new WalletManager();
+const ethereumManager = walletManager.getEthereumManager();
+
+// Configura provider personalizzato
+ethereumManager.setCustomProvider(
+  "https://your-rpc-url.com",
+  "0xYourPrivateKey"
+);
+
+// Usa normalmente
+const username = await ethereumManager.createAccountWithEthereum();
+const pubKey = await ethereumManager.loginWithEthereum();
+```
+
+## Utilizzo Indirizzi Stealth
+
+```typescript
+import { WalletManager } from 'hugo';
+
+const walletManager = new WalletManager();
+const stealthChain = walletManager.getStealthChain();
 
 // Genera chiavi stealth per il ricevitore
-const stealthKeys = await walletManager.generateStealthKeys(gunKeyPair);
-await walletManager.saveStealthKeys('alice', stealthKeys);
+const gunKeyPair = walletManager.getCurrentUserKeyPair();
+const stealthKeys = await stealthChain.generateStealthKeys(gunKeyPair);
+await stealthChain.saveStealthKeys('alice', stealthKeys);
 
 // Prepara le chiavi pubbliche da condividere
 const receiverPublicKeys = {
@@ -90,297 +138,60 @@ const { stealthAddress, ephemeralPublicKey } = await stealthChain.generateStealt
   receiverPublicKeys.viewingKey,   // usa la chiave pubblica di visualizzazione
   receiverPublicKeys.spendingKey   // usa l'indirizzo pubblico
 );
-
-// Logout
-walletManager.logout();
 ```
 
 ## API Disponibili
 
-### Gestione Account
+### WalletManager
 
 ```typescript
-// Registrazione nuovo utente
-await walletManager.createAccount(alias: string, passphrase: string): Promise<void>
+class WalletManager {
+  // Gestione base degli account
+  createAccount(alias: string, passphrase: string): Promise<void>
+  login(alias: string, passphrase: string): Promise<string | null>
+  logout(): void
+  getPublicKey(): string | null
+  getCurrentUserKeyPair(): GunKeyPair
 
-// Login utente esistente
-const pubKey = await walletManager.login(alias: string, passphrase: string): Promise<string | null>
+  // Accesso ai manager specializzati
+  getEthereumManager(): EthereumManager
+  getStealthChain(): StealthChain
 
-// Logout
-walletManager.logout(): void
-
-// Verifica se l'utente è loggato
-const pubKey = walletManager.getPublicKey(): string | null
-
-// Ottieni il keyPair dell'utente corrente
-const keyPair = walletManager.getCurrentUserKeyPair(): GunKeyPair
-```
-
-### Gestione Wallet
-
-```typescript
-// Crea un nuovo wallet object
-const { walletObj, entropy } = await WalletManager.createWalletObj(gunKeyPair: GunKeyPair): Promise<WalletResult>
-
-// Salva il wallet su GunDB
-await walletManager.saveWalletToGun(wallet: Wallet, alias: string): Promise<void>
-
-// Salva il wallet localmente (alias per saveWalletToGun)
-await walletManager.saveWalletLocally(wallet: Wallet, alias: string): Promise<void>
-
-// Recupera tutti i wallet di un utente
-const wallets = await walletManager.retrieveWallets(alias: string): Promise<Wallet[]>
-
-// Recupera un wallet specifico per indirizzo
-const wallet = await walletManager.retrieveWalletByAddress(alias: string, publicKey: string): Promise<Wallet | null>
-
-// Converte una chiave privata Gun in formato Ethereum
-const ethPrivateKey = await walletManager.convertToEthPk(gunPrivateKey: string): Promise<string>
-```
-
-### Gestione Chiavi Stealth
-
-```typescript
-// Genera le chiavi stealth per il ricevitore
-const keys = await walletManager.generateStealthKeys(pair: GunKeyPair): Promise<{
-  spendingKey: string;
-  viewingKey: string;
-}>
-
-// Salva le chiavi stealth su GunDB
-await walletManager.saveStealthKeys(
-  alias: string,
-  stealthKeys: { spendingKey: string; viewingKey: string }
-): Promise<void>
-
-// Recupera le chiavi stealth da GunDB
-const keys = await walletManager.retrieveStealthKeys(
-  alias: string
-): Promise<{ spendingKey: string; viewingKey: string }>
-
-// Salva le chiavi stealth in localStorage
-await walletManager.saveStealthKeysLocally(
-  alias: string,
-  stealthKeys: { spendingKey: string; viewingKey: string }
-): Promise<void>
-
-// Recupera le chiavi stealth da localStorage
-const keys = await walletManager.retrieveStealthKeysLocally(
-  alias: string
-): Promise<{ spendingKey: string; viewingKey: string }>
-```
-
-### Esempi Pratici
-
-```typescript
-// Esempio: Gestione completa dei wallet
-const manageWallets = async () => {
-  const walletManager = new WalletManager();
-  
-  // Crea account e login
-  await walletManager.createAccount("alice", "password123");
-  const pubKey = await walletManager.login("alice", "password123");
-  
-  // Crea un nuovo wallet
-  const gunKeyPair = walletManager.getCurrentUserKeyPair();
-  const { walletObj, entropy } = await WalletManager.createWalletObj(gunKeyPair);
-  
-  // Salva il wallet
-  await walletManager.saveWalletToGun(walletObj, "alice");
-  
-  // Recupera i wallet
-  const wallets = await walletManager.retrieveWallets("alice");
-  console.log("Wallet disponibili:", wallets);
-};
-
-// Esempio: Gestione di più wallet per utente
-const multipleWallets = async () => {
-  const walletManager = new WalletManager();
-  const username = "alice";
-  
-  // Login
-  await walletManager.login(username, "password123");
-  const gunKeyPair = walletManager.getCurrentUserKeyPair();
-  
-  // Crea due wallet
-  const { walletObj: wallet1 } = await WalletManager.createWalletObj(gunKeyPair);
-  const { walletObj: wallet2 } = await WalletManager.createWalletObj(gunKeyPair);
-  
-  // Salva entrambi
-  await walletManager.saveWalletToGun(wallet1, username);
-  await walletManager.saveWalletToGun(wallet2, username);
-  
-  // Recupera tutti i wallet
-  const wallets = await walletManager.retrieveWallets(username);
-  console.log("Wallet multipli:", wallets);
-  
-  // Recupera un wallet specifico
-  const specificWallet = await walletManager.retrieveWalletByAddress(username, wallet1.publicKey);
-  console.log("Wallet specifico:", specificWallet);
-};
-
-// Esempio: Utilizzo degli Indirizzi Stealth
-const stealthExample = async () => {
-  // Inizializza StealthChain
-  const stealthChain = new StealthChain();
-  
-  // RICEVITORE: Genera le sue chiavi (questo è privato, solo il ricevitore lo fa)
-  const receiverViewingKeyPair = await SEA.pair();
-  const receiverSpendingKey = ethers.Wallet.createRandom().privateKey;
-  
-  // Il ricevitore condivide pubblicamente:
-  const receiverPublicKeys = {
-    viewingKey: receiverViewingKeyPair.epub, // chiave pubblica di visualizzazione
-    spendingKey: new ethers.Wallet(receiverSpendingKey).address // indirizzo pubblico Ethereum
-  };
-  
-  // MITTENTE: Genera un indirizzo stealth usando le chiavi pubbliche del ricevitore
-  const { stealthAddress, ephemeralPublicKey } = await stealthChain.generateStealthAddress(
-    receiverPublicKeys.viewingKey,  // usa la chiave pubblica di visualizzazione
-    receiverPublicKeys.spendingKey  // usa l'indirizzo pubblico per la spesa
-  );
-  console.log('Indirizzo stealth generato:', stealthAddress);
-  
-  // Il mittente può ora inviare fondi all'indirizzo stealth
-  // e condivide ephemeralPublicKey con il ricevitore
-  
-  // RICEVITORE: Recupera il wallet stealth usando le sue chiavi private
-  const recoveredWallet = await stealthChain.openStealthAddress(
-    stealthAddress,
-    ephemeralPublicKey,
-    receiverViewingKeyPair,  // usa il keypair completo per la visualizzazione
-    receiverSpendingKey      // usa la chiave privata per la spesa
-  );
-  console.log('Wallet stealth recuperato:', recoveredWallet.address);
-  
-  // Il ricevitore può ora utilizzare recoveredWallet per gestire i fondi
-  const balance = await recoveredWallet.getBalance();
-  console.log('Bilancio del wallet stealth:', balance);
-};
-```
-
-## Funzionalità Stealth Address
-
-HUGO supporta la generazione e il recupero di indirizzi stealth per una maggiore privacy nelle transazioni. Gli indirizzi stealth sono indirizzi monouso generati dal mittente per il ricevitore, che solo il ricevitore può rivendicare usando le proprie chiavi private.
-
-### Come Funziona
-
-1. **Setup Iniziale**
-   ```typescript
-   // Il ricevitore genera le sue chiavi stealth
-   const stealthKeys = await walletManager.generateStealthKeys(gunKeyPair);
-   await walletManager.saveStealthKeys('alice', stealthKeys);
-   ```
-
-2. **Generazione Indirizzo Stealth (Mittente)**
-   ```typescript
-   // Il mittente usa le chiavi pubbliche del ricevitore
-   const { stealthAddress, ephemeralPublicKey } = await stealthChain.generateStealthAddress(
-     receiverPublicKeys.viewingKey,  // chiave pubblica di visualizzazione
-     receiverPublicKeys.spendingKey  // indirizzo pubblico per la spesa
-   );
-
-   // Il mittente invia fondi a stealthAddress e condivide ephemeralPublicKey
-   ```
-
-3. **Recupero Wallet Stealth (Ricevitore)**
-   ```typescript
-   // Il ricevitore recupera il wallet usando le sue chiavi private
-   const wallet = await stealthChain.openStealthAddress(
-     stealthAddress,           // indirizzo stealth ricevuto
-     ephemeralPublicKey,       // chiave pubblica effimera del mittente
-     receiverViewingKeyPair,   // coppia di chiavi di visualizzazione
-     receiverSpendingKey       // chiave privata di spesa
-   );
-   ```
-
-### API Stealth Address
-
-```typescript
-// Interfaccia per le chiavi di visualizzazione
-interface KeyPair {
-  epub: string;  // Chiave pubblica di visualizzazione
-  epriv: string; // Chiave privata di visualizzazione
+  // Gestione wallet
+  static createWalletObj(gunKeyPair: GunKeyPair): Promise<WalletResult>
+  saveWalletToGun(wallet: Wallet, alias: string): Promise<void>
+  retrieveWallets(alias: string): Promise<Wallet[]>
+  retrieveWalletByAddress(alias: string, publicKey: string): Promise<Wallet | null>
 }
-
-// Genera le chiavi stealth per il ricevitore
-const stealthKeys = await walletManager.generateStealthKeys(
-  gunKeyPair: GunKeyPair
-): Promise<{
-  spendingKey: string;  // Chiave privata per spendere i fondi
-  viewingKey: string;   // Chiave privata per visualizzare le transazioni
-}>
-
-// Salva le chiavi stealth (su GunDB o localStorage)
-await walletManager.saveStealthKeys(
-  alias: string,
-  stealthKeys: { spendingKey: string; viewingKey: string }
-): Promise<void>
-
-// Genera un indirizzo stealth (lato mittente)
-const { stealthAddress, ephemeralPublicKey } = await stealthChain.generateStealthAddress(
-  receiverViewingPublicKey: string,  // Chiave pubblica di visualizzazione del ricevitore
-  receiverSpendingPublicKey: string  // Indirizzo pubblico del ricevitore
-): Promise<{
-  stealthAddress: string;      // Indirizzo stealth generato
-  ephemeralPublicKey: string;  // Chiave pubblica effimera da condividere
-}>
-
-// Recupera il wallet stealth (lato ricevitore)
-const wallet = await stealthChain.openStealthAddress(
-  stealthAddress: string,             // Indirizzo stealth da recuperare
-  senderEphemeralPublicKey: string,   // Chiave pubblica effimera del mittente
-  receiverViewingKeyPair: KeyPair,    // Coppia di chiavi di visualizzazione
-  receiverSpendingKey: string         // Chiave privata di spesa
-): Promise<ethers.Wallet>             // Wallet Ethereum con accesso ai fondi
 ```
 
-### Flusso di Privacy
+### EthereumManager
 
-1. Il ricevitore genera e salva le sue chiavi stealth
-2. Il ricevitore condivide pubblicamente solo:
-   - La chiave pubblica di visualizzazione
-   - L'indirizzo pubblico per la spesa
+```typescript
+class EthereumManager {
+  // Configurazione provider
+  setCustomProvider(rpcUrl: string, privateKey: string): void
 
-3. Il mittente:
-   - Genera una coppia di chiavi effimere
-   - Calcola un segreto condiviso usando la chiave pubblica di visualizzazione del ricevitore
-   - Genera un indirizzo stealth univoco
-   - Invia i fondi all'indirizzo stealth
-   - Condivide la chiave pubblica effimera con il ricevitore
+  // Operazioni con Ethereum
+  createAccountWithEthereum(): Promise<string>
+  loginWithEthereum(): Promise<string | null>
+}
+```
 
-4. Il ricevitore:
-   - Usa la sua chiave privata di visualizzazione con la chiave pubblica effimera del mittente
-   - Deriva lo stesso segreto condiviso
-   - Recupera il wallet stealth e accede ai fondi
+### StealthChain
 
-### Vantaggi degli Indirizzi Stealth
+```typescript
+class StealthChain {
+  // Gestione chiavi stealth
+  generateStealthKeys(pair: GunKeyPair): Promise<{ spendingKey: string; viewingKey: string }>
+  saveStealthKeys(alias: string, stealthKeys: { spendingKey: string; viewingKey: string }): Promise<void>
+  retrieveStealthKeys(alias: string): Promise<{ spendingKey: string; viewingKey: string }>
 
-* 🔒 Maggiore privacy nelle transazioni
-* 👥 Indirizzi monouso per ogni transazione
-* 🔑 Solo il legittimo ricevitore può accedere ai fondi
-* 🌐 Compatibile con qualsiasi wallet Ethereum
-* 🔐 Separazione tra chiavi di visualizzazione e di spesa
-* 📱 Ideale per applicazioni che richiedono privacy
-* 🛡️ Il mittente non può tracciare le transazioni future del ricevitore
-* 🤝 Il ricevitore può dimostrare la proprietà dei fondi
-
-## Casi d'Uso Ideali
-
-*[Casi d'uso ottimali]*
-
-* **DApp con Autenticazione**: Perfetto per applicazioni che richiedono un sistema di autenticazione decentralizzato con wallet integrato
-* **Multi-Device**: Ideale per applicazioni che necessitano di sincronizzazione del wallet tra dispositivi
-* **Gaming DApp**: Semplifica l'esperienza utente nascondendo la complessità della gestione del wallet
-
-*[Casi d'uso non consigliati]*
-
-Come per Hedgehog originale, non è consigliato l'utilizzo in:
-
-* **DApp Bancarie**
-* **Prestiti Decentralizzati**
-* **Mercati Predittivi**
-* Qualsiasi applicazione che gestisce grandi somme di denaro
+  // Operazioni stealth
+  generateStealthAddress(receiverViewingKey: string, receiverSpendingKey: string): Promise<{ stealthAddress: string; ephemeralPublicKey: string }>
+  openStealthAddress(stealthAddress: string, senderEphemeralPublicKey: string, receiverViewingKeyPair: KeyPair, receiverSpendingKey: string): Promise<ethers.Wallet>
+}
+```
 
 ## Sicurezza
 
@@ -393,3 +204,52 @@ Le pull request sono benvenute. Per modifiche importanti, apri prima un issue pe
 ## Licenza
 
 [MIT](https://choosealicense.com/licenses/mit/)
+
+# Changelog
+
+Tutte le modifiche notevoli a questo progetto verranno documentate in questo file.
+
+Il formato è basato su [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [2.1.0] - 2024-01-17
+
+### Aggiunto
+- Supporto per autenticazione tramite Ethereum/Metamask
+- Supporto completo per indirizzi stealth
+- Gestione multi-wallet
+- Sincronizzazione decentralizzata tramite Gun.js
+- Test completi per tutte le funzionalità principali
+- Documentazione dettagliata con esempi pratici
+
+### Modificato
+- Migliorata la gestione delle chiavi private
+- Ottimizzata la sincronizzazione dei dati
+- Aggiornate le dipendenze alle versioni più recenti
+
+### Sicurezza
+- Implementata la gestione sicura delle chiavi private
+- Aggiunta la separazione tra chiavi di visualizzazione e di spesa
+- Migliorata la gestione delle sessioni utente
+
+## Esempio di Utilizzo con Ethereum
+
+```typescript
+import { WalletManager } from 'hugo';
+
+// Inizializza WalletManager
+const walletManager = new WalletManager();
+
+// Registrazione nuovo utente con Ethereum
+const username = await walletManager.createAccountWithEthereum();
+console.log('Account creato con indirizzo:', username);
+
+// Login con Ethereum
+const pubKey = await walletManager.loginWithEthereum();
+console.log('Login effettuato con chiave pubblica:', pubKey);
+
+// Il resto delle operazioni rimane invariato
+const gunKeyPair = walletManager.getCurrentUserKeyPair();
+const { walletObj, entropy } = await WalletManager.createWalletObj(gunKeyPair);
+await walletManager.saveWalletToGun(walletObj, username);
+```

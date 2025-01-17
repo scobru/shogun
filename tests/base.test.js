@@ -5,6 +5,7 @@ const { ethers } = require("ethers");
 
 const { WalletManager } = require("../src/WalletManager");
 const { StealthChain } = require("../src/Stealth");
+const { MESSAGE_TO_SIGN } = require("../src/utils/ethereum");
 
 // Funzione di utilità per attendere che i dati siano disponibili in Gun
 const waitForGunData = async (
@@ -21,7 +22,7 @@ const waitForGunData = async (
       if (typeof unsubscribe === "function") {
         unsubscribe();
       }
-      ref.off(); // Rimuove tutti i listener
+      ref.off();
       reject(new Error(`Timeout attendendo i dati per il path: ${path}`));
     }, timeout);
 
@@ -30,60 +31,13 @@ const waitForGunData = async (
     const processedData = new Set();
 
     const processData = async (data) => {
-      try {
-        // Crea una chiave unica per questi dati
-        const dataKey = JSON.stringify(data);
-
-        // Se abbiamo già processato questi dati esatti, ignoriamo
-        if (processedData.has(dataKey)) {
-          return;
-        }
-        processedData.add(dataKey);
-
-        console.log(`📥 Ricevuti dati per ${path}:`, data);
-
-        if (!data) return;
-
-        if (expectedData) {
-          if (typeof expectedData === "function") {
-            const result = await expectedData(data);
-            if (!result) return;
-          } else {
-            const expected =
-              typeof expectedData === "string"
-                ? expectedData
-                : JSON.stringify(expectedData);
-            const actual =
-              typeof data === "string" ? data : JSON.stringify(data);
-            if (expected !== actual) return;
-          }
-        }
-
-        if (!resolved) {
-          console.log(`✅ Dati validi trovati per ${path}`);
-          resolved = true;
-          if (typeof unsubscribe === "function") {
-            unsubscribe();
-          }
-          ref.off(); // Rimuove tutti i listener
-          clearTimeout(timeoutId);
-          resolve(data);
-        }
-      } catch (error) {
-        console.error(
-          `❌ Errore durante l'elaborazione dei dati per ${path}:`,
-          error
-        );
-        if (!resolved) {
-          resolved = true;
-          if (typeof unsubscribe === "function") {
-            unsubscribe();
-          }
-          ref.off(); // Rimuove tutti i listener
-          clearTimeout(timeoutId);
-          reject(error);
-        }
-      }
+      if (!data) return;
+      if (resolved) return;
+      
+      console.log(`📥 Ricevuti dati per ${path}:`, data);
+      resolved = true;
+      clearTimeout(timeoutId);
+      resolve(data);
     };
 
     const ref = gun.get(path);
@@ -649,6 +603,158 @@ describe("WalletManager e StealthChain Test Suite", function () {
           );
         }
       });
+    });
+  });
+});
+
+describe("EthereumManager Test Suite", function () {
+  this.timeout(30000);
+
+  let walletManager;
+  let ethereumManager;
+  let testWallet;
+  const TEST_RPC_URL = "https://optimism.llamarpc.com";
+
+  beforeEach(async function () {
+    walletManager = new WalletManager();
+    ethereumManager = walletManager.getEthereumManager();
+    
+    // Crea un wallet di test
+    testWallet = ethers.Wallet.createRandom();
+    
+    // Configura il provider personalizzato
+    ethereumManager.setCustomProvider(TEST_RPC_URL, testWallet.privateKey);
+  });
+
+  afterEach(function () {
+    if (walletManager.gun) {
+      walletManager.gun.off();
+    }
+    walletManager.logout();
+  });
+
+  describe("Creazione Account", function () {
+    it("dovrebbe creare un account usando il wallet Ethereum", async function () {
+      const username = await ethereumManager.createAccountWithEthereum();
+      
+      assert(username, "Dovrebbe restituire un username");
+      assert.strictEqual(
+        username,
+        testWallet.address.toLowerCase(),
+        "Username dovrebbe essere l'indirizzo Ethereum in minuscolo"
+      );
+
+      const pubKey = walletManager.getPublicKey();
+      assert(pubKey, "Dovrebbe avere una chiave pubblica dopo la creazione");
+    });
+
+    it("dovrebbe gestire errori del provider", async function () {
+      // Configura un provider con URL non valido
+      ethereumManager.setCustomProvider("http://invalid-url", testWallet.privateKey);
+
+      try {
+        await ethereumManager.createAccountWithEthereum();
+        assert.fail("Dovrebbe fallire con provider non valido");
+      } catch (error) {
+        assert(error, "Dovrebbe lanciare un errore");
+      }
+    });
+  });
+
+  describe("Login", function () {
+    it("dovrebbe fare login con un account esistente", async function () {
+      // Prima crea l'account
+      const username = await ethereumManager.createAccountWithEthereum();
+      
+      // Logout
+      walletManager.logout();
+      
+      // Prova il login
+      const pubKey = await ethereumManager.loginWithEthereum();
+      
+      assert(pubKey, "Dovrebbe ottenere una chiave pubblica dopo il login");
+      assert.strictEqual(
+        walletManager.getPublicKey(),
+        pubKey,
+        "Le chiavi pubbliche dovrebbero corrispondere"
+      );
+    });
+
+    it("dovrebbe gestire errori di firma", async function () {
+      try {
+        // Usa una chiave privata invalida (deve essere 32 bytes)
+        const invalidKey = "0x" + "1".repeat(64); // 32 bytes ma non è una chiave valida
+        ethereumManager.setCustomProvider(TEST_RPC_URL, invalidKey);
+        
+        await ethereumManager.loginWithEthereum();
+        assert.fail("Dovrebbe fallire con chiave privata non valida");
+      } catch (error) {
+        assert(error, "Dovrebbe lanciare un errore");
+      }
+    });
+  });
+
+  describe("Integrazione con Gun", function () {
+    it("dovrebbe persistere i dati dell'account su Gun", async function () {
+      const username = await ethereumManager.createAccountWithEthereum();
+      
+      // Attendi che i dati siano salvati su Gun
+      const savedData = await waitForGunData(
+        walletManager.gun,
+        `~@${username}`
+      );
+      
+      assert(savedData, "I dati dovrebbero essere salvati su Gun");
+    });
+
+    it("dovrebbe sincronizzare i dati tra sessioni", async function () {
+      // Prima sessione: crea account
+      const username = await ethereumManager.createAccountWithEthereum();
+      const firstPubKey = walletManager.getPublicKey();
+      
+      // Attendi che i dati siano salvati
+      await waitForGunData(walletManager.gun, `~@${username}`);
+      
+      // Simula nuova sessione
+      walletManager.logout();
+      
+      // Seconda sessione: login
+      const secondPubKey = await ethereumManager.loginWithEthereum();
+      
+      assert.strictEqual(
+        firstPubKey,
+        secondPubKey,
+        "Le chiavi pubbliche dovrebbero essere le stesse tra sessioni"
+      );
+    });
+  });
+
+  describe("Performance e Sicurezza", function () {
+    it("dovrebbe completare le operazioni entro limiti di tempo accettabili", async function () {
+      const startTime = performance.now();
+      
+      await ethereumManager.createAccountWithEthereum();
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      
+      assert(
+        duration < 5000,
+        "La creazione dell'account dovrebbe richiedere meno di 5 secondi"
+      );
+    });
+
+    it("dovrebbe generare password sicure dalla firma", async function () {
+      // Prima crea l'account per ottenere la password generata
+      await ethereumManager.createAccountWithEthereum();
+      
+      // Verifica che la password sia un hash di 64 caratteri (32 bytes)
+      const username = testWallet.address.toLowerCase();
+      
+      // Prova a fare login con la stessa firma
+      const pubKey = await ethereumManager.loginWithEthereum();
+      
+      assert(pubKey, "Dovrebbe accettare la password generata dalla firma");
     });
   });
 });

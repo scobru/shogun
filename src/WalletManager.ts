@@ -1,10 +1,18 @@
+/**
+ * @fileoverview Manages wallet functionality, including authentication and key management
+ * @module WalletManager
+ */
+
 import Gun from "gun";
 import "gun/sea";
 import { createHash } from "crypto";
+import { ethers } from "ethers";
 
 import { Wallet } from "./interfaces/Wallet";
 import type { GunKeyPair } from "./interfaces/GunKeyPair";
 import type { WalletResult } from "./interfaces/WalletResult";
+import { EthereumManager } from "./EthereumManager";
+import { StealthChain } from "./Stealth";
 
 // Extend Gun type definitions
 declare module "gun" {
@@ -15,10 +23,19 @@ declare module "gun" {
 
 const SEA = Gun.SEA;
 
+/**
+ * Main class for managing wallet and related functionality
+ */
 export class WalletManager {
   private gun: any;
   private user: any;
+  private ethereumManager: EthereumManager;
+  private stealthChain: StealthChain;
 
+  /**
+   * Creates a WalletManager instance
+   * Initializes Gun, user and managers for Ethereum and StealthChain
+   */
   constructor() {
     // Initialize Gun with correct options for testing
     this.gun = new Gun({
@@ -27,17 +44,39 @@ export class WalletManager {
       radisk: true,
     });
     this.user = this.gun.user();
+    this.ethereumManager = new EthereumManager(this);
+    this.stealthChain = new StealthChain(this.gun);
+  }
+
+  /**
+   * Gets the EthereumManager instance
+   * @returns {EthereumManager} The EthereumManager instance
+   */
+  public getEthereumManager(): EthereumManager {
+    return this.ethereumManager;
+  }
+
+  /**
+   * Gets the StealthChain instance
+   * @returns {StealthChain} The StealthChain instance
+   */
+  public getStealthChain(): StealthChain {
+    return this.stealthChain;
   }
 
   /**
    * Gets the current user's keyPair
+   * @returns {GunKeyPair} The user's keyPair
    */
   public getCurrentUserKeyPair(): GunKeyPair {
     return this.user._.sea;
   }
 
   /**
-   * Creates a GunDB account using an alias (username) and passphrase
+   * Creates a GunDB account using alias and passphrase
+   * @param {string} alias - Account username
+   * @param {string} passphrase - Account password
+   * @returns {Promise<void>}
    */
   public async createAccount(alias: string, passphrase: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -58,8 +97,10 @@ export class WalletManager {
   }
 
   /**
-   * Logs into GunDB with alias and passphrase.
-   * Returns Gun public key if login successful, otherwise null.
+   * Logs into GunDB with alias and passphrase
+   * @param {string} alias - Account username
+   * @param {string} passphrase - Account password
+   * @returns {Promise<string|null>} Public key if login successful, otherwise null
    */
   public async login(
     alias: string,
@@ -77,22 +118,24 @@ export class WalletManager {
   }
 
   /**
-   * Logs out current GunDB user
+   * Logs out current user from GunDB
    */
   public logout(): void {
     this.user.leave();
   }
 
   /**
-   * Returns logged in GunDB user's public key
+   * Gets the public key of the logged in GunDB user
+   * @returns {string|null} User's public key or null
    */
   public getPublicKey(): string | null {
     return this.user.is?.pub || null;
   }
 
   /**
-   * Converts a Gun private key (in base64Url) to Ethereum-compatible
-   * hexadecimal format (64 hex, prefix "0x")
+   * Converts a Gun private key (in base64Url) to Ethereum-compatible hex format
+   * @param {string} gunPrivateKey - Gun private key in base64Url format
+   * @returns {Promise<string>} Private key in hex format
    */
   public async convertToEthPk(gunPrivateKey: string): Promise<string> {
     const base64UrlToHex = (base64url: string): string => {
@@ -106,14 +149,11 @@ export class WalletManager {
         ).join("");
 
         if (hex.length !== 64) {
-          throw new Error("Lunghezza chiave privata non valida");
+          throw new Error("Impossibile convertire la chiave privata: lunghezza non valida");
         }
         return hex;
       } catch (error) {
-        console.error("Errore nella conversione base64Url to hex:", error);
-        throw new Error(
-          "Impossibile convertire la chiave privata: formato non valido"
-        );
+        throw new Error("Impossibile convertire la chiave privata: formato non valido");
       }
     };
 
@@ -123,12 +163,22 @@ export class WalletManager {
       );
     }
 
-    const hexPrivateKey = "0x" + base64UrlToHex(gunPrivateKey);
-    return hexPrivateKey;
+    try {
+      const hexPrivateKey = "0x" + base64UrlToHex(gunPrivateKey);
+      return hexPrivateKey;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Impossibile convertire la chiave privata: ${error.message}`);
+      }
+      throw new Error("Impossibile convertire la chiave privata: errore sconosciuto");
+    }
   }
 
   /**
    * Saves wallet to GunDB
+   * @param {Wallet} wallet - Wallet to save
+   * @param {string} alias - Username associated with wallet
+   * @returns {Promise<void>}
    */
   public async saveWalletToGun(wallet: Wallet, alias: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -161,14 +211,22 @@ export class WalletManager {
   }
 
   /**
-   * Saves wallet. Uses only Gun, no longer localStorage.
+   * Saves wallet locally using only Gun
+   * @param {Wallet} wallet - Wallet to save
+   * @param {string} alias - Username associated with wallet
+   * @returns {Promise<void>}
    */
   public async saveWalletLocally(wallet: Wallet, alias: string): Promise<void> {
     return this.saveWalletToGun(wallet, alias);
   }
 
   /**
-   * Saves receiver's viewing and spending keys to localStorage
+   * Saves recipient's stealth keys to localStorage
+   * @param {string} alias - Recipient's username
+   * @param {Object} stealthKeys - Object containing stealth keys
+   * @param {string} stealthKeys.spendingKey - Spending key
+   * @param {string} stealthKeys.viewingKey - Viewing key
+   * @returns {Promise<void>}
    */
   public async saveStealthKeysLocally(
     alias: string,
@@ -178,24 +236,31 @@ export class WalletManager {
   }
 
   /**
-   * Retrieves receiver's viewing and spending keys from localStorage
+   * Retrieves recipient's stealth keys from localStorage
+   * @param {string} alias - Recipient's username
+   * @returns {Promise<{spendingKey: string, viewingKey: string}>} Stealth keys
    */
   public async retrieveStealthKeysLocally(
     alias: string
   ): Promise<{ spendingKey: string; viewingKey: string }> {
     const stealthKeys = localStorage.getItem(`stealthKeys_${alias}`);
     if (!stealthKeys) {
-      throw new Error("Chiavi stealth non trovate in localStorage");
+      throw new Error("Stealth keys not found in localStorage");
     }
     const parsed = JSON.parse(stealthKeys);
     if (!parsed || !parsed.spendingKey || !parsed.viewingKey) {
-      throw new Error("Chiavi stealth non valide in localStorage");
+      throw new Error("Invalid stealth keys in localStorage");
     }
     return parsed;
   }
 
   /**
-   * Saves receiver's viewing and spending keys
+   * Saves recipient's stealth keys
+   * @param {string} alias - Recipient's username
+   * @param {Object} stealthKeys - Object containing stealth keys
+   * @param {string} stealthKeys.spendingKey - Spending key
+   * @param {string} stealthKeys.viewingKey - Viewing key
+   * @returns {Promise<void>}
    */
   public async saveStealthKeys(
     alias: string,
@@ -205,7 +270,9 @@ export class WalletManager {
   }
 
   /**
-   * Retrieves receiver's viewing and spending keys
+   * Retrieves recipient's stealth keys
+   * @param {string} alias - Recipient's username
+   * @returns {Promise<{spendingKey: string, viewingKey: string}>} Stealth keys
    */
   public async retrieveStealthKeys(
     alias: string
@@ -229,16 +296,23 @@ export class WalletManager {
           viewingKey: data.viewingKey,
         });
       });
+
+      // Aggiungi un timeout per gestire il caso in cui Gun non risponda
+      setTimeout(() => {
+        reject(new Error("Chiavi stealth non trovate: timeout"));
+      }, 5000);
     });
   }
 
   /**
    * Retrieves all user wallets from Gun
+   * @param {string} alias - User's username
+   * @returns {Promise<Wallet[]>} Array of wallets
    */
   public async retrieveWallets(alias: string): Promise<Wallet[]> {
     return new Promise<Wallet[]>((resolve) => {
       const startTime = performance.now();
-      console.log(`🔄 Iniziato recupero wallet per ${alias}`);
+      console.log(`🔄 Started retrieving wallets for ${alias}`);
 
       const wallets: Wallet[] = [];
 
@@ -255,11 +329,11 @@ export class WalletManager {
           }
         });
 
-      // Aumentato il timeout per gestire meglio le condizioni di rete non ottimali
+      // Increased timeout to better handle non-optimal network conditions
       setTimeout(() => {
         const endTime = performance.now();
         console.log(
-          `✅ Recupero wallet completato in ${Math.round(
+          `✅ Wallet retrieval completed in ${Math.round(
             endTime - startTime
           )}ms`
         );
@@ -269,7 +343,10 @@ export class WalletManager {
   }
 
   /**
-   * Retrieves specific wallet given its public address
+   * Retrieves a specific wallet given its public address
+   * @param {string} alias - User's username
+   * @param {string} publicKey - Wallet's public key
+   * @returns {Promise<Wallet|null>} Found wallet or null
    */
   public async retrieveWalletByAddress(
     alias: string,
@@ -280,8 +357,10 @@ export class WalletManager {
   }
 
   /**
-   * Creates a new wallet from Gun public key,
-   * generating "entropy" that we'll use to create an Ethereum-style address
+   * Creates a new wallet object from Gun public key,
+   * generating "entropy" which we'll use to create an Ethereum-style address
+   * @param {GunKeyPair} gunKeyPair - Gun key pair
+   * @returns {Promise<WalletResult>} Object containing wallet and entropy
    */
   public static async createWalletObj(
     gunKeyPair: GunKeyPair
@@ -309,8 +388,11 @@ export class WalletManager {
   }
 
   /**
-   * Given a `salt` and Gun keyPair, generates a derived key and hashes it with
-   * SHA-256 to obtain an address to use as "public key"
+   * Given a `salt` and Gun key pair, generates a derived key and hashes it with
+   * SHA-256 to get an address to use as "public key"
+   * @param {GunKeyPair} gunKeyPair - Gun key pair
+   * @param {string} salt - Salt for key derivation
+   * @returns {Promise<Wallet>} Created wallet
    */
   public static async createWalletFromSalt(
     gunKeyPair: GunKeyPair,
@@ -336,7 +418,9 @@ export class WalletManager {
   }
 
   /**
-   * Generates spending key and viewing key for receiver
+   * Generates spending and viewing keys for recipient
+   * @param {GunKeyPair} pair - Gun key pair
+   * @returns {Promise<{spendingKey: string, viewingKey: string}>} Generated stealth keys
    */
   public async generateStealthKeys(
     pair: GunKeyPair
