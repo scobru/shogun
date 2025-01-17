@@ -22,9 +22,9 @@ export class WalletManager {
   constructor() {
     // Initialize Gun with correct options for testing
     this.gun = new Gun({
-      peers: ['https://gun-relay.scobrudot.dev/gun'],
+      peers: ["https://gun-relay.scobrudot.dev/gun"],
       localStorage: true,
-      radisk: true
+      radisk: true,
     });
     this.user = this.gun.user();
   }
@@ -91,7 +91,7 @@ export class WalletManager {
   }
 
   /**
-   * Converts a Gun private key (in base64Url) to Ethereum-compatible 
+   * Converts a Gun private key (in base64Url) to Ethereum-compatible
    * hexadecimal format (64 hex, prefix "0x")
    */
   public async convertToEthPk(gunPrivateKey: string): Promise<string> {
@@ -111,12 +111,16 @@ export class WalletManager {
         return hex;
       } catch (error) {
         console.error("Errore nella conversione base64Url to hex:", error);
-        throw new Error("Impossibile convertire la chiave privata: formato non valido");
+        throw new Error(
+          "Impossibile convertire la chiave privata: formato non valido"
+        );
       }
     };
 
-    if (!gunPrivateKey || typeof gunPrivateKey !== 'string') {
-      throw new Error("Impossibile convertire la chiave privata: input non valido");
+    if (!gunPrivateKey || typeof gunPrivateKey !== "string") {
+      throw new Error(
+        "Impossibile convertire la chiave privata: input non valido"
+      );
     }
 
     const hexPrivateKey = "0x" + base64UrlToHex(gunPrivateKey);
@@ -130,19 +134,25 @@ export class WalletManager {
     return new Promise((resolve, reject) => {
       try {
         // Save wallet using a simpler path
-        this.gun.get('wallets').get(alias).set({
-          publicKey: wallet.publicKey,
-          entropy: wallet.entropy,
-          alias: alias,
-          timestamp: Date.now()
-        }, (ack: any) => {
-          if (ack.err) {
-            console.error("Error saving:", ack.err);
-            reject(new Error(ack.err));
-            return;
-          }
-          resolve();
-        });
+        this.gun
+          .get("wallets")
+          .get(alias)
+          .set(
+            {
+              publicKey: wallet.publicKey,
+              entropy: wallet.entropy,
+              alias: alias,
+              timestamp: Date.now(),
+            },
+            (ack: any) => {
+              if (ack.err) {
+                console.error("Error saving:", ack.err);
+                reject(new Error(ack.err));
+                return;
+              }
+              resolve();
+            }
+          );
       } catch (error) {
         console.error("Error saving:", error);
         reject(error);
@@ -174,7 +184,14 @@ export class WalletManager {
     alias: string
   ): Promise<{ spendingKey: string; viewingKey: string }> {
     const stealthKeys = localStorage.getItem(`stealthKeys_${alias}`);
-    return stealthKeys ? JSON.parse(stealthKeys) : null;
+    if (!stealthKeys) {
+      throw new Error("Chiavi stealth non trovate in localStorage");
+    }
+    const parsed = JSON.parse(stealthKeys);
+    if (!parsed || !parsed.spendingKey || !parsed.viewingKey) {
+      throw new Error("Chiavi stealth non valide in localStorage");
+    }
+    return parsed;
   }
 
   /**
@@ -193,7 +210,7 @@ export class WalletManager {
   public async retrieveStealthKeys(
     alias: string
   ): Promise<{ spendingKey: string; viewingKey: string }> {
-    if (!alias || typeof alias !== 'string') {
+    if (!alias || typeof alias !== "string") {
       throw new Error("Chiavi stealth non trovate: alias non valido");
     }
 
@@ -220,19 +237,34 @@ export class WalletManager {
    */
   public async retrieveWallets(alias: string): Promise<Wallet[]> {
     return new Promise<Wallet[]>((resolve) => {
+      const startTime = performance.now();
+      console.log(`🔄 Iniziato recupero wallet per ${alias}`);
+
       const wallets: Wallet[] = [];
-      
-      this.gun.get('wallets').get(alias).map().once((data: any) => {
-        if (!data || !data.publicKey) return;
-        try {
-          wallets.push(new Wallet(data.publicKey, data.entropy));
-        } catch (error) {
-          console.error("Error parsing wallet:", error);
-        }
-      });
-      
-      // Resolve after short timeout to allow Gun to fetch data
-      setTimeout(() => resolve(wallets), 500);
+
+      this.gun
+        .get("wallets")
+        .get(alias)
+        .map()
+        .once((data: any) => {
+          if (!data || !data.publicKey) return;
+          try {
+            wallets.push(new Wallet(data.publicKey, data.entropy));
+          } catch (error) {
+            console.error("Error parsing wallet:", error);
+          }
+        });
+
+      // Aumentato il timeout per gestire meglio le condizioni di rete non ottimali
+      setTimeout(() => {
+        const endTime = performance.now();
+        console.log(
+          `✅ Recupero wallet completato in ${Math.round(
+            endTime - startTime
+          )}ms`
+        );
+        resolve(wallets);
+      }, 2000);
     });
   }
 

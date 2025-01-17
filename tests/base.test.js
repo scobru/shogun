@@ -212,7 +212,6 @@ describe("WalletManager e StealthChain Test Suite", function () {
       beforeEach(async function () {
         username = generateUniqueUsername();
         await walletManager.createAccount(username, "password123");
-        // Attendi un po' per assicurarsi che la creazione sia completata
         await new Promise((resolve) => setTimeout(resolve, 100));
         await walletManager.login(username, "password123");
       });
@@ -339,6 +338,92 @@ describe("WalletManager e StealthChain Test Suite", function () {
             "Dovrebbe indicare un errore di conversione"
           );
         }
+      });
+
+      it("dovrebbe gestire correttamente le race conditions", async function () {
+        const gunKeyPair = walletManager.getCurrentUserKeyPair();
+        const { walletObj } = await WalletManager.createWalletObj(gunKeyPair);
+
+        // Salva il wallet
+        await walletManager.saveWalletToGun(walletObj, username);
+
+        // Attendi che i dati siano salvati
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        console.log("🏃 Test race conditions: avvio richieste multiple");
+        const startTime = performance.now();
+
+        // Esegui 5 richieste simultanee
+        const promises = Array(5)
+          .fill(null)
+          .map(() => walletManager.retrieveWallets(username));
+
+        const results = await Promise.all(promises);
+        const endTime = performance.now();
+        console.log(
+          `⏱️ Test completato in ${Math.round(endTime - startTime)}ms`
+        );
+
+        // Verifica che tutti i risultati siano consistenti
+        results.forEach((wallets) => {
+          assert.strictEqual(
+            wallets.length,
+            1,
+            "Ogni risultato dovrebbe contenere un wallet"
+          );
+          assert.strictEqual(
+            wallets[0].publicKey,
+            walletObj.publicKey,
+            "Le chiavi pubbliche dovrebbero corrispondere"
+          );
+        });
+      });
+
+      it("dovrebbe completare le operazioni entro limiti di tempo accettabili", async function () {
+        const gunKeyPair = walletManager.getCurrentUserKeyPair();
+        const startTime = performance.now();
+
+        // Test creazione wallet
+        console.log("⏱️ Test performance: creazione wallet");
+        const { walletObj } = await WalletManager.createWalletObj(gunKeyPair);
+        const createTime = performance.now();
+        console.log(
+          `Creazione wallet: ${Math.round(createTime - startTime)}ms`
+        );
+
+        // Test salvataggio wallet
+        console.log("⏱️ Test performance: salvataggio wallet");
+        await walletManager.saveWalletToGun(walletObj, username);
+        const saveTime = performance.now();
+        console.log(
+          `Salvataggio wallet: ${Math.round(saveTime - createTime)}ms`
+        );
+
+        // Test recupero wallet
+        console.log("⏱️ Test performance: recupero wallet");
+        const wallets = await walletManager.retrieveWallets(username);
+        const retrieveTime = performance.now();
+        console.log(
+          `Recupero wallet: ${Math.round(retrieveTime - saveTime)}ms`
+        );
+
+        // Verifica tempi di esecuzione
+        const createDuration = createTime - startTime;
+        const saveDuration = saveTime - createTime;
+        const retrieveDuration = retrieveTime - saveTime;
+
+        assert(
+          createDuration < 1000,
+          "La creazione del wallet dovrebbe richiedere meno di 1 secondo"
+        );
+        assert(
+          saveDuration < 3000,
+          "Il salvataggio del wallet dovrebbe richiedere meno di 3 secondi"
+        );
+        assert(
+          retrieveDuration < 3000,
+          "Il recupero del wallet dovrebbe richiedere meno di 3 secondi"
+        );
       });
     });
 
