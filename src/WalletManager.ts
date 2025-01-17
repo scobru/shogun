@@ -5,13 +5,18 @@
 
 import Gun from "gun";
 import "gun/sea";
+import "gun/lib/webrtc"; // Abilita WebRTC in GunDB
+import 'gun/lib/radisk';
+import 'gun/lib/axe';
+
+
 import { ethers } from "ethers";
 
 import { Wallet } from "./interfaces/Wallet";
 import type { GunKeyPair } from "./interfaces/GunKeyPair";
 import type { WalletResult } from "./interfaces/WalletResult";
 import { EthereumManager } from "./EthereumManager";
-import { StealthChain } from "./Stealth";
+import { StealthChain } from "./StealthChain";
 
 // Extend Gun type definitions
 declare module "gun" {
@@ -29,9 +34,11 @@ const SEA = Gun.SEA;
  */
 async function sha256(input: string): Promise<string> {
   const msgBuffer = new TextEncoder().encode(input);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  const hashHex = hashArray
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
   return hashHex;
 }
 
@@ -52,12 +59,27 @@ export class WalletManager {
     // Initialize Gun with correct options for testing
     this.gun = new Gun({
       peers: ["https://gun-relay.scobrudot.dev/gun"],
-      localStorage: true,
-      radisk: true,
+      localStorage: false,
+      radisk:false,
+      rtc: {
+        enable: true,
+        trickle: true,
+      },
+      axe: true,
+      web: false,      
     });
     this.user = this.gun.user();
     this.ethereumManager = new EthereumManager(this);
     this.stealthChain = new StealthChain(this.gun);
+    
+
+    this.gun.on("rtc:peer", (peer: any) => {
+      console.log("Nuovo peer connesso:", peer);
+    });
+
+    this.gun.on("rtc:data", (msg: any) => {
+      console.log("Dati ricevuti via WebRTC:", msg);
+    });
   }
 
   /**
@@ -92,13 +114,37 @@ export class WalletManager {
    */
   public async createAccount(alias: string, passphrase: string): Promise<void> {
     return new Promise((resolve, reject) => {
+      // Prima verifica se l'utente è già autenticato
+      if (this.user.is) {
+        console.log("Utente già autenticato, effettuo logout");
+        this.user.leave(); // Logout dell'utente corrente
+      }
+
+      // Prova a creare l'account
       this.user.create(alias, passphrase, async (ack: any) => {
         if (ack.err) {
-          reject(new Error(ack.err));
+          // Se l'errore indica che l'utente esiste già, prova a fare il login
+          if (
+            ack.err.includes("already created") ||
+            ack.err.includes("already being created")
+          ) {
+            console.log("Account già esistente, provo ad effettuare il login");
+            try {
+              await this.login(alias, passphrase);
+              resolve();
+            } catch (loginError) {
+              reject(loginError);
+            }
+            return;
+          }
+          reject(
+            new Error(`Errore durante la creazione dell'account: ${ack.err}`)
+          );
           return;
         }
         try {
-          // After creation, automatically log in
+          // Dopo la creazione, effettua il login
+          console.log("Account creato con successo, effettuo login");
           await this.login(alias, passphrase);
           resolve();
         } catch (error) {
@@ -112,21 +158,24 @@ export class WalletManager {
    * Logs into GunDB with alias and passphrase
    * @param {string} alias - Account username
    * @param {string} passphrase - Account password
-   * @returns {Promise<string|null>} Public key if login successful, otherwise null
+   * @returns {Promise<string>} Public key if login successful
    */
-  public async login(
-    alias: string,
-    passphrase: string
-  ): Promise<string | null> {
-    return new Promise((resolve, reject) => {
+  public async login(alias: string, passphrase: string): Promise<string> {
+    await new Promise<void>((resolve, reject) => {
       this.user.auth(alias, passphrase, (ack: any) => {
         if (ack.err) {
-          reject(new Error(ack.err));
-          return;
+          reject(new Error("Password errata o utente non trovato"));
+        } else {
+          resolve();
         }
-        resolve(this.user.is?.pub || null);
       });
     });
+
+    if (!this.user.is?.pub) {
+      throw new Error("Login fallito: chiave pubblica non trovata");
+    }
+
+    return this.user.is.pub;
   }
 
   /**
@@ -138,10 +187,14 @@ export class WalletManager {
 
   /**
    * Gets the public key of the logged in GunDB user
-   * @returns {string|null} User's public key or null
+   * @returns {string} User's public key
+   * @throws {Error} If user is not logged in
    */
-  public getPublicKey(): string | null {
-    return this.user.is?.pub || null;
+  public getPublicKey(): string {
+    if (!this.user.is?.pub) {
+      throw new Error("Utente non autenticato");
+    }
+    return this.user.is.pub;
   }
 
   /**
@@ -161,11 +214,15 @@ export class WalletManager {
         ).join("");
 
         if (hex.length !== 64) {
-          throw new Error("Impossibile convertire la chiave privata: lunghezza non valida");
+          throw new Error(
+            "Impossibile convertire la chiave privata: lunghezza non valida"
+          );
         }
         return hex;
       } catch (error) {
-        throw new Error("Impossibile convertire la chiave privata: formato non valido");
+        throw new Error(
+          "Impossibile convertire la chiave privata: formato non valido"
+        );
       }
     };
 
@@ -180,45 +237,68 @@ export class WalletManager {
       return hexPrivateKey;
     } catch (error) {
       if (error instanceof Error) {
-        throw new Error(`Impossibile convertire la chiave privata: ${error.message}`);
+        throw new Error(
+          `Impossibile convertire la chiave privata: ${error.message}`
+        );
       }
-      throw new Error("Impossibile convertire la chiave privata: errore sconosciuto");
+      throw new Error(
+        "Impossibile convertire la chiave privata: errore sconosciuto"
+      );
     }
   }
 
   /**
    * Saves wallet to GunDB
    * @param {Wallet} wallet - Wallet to save
-   * @param {string} alias - Username associated with wallet
+   * @param {string} publicKey - Wallet's public key
    * @returns {Promise<void>}
    */
-  public async saveWalletToGun(wallet: Wallet, alias: string): Promise<void> {
+  public async saveWalletToGun(
+    wallet: Wallet,
+    publicKey: string
+  ): Promise<void> {
+    console.log(`💾 Salvando wallet per ${publicKey}:`, wallet);
+
     return new Promise((resolve, reject) => {
-      try {
-        // Save wallet using a simpler path
-        this.gun
-          .get("wallets")
-          .get(alias)
-          .set(
-            {
-              publicKey: wallet.publicKey,
-              entropy: wallet.entropy,
-              alias: alias,
-              timestamp: Date.now(),
-            },
-            (ack: any) => {
-              if (ack.err) {
-                console.error("Error saving:", ack.err);
-                reject(new Error(ack.err));
-                return;
-              }
-              resolve();
-            }
-          );
-      } catch (error) {
-        console.error("Error saving:", error);
-        reject(error);
-      }
+      let hasResolved = false;
+
+      const walletData = {
+        publicKey: wallet.publicKey,
+        entropy: wallet.entropy,
+        timestamp: Date.now(),
+      };
+
+      console.log("📦 Dati wallet da salvare:", walletData);
+
+      // Salva i dati direttamente
+      const node = this.gun.get("wallets").get(publicKey);
+
+      // Salva ogni campo separatamente
+      node.get("publicKey").put(walletData.publicKey);
+      node.get("entropy").put(walletData.entropy);
+      node.get("timestamp").put(walletData.timestamp);
+
+      // Ascolta per confermare il salvataggio
+      node.on((data: any) => {
+        console.log("📥 Dati ricevuti dopo il salvataggio:", data);
+        if (
+          data &&
+          data.publicKey === wallet.publicKey &&
+          data.entropy === wallet.entropy &&
+          !hasResolved
+        ) {
+          console.log("✅ Wallet salvato con successo");
+          hasResolved = true;
+          resolve();
+        }
+      });
+
+      setTimeout(() => {
+        if (!hasResolved) {
+          console.error("⌛ Timeout nel salvataggio del wallet");
+          reject(new Error("Timeout nel salvataggio del wallet"));
+        }
+      }, 25000);
     });
   }
 
@@ -229,7 +309,7 @@ export class WalletManager {
    * @returns {Promise<void>}
    */
   public async saveWalletLocally(wallet: Wallet, alias: string): Promise<void> {
-    return this.saveWalletToGun(wallet, alias);
+    localStorage.setItem(`wallet_${alias}`, JSON.stringify(wallet));
   }
 
   /**
@@ -278,7 +358,12 @@ export class WalletManager {
     alias: string,
     stealthKeys: { spendingKey: string; viewingKey: string }
   ): Promise<void> {
-    this.gun.get(`stealthKeys/${alias}`).put(stealthKeys);
+    this.gun
+      .get(`stealthKeys/${alias}`)
+      .put(stealthKeys)
+      .on((data: any) => {
+        console.log("✅ Chiavi stealth salvate con successo:", data);
+      });
   }
 
   /**
@@ -318,146 +403,47 @@ export class WalletManager {
 
   /**
    * Retrieves all user wallets from Gun
-   * @param {string} alias - User's username
+   * @param {string} publicKey - User's public key
    * @returns {Promise<Wallet[]>} Array of wallets
    */
-  public async retrieveWallets(alias: string): Promise<Wallet[]> {
-    return new Promise<Wallet[]>((resolve) => {
-      const startTime = performance.now();
-      console.log(`🔄 Started retrieving wallets for ${alias}`);
+  public async retrieveWallets(publicKey: string): Promise<Wallet[]> {
+    console.log(`🔄 Recupero wallet per ${publicKey}`);
 
+    return new Promise((resolve, reject) => {
       const wallets: Wallet[] = [];
+      let hasResolved = false;
 
       this.gun
         .get("wallets")
-        .get(alias)
-        .map()
+        .get(publicKey)
         .once((data: any) => {
-          if (!data || !data.publicKey) return;
+          console.log(`📥 Dati ricevuti:`, data);
+
+          if (!data) {
+            console.log("❌ Nessun wallet trovato");
+            hasResolved = true;
+            resolve([]);
+            return;
+          }
+
           try {
-            wallets.push(new Wallet(data.publicKey, data.entropy));
+            const wallet = new Wallet(data.publicKey, data.entropy);
+            console.log("✅ Wallet creato:", wallet);
+            wallets.push(wallet);
+            hasResolved = true;
+            resolve(wallets);
           } catch (error) {
-            console.error("Error parsing wallet:", error);
+            console.error("❌ Errore nel parsing del wallet:", error);
+            reject(error);
           }
         });
 
-      // Increased timeout to better handle non-optimal network conditions
       setTimeout(() => {
-        const endTime = performance.now();
-        console.log(
-          `✅ Wallet retrieval completed in ${Math.round(
-            endTime - startTime
-          )}ms`
-        );
-        resolve(wallets);
-      }, 2000);
+        if (!hasResolved) {
+          console.error("⌛ Timeout nel recupero dei wallet");
+          reject(new Error("Timeout nel recupero dei wallet"));
+        }
+      }, 25000);
     });
-  }
-
-  /**
-   * Retrieves a specific wallet given its public address
-   * @param {string} alias - User's username
-   * @param {string} publicKey - Wallet's public key
-   * @returns {Promise<Wallet|null>} Found wallet or null
-   */
-  public async retrieveWalletByAddress(
-    alias: string,
-    publicKey: string
-  ): Promise<Wallet | null> {
-    const wallets = await this.retrieveWallets(alias);
-    return wallets.find((w) => w.publicKey === publicKey) || null;
-  }
-
-  /**
-   * Creates a new wallet object from Gun public key,
-   * generating "entropy" which we'll use to create an Ethereum-style address
-   * @param {GunKeyPair} gunKeyPair - Gun key pair
-   * @returns {Promise<WalletResult>} Object containing wallet and entropy
-   */
-  public static async createWalletObj(
-    gunKeyPair: GunKeyPair
-  ): Promise<WalletResult> {
-    try {
-      if (!gunKeyPair.pub) {
-        throw new Error("Missing public key");
-      }
-
-      // Genera entropia casuale usando crypto.getRandomValues
-      const randomBytes = new Uint8Array(32);
-      crypto.getRandomValues(randomBytes);
-      const entropy = Array.from(randomBytes)
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-
-      // Combina l'entropia con la chiave pubblica per generare il salt
-      const salt = `${entropy}_${gunKeyPair.pub}_${Date.now()}`;
-
-      const wallet = await this.createWalletFromSalt(gunKeyPair, salt);
-      wallet.entropy = entropy;
-
-      return {
-        walletObj: wallet,
-        entropy: entropy,
-      };
-    } catch (error: any) {
-      throw new Error(`Error creating wallet: ${error.message}`);
-    }
-  }
-
-  /**
-   * Given a `salt` and Gun key pair, generates a derived key and hashes it with
-   * SHA-256 to get an address to use as "public key"
-   * @param {GunKeyPair} gunKeyPair - Gun key pair
-   * @param {string} salt - Salt for key derivation
-   * @returns {Promise<Wallet>} Created wallet
-   */
-  public static async createWalletFromSalt(
-    gunKeyPair: GunKeyPair,
-    salt: string
-  ): Promise<Wallet> {
-    try {
-      // Derive key from salt + Gun key
-      const derivedKey = await SEA.work(salt, gunKeyPair);
-
-      if (!derivedKey) {
-        throw new Error("Unable to generate derived key");
-      }
-
-      // Generate address by hashing derivedKey
-      const hash = await sha256(derivedKey as string);
-      
-      // Prendi solo gli ultimi 40 caratteri per creare un indirizzo Ethereum valido
-      const address = "0x" + hash.slice(-40);
-
-      return new Wallet(address);
-    } catch (error: any) {
-      throw new Error(`Error recreating wallet: ${error.message}`);
-    }
-  }
-
-  /**
-   * Generates spending and viewing keys for recipient
-   * @param {GunKeyPair} pair - Gun key pair
-   * @returns {Promise<{spendingKey: string, viewingKey: string}>} Generated stealth keys
-   */
-  public async generateStealthKeys(
-    pair: GunKeyPair
-  ): Promise<{ spendingKey: string; viewingKey: string }> {
-    const viewingKeyPair = await SEA.pair();
-    const spendingKeyPair = await SEA.pair();
-
-    const stealthKeyPairs = {
-      spendingKey: spendingKeyPair.epriv,
-      viewingKey: viewingKeyPair.epriv,
-    };
-
-    // encrypt the viewing key with the spending key
-    const encryptedViewingKey = await SEA.encrypt(stealthKeyPairs, pair);
-    const decryptedKeys = await SEA.decrypt(encryptedViewingKey, pair);
-
-    return {
-      spendingKey: decryptedKeys.spendingKey,
-      viewingKey: decryptedKeys.viewingKey,
-    };
   }
 }

@@ -98,21 +98,125 @@ generateKeysBtn.addEventListener('click', async () => {
         const username = usernameInput.value.trim();
         const gunKeyPair = walletManager.getCurrentUserKeyPair();
         
+        console.log("🔑 GunKeyPair corrente:", gunKeyPair);
+        
         if (!gunKeyPair) {
             showStatus('Errore: KeyPair non trovato', true);
             return;
         }
-        
-        const stealthKeys = await stealthChain.generateStealthKeys(gunKeyPair);
-        await stealthChain.saveStealthKeys(username, stealthKeys);
-        
-        spendingKeyDiv.textContent = stealthKeys.spendingKey;
-        viewingKeyDiv.textContent = stealthKeys.viewingKey;
+
+        // Verifica che il keypair sia completo
+        if (!gunKeyPair.pub || !gunKeyPair.priv || !gunKeyPair.epub || !gunKeyPair.epriv) {
+            showStatus('Errore: KeyPair incompleto', true);
+            console.error("KeyPair incompleto:", gunKeyPair);
+            return;
+        }
+
+        const stealthKeys = {
+            spendingKey: gunKeyPair.pub,
+            viewingKeyPair: {
+                pub: gunKeyPair.pub,
+                priv: gunKeyPair.priv,
+                epub: gunKeyPair.epub,
+                epriv: gunKeyPair.epriv
+            }
+        };
+
+        // Salva prima in localStorage
+        await stealthChain.saveStealthKeysLocally(username, stealthKeys);
+        console.log("💾 Chiavi salvate in localStorage");
+
+        // Salva su Gun con percorso corretto
+        await new Promise((resolve, reject) => {
+            // Usa il nodo user per il salvataggio
+            const userNode = walletManager.gun.user();
+            
+            // Prima salva il viewingKeyPair
+            userNode.get('stealth')
+                   .get(username)
+                   .get('viewingKeyPair')
+                   .put({
+                       pub: stealthKeys.viewingKeyPair.pub,
+                       priv: stealthKeys.viewingKeyPair.priv,
+                       epub: stealthKeys.viewingKeyPair.epub,
+                       epriv: stealthKeys.viewingKeyPair.epriv
+                   }, (ack) => {
+                       if (ack.err) {
+                           console.error("Errore nel salvataggio del viewingKeyPair:", ack.err);
+                           reject(new Error(ack.err));
+                           return;
+                       }
+                       
+                       // Poi salva la spendingKey
+                       userNode.get('stealth')
+                              .get(username)
+                              .get('spendingKey')
+                              .put(stealthKeys.spendingKey, (ack) => {
+                                  if (ack.err) {
+                                      console.error("Errore nel salvataggio della spendingKey:", ack.err);
+                                      reject(new Error(ack.err));
+                                  } else {
+                                      console.log("✅ Salvataggio su Gun completato");
+                                      resolve();
+                                  }
+                              });
+                   });
+        });
+
+        // Verifica il salvataggio
+        const savedKeys = await new Promise((resolve, reject) => {
+            const userNode = walletManager.gun.user();
+            userNode.get('stealth').get(username).once((data) => {
+                console.log("📖 Dati recuperati da Gun:", data);
+                if (!data || !data.spendingKey || !data.viewingKeyPair) {
+                    reject(new Error("Chiavi non trovate su Gun"));
+                    return;
+                }
+
+                // Recupera il viewingKeyPair completo
+                userNode.get('stealth')
+                       .get(username)
+                       .get('viewingKeyPair')
+                       .once((viewingKeyPair) => {
+                           if (!viewingKeyPair || 
+                               !viewingKeyPair.pub || 
+                               !viewingKeyPair.priv || 
+                               !viewingKeyPair.epub || 
+                               !viewingKeyPair.epriv) {
+                               reject(new Error("ViewingKeyPair incompleto"));
+                               return;
+                           }
+
+                           const completeKeys = {
+                               spendingKey: data.spendingKey,
+                               viewingKeyPair: viewingKeyPair
+                           };
+                           console.log("🔐 Chiavi complete recuperate:", completeKeys);
+                           resolve(completeKeys);
+                       });
+            });
+        });
+
+        console.log("🔐 Chiavi stealth verificate:", savedKeys);
+
+        // Mostra le chiavi
+        spendingKeyDiv.textContent = savedKeys.spendingKey;
+        viewingKeyDiv.textContent = savedKeys.viewingKeyPair.epub;
         keysInfoDiv.style.display = 'block';
-        
-        showStatus('Chiavi stealth generate con successo!');
+
+        showStatus('Chiavi stealth generate e salvate con successo!');
     } catch (error) {
-        showStatus(`Errore nella generazione delle chiavi stealth: ${error.message}`, true);
+        console.error("❌ Errore completo:", error);
+        // Prova a recuperare da localStorage
+        try {
+            const localKeys = await stealthChain.retrieveStealthKeysLocally(username);
+            spendingKeyDiv.textContent = localKeys.spendingKey;
+            viewingKeyDiv.textContent = localKeys.viewingKeyPair.epub;
+            keysInfoDiv.style.display = 'block';
+            showStatus('Chiavi recuperate da localStorage (salvataggio su Gun fallito)');
+        } catch (localError) {
+            showStatus(`Errore nella generazione delle chiavi stealth: ${error.message}`, true);
+        }
     }
 });
 
@@ -125,12 +229,26 @@ generateStealthAddressBtn.addEventListener('click', async () => {
             return;
         }
         
+        console.log("🔍 Recupero chiavi per:", recipientUsername);
         const recipientKeys = await stealthChain.retrieveStealthKeys(recipientUsername);
+        console.log("🔑 Chiavi del destinatario:", recipientKeys);
+        
+        // Verifica che le chiavi del destinatario siano complete
+        if (!recipientKeys.spendingKey || !recipientKeys.viewingKeyPair ||
+            !recipientKeys.viewingKeyPair.pub || !recipientKeys.viewingKeyPair.priv ||
+            !recipientKeys.viewingKeyPair.epub || !recipientKeys.viewingKeyPair.epriv) {
+            showStatus('Errore: Chiavi del destinatario incomplete', true);
+            console.error("Chiavi destinatario incomplete:", recipientKeys);
+            return;
+        }
         
         const { stealthAddress, ephemeralPublicKey } = await stealthChain.generateStealthAddress(
-            recipientKeys.viewingKey,
+            recipientKeys.viewingKeyPair.epub,
             recipientKeys.spendingKey
         );
+        
+        console.log("🏠 Indirizzo stealth generato:", stealthAddress);
+        console.log("🔐 Chiave pubblica effimera:", ephemeralPublicKey);
         
         stealthAddressDiv.textContent = stealthAddress;
         ephemeralPublicKeyDiv.textContent = ephemeralPublicKey;
@@ -138,6 +256,7 @@ generateStealthAddressBtn.addEventListener('click', async () => {
         
         showStatus('Indirizzo stealth generato con successo!');
     } catch (error) {
+        console.error("❌ Errore completo:", error);
         showStatus(`Errore nella generazione dell'indirizzo stealth: ${error.message}`, true);
     }
 });
@@ -154,10 +273,11 @@ recoverStealthAddressBtn.addEventListener('click', async () => {
         }
         
         const myKeys = await stealthChain.retrieveStealthKeys(username);
+        
         const recoveredWallet = await stealthChain.openStealthAddress(
             stealthAddress,
             ephemeralKey,
-            { epub: myKeys.viewingKey, epriv: myKeys.viewingKey },
+            myKeys.viewingKeyPair,  // Usa il keypair completo
             myKeys.spendingKey
         );
         

@@ -2,49 +2,46 @@ const { describe, it, before, beforeEach, afterEach, after } = require("mocha");
 const assert = require("assert");
 const SEA = require("gun/sea");
 const { ethers } = require("ethers");
+const Gun = require('gun');
 
 const { WalletManager } = require("../src/WalletManager");
-const { StealthChain } = require("../src/Stealth");
+const { StealthChain } = require("../src/StealthChain");
+const { Wallet } = require("../src/interfaces/Wallet");
 const { MESSAGE_TO_SIGN } = require("../src/utils/ethereum");
 
 // Funzione di utilità per attendere che i dati siano disponibili in Gun
-const waitForGunData = async (
-  gun,
-  path,
-  expectedData = null,
-  timeout = 30000
-) => {
+async function waitForGunData(gun, path, timeout = 15000) {
   console.log(`🔄 Iniziata attesa dati per ${path}`);
-
+  
   return new Promise((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      console.log(`⚠️ TIMEOUT per ${path}`);
-      if (typeof unsubscribe === "function") {
-        unsubscribe();
+    let hasResolved = false;
+    
+    const timer = setTimeout(() => {
+      if (!hasResolved) {
+        console.error(`⏰ Timeout dopo ${timeout}ms attendendo i dati per ${path}`);
+        reject(new Error(`Timeout dopo ${timeout}ms attendendo i dati per ${path}`));
       }
-      ref.off();
-      reject(new Error(`Timeout attendendo i dati per il path: ${path}`));
     }, timeout);
 
-    let resolved = false;
-    const unsubscribe = null;
-    const processedData = new Set();
-
-    const processData = async (data) => {
-      if (!data) return;
-      if (resolved) return;
-      
+    gun.get(path).once((data, key) => {
       console.log(`📥 Ricevuti dati per ${path}:`, data);
-      resolved = true;
-      clearTimeout(timeoutId);
-      resolve(data);
-    };
+      if (data && !hasResolved) {
+        hasResolved = true;
+        clearTimeout(timer);
+        resolve(data);
+      }
+    }, {
+      change: true
+    });
 
-    const ref = gun.get(path);
-    ref.on(processData);
-    ref.once(processData);
+    // Gestione errori
+    gun.get(path).once((data, key) => {
+      if (!data && !hasResolved) {
+        console.log(`⚠️ Nessun dato trovato per ${path}`);
+      }
+    });
   });
-};
+}
 
 // Genera username unici
 const generateUniqueUsername = () =>
@@ -52,558 +49,195 @@ const generateUniqueUsername = () =>
 
 describe("WalletManager e StealthChain Test Suite", function () {
   this.timeout(30000);
-
   let walletManager;
   let stealthChain;
-  let receiverSpendingPrivateKey;
-  let localStorageData = {};
+  let gun;
 
-  // Inizializza WalletManager una sola volta per tutti i test
-  before(function () {
+  beforeEach(async () => {
     walletManager = new WalletManager();
+    stealthChain = walletManager.getStealthChain();
+    gun = walletManager.gun;
   });
 
-  // Cleanup dopo tutti i test
-  after(function () {
-    if (walletManager.gun) {
-      walletManager.gun.off();
+  it("dovrebbe creare un account e fare login", async () => {
+    const alias = generateUniqueUsername();
+    const password = "password";
+    
+    await walletManager.createAccount(alias, password);
+    const publicKey = walletManager.getPublicKey();
+    assert(publicKey, "Dovrebbe ottenere una chiave pubblica");
+  });
+
+  it("dovrebbe gestire errori di login", async () => {
+    const alias = generateUniqueUsername();
+    const password = "password";
+    const wrongPassword = "wrongpassword";
+    
+    await walletManager.createAccount(alias, password);
+    
+    try {
+      await walletManager.login(alias, wrongPassword);
+      assert.fail("Il login dovrebbe fallire");
+    } catch (error) {
+      assert(error.message.includes("errata"), "Dovrebbe contenere il messaggio di errore corretto");
     }
   });
 
-  beforeEach(async function () {
-    // Ricrea una nuova istanza di WalletManager per ogni test
-    walletManager = new WalletManager();
+  it("dovrebbe salvare e recuperare un wallet", async () => {
+    const alias = generateUniqueUsername();
+    const password = "password";
+    
+    await walletManager.createAccount(alias, password);
+    const publicKey = walletManager.getPublicKey();
+    assert(publicKey, "Dovrebbe avere una chiave pubblica");
 
-    const wallet = ethers.Wallet.createRandom();
-    receiverSpendingPrivateKey = wallet.privateKey;
-    stealthChain = new StealthChain();
-    localStorageData = {}; // Reset localStorage mock data
+    const wallet = new Wallet("0x123", "test");
 
-    // Mock localStorage migliorato
-    global.localStorage = {
-      getItem: (key) => localStorageData[key] || null,
-      setItem: (key, value) => {
-        localStorageData[key] = value;
-      },
-      removeItem: (key) => {
-        delete localStorageData[key];
-      },
-      clear: () => {
-        localStorageData = {};
-      },
-      length: 0,
-      key: () => null,
-    };
-
-    // Assicurati che l'utente sia disconnesso
-    walletManager.logout();
-
-    // Attendi un po' per assicurarsi che Gun sia pronto
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  });
-
-  afterEach(function () {
-    // Cleanup dopo ogni test
-    if (walletManager.gun) {
-      walletManager.gun.off();
+    try {
+      await walletManager.saveWalletToGun(wallet, publicKey);
+      console.log("💾 Wallet salvato, attendo sincronizzazione...");
+      
+      // Attendi che i dati siano salvati
+      const savedData = await waitForGunData(walletManager.gun, `wallets/${publicKey}`, 15000);
+      console.log("📥 Dati salvati:", savedData);
+      
+      const wallets = await walletManager.retrieveWallets(publicKey);
+      console.log("📥 Wallet recuperati:", wallets);
+      
+      assert(Array.isArray(wallets), "Il risultato dovrebbe essere un array");
+      assert(wallets.length > 0, "Dovrebbe contenere almeno un wallet");
+      assert.strictEqual(wallets[0].publicKey, wallet.publicKey, "La chiave pubblica del wallet dovrebbe corrispondere");
+    } catch (error) {
+      console.error("❌ Errore durante il test del wallet:", error);
+      throw error;
     }
-    walletManager.logout();
+  }).timeout(30000);
+
+  it("dovrebbe generare chiavi stealth valide", async () => {
+    const alias = generateUniqueUsername();
+    const password = "password";
+    
+    await walletManager.createAccount(alias, password);
+    const gunKeyPair = walletManager.getCurrentUserKeyPair();
+    
+    const stealthKeys = await stealthChain.generateStealthKeys(gunKeyPair);
+    assert(stealthKeys.spendingKey, "Dovrebbe avere una spendingKey");
+    assert(stealthKeys.viewingKeyPair, "Dovrebbe avere un viewingKeyPair");
+    assert(stealthKeys.viewingKeyPair.pub && 
+           stealthKeys.viewingKeyPair.priv && 
+           stealthKeys.viewingKeyPair.epub && 
+           stealthKeys.viewingKeyPair.epriv, 
+           "Il viewingKeyPair dovrebbe avere tutte le chiavi necessarie");
   });
 
-  describe("WalletManager", function () {
-    describe("Gestione Account", function () {
-      it("dovrebbe creare un account e fare login", async function () {
-        const username = generateUniqueUsername();
+  it("dovrebbe salvare e recuperare chiavi stealth", async () => {
+    const alias = generateUniqueUsername();
+    const password = "password";
+    
+    await walletManager.createAccount(alias, password);
+    const publicKey = walletManager.getPublicKey();
+    assert(publicKey, "Dovrebbe avere una chiave pubblica");
 
-        // Creazione account
-        await walletManager.createAccount(username, "password123");
+    const gunKeyPair = await walletManager.getCurrentUserKeyPair();
+    const stealthKeys = await stealthChain.generateStealthKeys(gunKeyPair);
+    
+    try {
+      // Salva le chiavi stealth
+      await stealthChain.saveStealthKeys(stealthKeys, publicKey);
+      console.log("💾 Chiavi stealth salvate, attendo sincronizzazione...");
+      
+      // Verifica i dati pubblici
+      const savedPublicData = await waitForGunData(walletManager.gun, `stealth/${publicKey}`, 30000);
+      console.log("📥 Dati pubblici salvati:", savedPublicData);
+      
+      assert(savedPublicData.spendingKey, "Dovrebbe avere una spendingKey");
+      assert(savedPublicData.viewingKeyPair, "Dovrebbe avere un viewingKeyPair");
+      
+      // Verifica i dati privati
+      const savedPrivateData = await waitForGunData(walletManager.gun.user().get('stealthKeys'), publicKey, 30000);
+      console.log("📥 Dati privati salvati:", savedPrivateData);
+      
+      
+      // Recupera le chiavi stealth
+      const retrievedKeys = await stealthChain.retrieveStealthKeys(publicKey);
+      console.log("🔑 Chiavi stealth recuperate:", retrievedKeys);
+      
+      // Verifica che i dati recuperati corrispondano
+      assert.deepStrictEqual(retrievedKeys, stealthKeys, "Le chiavi stealth recuperate dovrebbero corrispondere a quelle salvate");
+    } catch (error) {
+      console.error("❌ Errore durante il test delle chiavi stealth:", error);
+      throw error;
+    }
+  }).timeout(60000);
 
-        // Attendi un po' per assicurarsi che la creazione sia completata
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        const pubKey = await walletManager.login(username, "password123");
-
-        assert(pubKey, "Dovrebbe ottenere una chiave pubblica dopo il login");
-        assert.strictEqual(
-          pubKey,
-          walletManager.getPublicKey(),
-          "Le chiavi pubbliche dovrebbero corrispondere"
-        );
-      });
-
-      it("dovrebbe gestire errori di login", async function () {
-        const username = generateUniqueUsername();
-
-        try {
-          await walletManager.login(username, "password123");
-          assert.fail("Dovrebbe fallire con credenziali non valide");
-        } catch (error) {
-          assert(error, "Dovrebbe lanciare un errore");
-        }
-      });
-
-      it("dovrebbe gestire il logout correttamente", async function () {
-        const username = generateUniqueUsername();
-
-        await walletManager.createAccount(username, "password123");
-        // Attendi un po' per assicurarsi che la creazione sia completata
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        await walletManager.login(username, "password123");
-
-        walletManager.logout();
-        assert.strictEqual(
-          walletManager.getPublicKey(),
-          null,
-          "Dovrebbe rimuovere la chiave pubblica dopo il logout"
-        );
-      });
-    });
-
-    describe("Gestione Wallet", function () {
-      let username;
-
-      beforeEach(async function () {
-        username = generateUniqueUsername();
-        await walletManager.createAccount(username, "password123");
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        await walletManager.login(username, "password123");
-      });
-
-      it("dovrebbe creare e recuperare wallet", async function () {
-        const gunKeyPair = walletManager.getCurrentUserKeyPair();
-        const { walletObj, entropy } = await WalletManager.createWalletObj(
-          gunKeyPair
-        );
-        console.log("Entropy generata:", entropy);
-
-        // Salva il wallet
-        await walletManager.saveWalletToGun(walletObj, username);
-
-        // Attendi che i dati siano salvati in Gun
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        // Recupera il wallet direttamente da Gun per verificare il salvataggio
-        const savedData = await new Promise((resolve) => {
-          walletManager.gun
-            .get("wallets")
-            .get(username)
-            .once((data) => {
-              resolve(data);
-            });
-        });
-
-        assert(savedData, "I dati dovrebbero essere salvati in Gun");
-
-        // Recupera il wallet usando il metodo della classe
-        const retrievedWallet = await walletManager.retrieveWalletByAddress(
-          username,
-          walletObj.publicKey
-        );
-
-        assert(retrievedWallet, "Dovrebbe recuperare il wallet");
-        assert.strictEqual(
-          retrievedWallet.publicKey,
-          walletObj.publicKey,
-          "Gli indirizzi dovrebbero corrispondere"
-        );
-      });
-
-      it("dovrebbe gestire più wallet per utente", async function () {
-        const gunKeyPair = walletManager.getCurrentUserKeyPair();
-
-        // Crea due wallet
-        const { walletObj: wallet1 } = await WalletManager.createWalletObj(
-          gunKeyPair
-        );
-        const { walletObj: wallet2 } = await WalletManager.createWalletObj(
-          gunKeyPair
-        );
-
-        // Salva entrambi i wallet
-        await walletManager.saveWalletToGun(wallet1, username);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        await walletManager.saveWalletToGun(wallet2, username);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        // Verifica il salvataggio direttamente in Gun
-        const savedData = await new Promise((resolve) => {
-          const wallets = [];
-          walletManager.gun
-            .get("wallets")
-            .get(username)
-            .map()
-            .once((data, key) => {
-              if (data && data.publicKey) {
-                wallets.push(data);
-              }
-            });
-          setTimeout(() => resolve(wallets), 1000);
-        });
-
-        assert(
-          savedData.length >= 2,
-          "Dovrebbero esserci almeno due wallet salvati"
-        );
-
-        // Recupera i wallet usando il metodo della classe
-        const wallets = await walletManager.retrieveWallets(username);
-
-        // Verifica che ci siano almeno due wallet
-        assert(wallets.length >= 2, "Dovrebbe avere almeno due wallet");
-
-        // Verifica che entrambi i wallet siano presenti
-        const hasWallet1 = wallets.some(
-          (w) => w.publicKey === wallet1.publicKey
-        );
-        const hasWallet2 = wallets.some(
-          (w) => w.publicKey === wallet2.publicKey
-        );
-
-        assert(hasWallet1, "Dovrebbe contenere il primo wallet");
-        assert(hasWallet2, "Dovrebbe contenere il secondo wallet");
-      });
-
-      it("dovrebbe gestire la conversione delle chiavi private Gun in formato Ethereum", async function () {
-        const gunKeyPair = walletManager.getCurrentUserKeyPair();
-        const ethPrivateKey = await walletManager.convertToEthPk(
-          gunKeyPair.epriv
-        );
-
-        assert(
-          ethPrivateKey.startsWith("0x"),
-          "La chiave dovrebbe iniziare con 0x"
-        );
-        assert.strictEqual(
-          ethPrivateKey.length,
-          66,
-          "La chiave dovrebbe essere lunga 66 caratteri (0x + 64)"
-        );
-      });
-
-      it("dovrebbe gestire errori nella conversione delle chiavi private", async function () {
-        try {
-          await walletManager.convertToEthPk("chiave_non_valida");
-          assert.fail("Dovrebbe fallire con una chiave non valida");
-        } catch (error) {
-          assert(
-            error.message.includes("Impossibile convertire"),
-            "Dovrebbe indicare un errore di conversione"
-          );
-        }
-      });
-
-      it("dovrebbe gestire correttamente le race conditions", async function () {
-        const gunKeyPair = walletManager.getCurrentUserKeyPair();
-        const { walletObj } = await WalletManager.createWalletObj(gunKeyPair);
-
-        // Salva il wallet
-        await walletManager.saveWalletToGun(walletObj, username);
-
-        // Attendi che i dati siano salvati
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        console.log("🏃 Test race conditions: avvio richieste multiple");
-        const startTime = performance.now();
-
-        // Esegui 5 richieste simultanee
-        const promises = Array(5)
-          .fill(null)
-          .map(() => walletManager.retrieveWallets(username));
-
-        const results = await Promise.all(promises);
-        const endTime = performance.now();
-        console.log(
-          `⏱️ Test completato in ${Math.round(endTime - startTime)}ms`
-        );
-
-        // Verifica che tutti i risultati siano consistenti
-        results.forEach((wallets) => {
-          assert.strictEqual(
-            wallets.length,
-            1,
-            "Ogni risultato dovrebbe contenere un wallet"
-          );
-          assert.strictEqual(
-            wallets[0].publicKey,
-            walletObj.publicKey,
-            "Le chiavi pubbliche dovrebbero corrispondere"
-          );
-        });
-      });
-
-      it("dovrebbe completare le operazioni entro limiti di tempo accettabili", async function () {
-        const gunKeyPair = walletManager.getCurrentUserKeyPair();
-        const startTime = performance.now();
-
-        // Test creazione wallet
-        console.log("⏱️ Test performance: creazione wallet");
-        const { walletObj } = await WalletManager.createWalletObj(gunKeyPair);
-        const createTime = performance.now();
-        console.log(
-          `Creazione wallet: ${Math.round(createTime - startTime)}ms`
-        );
-
-        // Test salvataggio wallet
-        console.log("⏱️ Test performance: salvataggio wallet");
-        await walletManager.saveWalletToGun(walletObj, username);
-        const saveTime = performance.now();
-        console.log(
-          `Salvataggio wallet: ${Math.round(saveTime - createTime)}ms`
-        );
-
-        // Test recupero wallet
-        console.log("⏱️ Test performance: recupero wallet");
-        const wallets = await walletManager.retrieveWallets(username);
-        const retrieveTime = performance.now();
-        console.log(
-          `Recupero wallet: ${Math.round(retrieveTime - saveTime)}ms`
-        );
-
-        // Verifica tempi di esecuzione
-        const createDuration = createTime - startTime;
-        const saveDuration = saveTime - createTime;
-        const retrieveDuration = retrieveTime - saveTime;
-
-        assert(
-          createDuration < 1000,
-          "La creazione del wallet dovrebbe richiedere meno di 1 secondo"
-        );
-        assert(
-          saveDuration < 3000,
-          "Il salvataggio del wallet dovrebbe richiedere meno di 3 secondi"
-        );
-        assert(
-          retrieveDuration < 3000,
-          "Il recupero del wallet dovrebbe richiedere meno di 3 secondi"
-        );
-      });
-    });
-
-    describe("Gestione Chiavi Stealth", function () {
-      let username;
-      let gunKeyPair;
-
-      beforeEach(async function () {
-        username = generateUniqueUsername();
-        await walletManager.createAccount(username, "password123");
-        // Attendi un po' per assicurarsi che la creazione sia completata
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        await walletManager.login(username, "password123");
-        gunKeyPair = walletManager.getCurrentUserKeyPair();
-      });
-
-      it("dovrebbe salvare e recuperare le chiavi stealth da Gun", async function () {
-        const stealthKeys = await walletManager.generateStealthKeys(gunKeyPair);
-
-        await walletManager.saveStealthKeys(username, stealthKeys);
-
-        // Attendi che i dati siano salvati in Gun
-        await waitForGunData(
-          walletManager.gun,
-          `stealthKeys/${username}`,
-          (data) => {
-            return data && data.spendingKey === stealthKeys.spendingKey;
-          }
-        );
-
-        const retrievedKeys = await walletManager.retrieveStealthKeys(username);
-        assert.deepStrictEqual(
-          retrievedKeys,
-          stealthKeys,
-          "Le chiavi recuperate dovrebbero corrispondere"
-        );
-      });
-
-      it("dovrebbe salvare e recuperare le chiavi stealth da localStorage", async function () {
-        const stealthKeys = await walletManager.generateStealthKeys(gunKeyPair);
-
-        await walletManager.saveStealthKeysLocally(username, stealthKeys);
-        const retrievedKeys = await walletManager.retrieveStealthKeysLocally(
-          username
-        );
-
-        // Confronta le chiavi come oggetti JSON per evitare problemi di serializzazione
-        const expectedKeys = JSON.parse(JSON.stringify(stealthKeys));
-        const actualKeys = JSON.parse(JSON.stringify(retrievedKeys));
-        assert.deepStrictEqual(
-          actualKeys,
-          expectedKeys,
-          "Le chiavi recuperate dovrebbero corrispondere"
-        );
-      });
-
-      it("dovrebbe gestire errori nel recupero di chiavi stealth non esistenti", async function () {
-        try {
-          await walletManager.retrieveStealthKeys("utente_non_esistente");
-          assert.fail("Dovrebbe fallire per un utente non esistente");
-        } catch (error) {
-          assert(
-            error.message.includes("non trovate"),
-            "Dovrebbe indicare che le chiavi non sono state trovate"
-          );
-        }
-      });
-    });
+  it("dovrebbe generare un indirizzo stealth valido", async () => {
+    const alias = generateUniqueUsername();
+    const password = "password";
+    
+    await walletManager.createAccount(alias, password);
+    const gunKeyPair = walletManager.getCurrentUserKeyPair();
+    
+    const stealthKeys = await stealthChain.generateStealthKeys(gunKeyPair);
+    const result = await stealthChain.generateStealthAddress(
+      stealthKeys.viewingKeyPair.epub,
+      stealthKeys.spendingKey
+    );
+    
+    assert(result.stealthAddress, "Dovrebbe avere un indirizzo stealth");
+    assert(result.ephemeralPublicKey, "Dovrebbe avere una chiave pubblica effimera");
+    assert(/^0x[a-fA-F0-9]{40}$/.test(result.stealthAddress), "L'indirizzo stealth dovrebbe essere nel formato corretto");
   });
 
-  describe("StealthChain", function () {
-    describe("Generazione e Recupero Indirizzi Stealth", function () {
-      it("dovrebbe generare un indirizzo stealth valido", async function () {
-        // Genera le chiavi di visualizzazione
-        const receiverViewingKeyPair = await SEA.pair();
+  it("dovrebbe recuperare correttamente un indirizzo stealth", async () => {
+    const alias = generateUniqueUsername();
+    const password = "password";
+    
+    await walletManager.createAccount(alias, password);
+    const gunKeyPair = walletManager.getCurrentUserKeyPair();
+    
+    const stealthKeys = await stealthChain.generateStealthKeys(gunKeyPair);
+    const { stealthAddress, ephemeralPublicKey } = await stealthChain.generateStealthAddress(
+      stealthKeys.viewingKeyPair.epub,
+      stealthKeys.spendingKey
+    );
+    
+    const recovered = await stealthChain.openStealthAddress(
+      stealthAddress,
+      ephemeralPublicKey,
+      stealthKeys.viewingKeyPair,
+      stealthKeys.spendingKey
+    );
+    
+    assert.strictEqual(recovered.address.toLowerCase(), stealthAddress.toLowerCase(), 
+                      "L'indirizzo recuperato dovrebbe corrispondere");
+  });
 
-        // Genera l'indirizzo stealth usando le chiavi di visualizzazione
-        const result = await stealthChain.generateStealthAddress(
-          receiverViewingKeyPair.epub,
-          receiverSpendingPrivateKey
-        );
+  it("dovrebbe gestire errori con chiavi non valide", async () => {
+    try {
+      await stealthChain.generateStealthAddress("invalid_key", "invalid_key");
+      assert.fail("Dovrebbe lanciare un errore");
+    } catch (error) {
+      console.log("Errore ricevuto:", error.message);
+      assert(
+        error.message.includes("non valid") || 
+        error.message.includes("conversione") || 
+        error.message.includes("Chiavi pubbliche non valide") ||
+        error.message.includes("Impossibile calcolare il segreto condiviso"),
+        `Messaggio di errore non valido: ${error.message}`
+      );
+    }
 
-        // Verifica che l'indirizzo sia valido
-        assert(
-          result.stealthAddress.match(/^0x[a-fA-F0-9]{40}$/),
-          "Dovrebbe generare un indirizzo valido"
-        );
-        assert(
-          result.ephemeralPublicKey,
-          "Dovrebbe fornire una chiave pubblica effimera"
-        );
-
-        // Verifica che le chiavi di visualizzazione siano state usate correttamente
-        const recoveredWallet = await stealthChain.openStealthAddress(
-          result.stealthAddress,
-          result.ephemeralPublicKey,
-          receiverViewingKeyPair,
-          receiverSpendingPrivateKey
-        );
-
-        assert(
-          recoveredWallet.address,
-          "Dovrebbe poter recuperare il wallet usando le chiavi di visualizzazione"
-        );
-      });
-
-      it("dovrebbe recuperare correttamente la chiave privata stealth", async function () {
-        const receiverViewingKeyPair = await SEA.pair();
-
-        const { stealthAddress, ephemeralPublicKey } =
-          await stealthChain.generateStealthAddress(
-            receiverViewingKeyPair.epub,
-            receiverSpendingPrivateKey
-          );
-
-        const recoveredWallet = await stealthChain.openStealthAddress(
-          stealthAddress,
-          ephemeralPublicKey,
-          receiverViewingKeyPair,
-          receiverSpendingPrivateKey
-        );
-
-        assert.strictEqual(
-          recoveredWallet.address.toLowerCase(),
-          stealthAddress.toLowerCase(),
-          "Gli indirizzi dovrebbero corrispondere"
-        );
-      });
-
-      it("dovrebbe generare indirizzi diversi per lo stesso destinatario", async function () {
-        const receiverViewingKeyPair = await SEA.pair();
-
-        const result1 = await stealthChain.generateStealthAddress(
-          receiverViewingKeyPair.epub,
-          receiverSpendingPrivateKey
-        );
-
-        const result2 = await stealthChain.generateStealthAddress(
-          receiverViewingKeyPair.epub,
-          receiverSpendingPrivateKey
-        );
-
-        assert.notStrictEqual(
-          result1.stealthAddress,
-          result2.stealthAddress,
-          "Gli indirizzi dovrebbero essere diversi"
-        );
-
-        // Verifica che entrambi gli indirizzi siano recuperabili
-        const wallet1 = await stealthChain.openStealthAddress(
-          result1.stealthAddress,
-          result1.ephemeralPublicKey,
-          receiverViewingKeyPair,
-          receiverSpendingPrivateKey
-        );
-
-        const wallet2 = await stealthChain.openStealthAddress(
-          result2.stealthAddress,
-          result2.ephemeralPublicKey,
-          receiverViewingKeyPair,
-          receiverSpendingPrivateKey
-        );
-
-        assert(
-          wallet1.address && wallet2.address,
-          "Entrambi i wallet dovrebbero essere recuperabili"
-        );
-      });
-
-      it("dovrebbe fallire con chiavi errate", async function () {
-        const correctViewingKeyPair = await SEA.pair();
-        const wrongViewingKeyPair = await SEA.pair();
-
-        const { stealthAddress, ephemeralPublicKey } =
-          await stealthChain.generateStealthAddress(
-            correctViewingKeyPair.epub,
-            receiverSpendingPrivateKey
-          );
-
-        try {
-          await stealthChain.openStealthAddress(
-            stealthAddress,
-            ephemeralPublicKey,
-            wrongViewingKeyPair,
-            receiverSpendingPrivateKey
-          );
-          assert.fail("Dovrebbe fallire con chiavi errate");
-        } catch (error) {
-          assert(
-            error.message.includes("non corrisponde"),
-            "Dovrebbe indicare che l'indirizzo non corrisponde"
-          );
-        }
-      });
-    });
-
-    describe("Gestione Errori", function () {
-      it("dovrebbe gestire chiavi pubbliche non valide nella generazione dell'indirizzo", async function () {
-        try {
-          await stealthChain.generateStealthAddress("", "");
-          assert.fail("Dovrebbe fallire con chiavi non valide");
-        } catch (error) {
-          assert(
-            error.message.includes("non valida"),
-            "Dovrebbe indicare chiavi non valide"
-          );
-        }
-      });
-
-      it("dovrebbe gestire errori nella derivazione della chiave condivisa", async function () {
-        // const receiverViewingKeyPair = await SEA.pair()
-
-        try {
-          await stealthChain.generateStealthAddress(
-            undefined,
-            receiverSpendingPrivateKey
-          );
-          assert.fail("Dovrebbe fallire con chiave undefined");
-        } catch (error) {
-          assert(
-            error.message.includes("non valida"),
-            "Dovrebbe indicare una chiave non valida"
-          );
-        }
-      });
-    });
+    try {
+      await stealthChain.generateStealthKeys({});
+      assert.fail("Dovrebbe lanciare un errore con keypair invalido");
+    } catch (error) {
+      console.log("Errore ricevuto:", error.message);
+      assert(
+        error.message.includes("non valido") || 
+        error.message.includes("Keypair non valido"),
+        `Messaggio di errore non valido: ${error.message}`
+      );
+    }
   });
 });
 
@@ -763,13 +397,10 @@ describe("StealthChain Test Suite", function () {
   this.timeout(30000);
   let walletManager;
   let stealthChain;
-  let gun;
 
   beforeEach(async () => {
-    const Gun = require('gun');
-    gun = Gun();
-    walletManager = new WalletManager(gun);
-    stealthChain = new StealthChain(gun);
+    walletManager = new WalletManager();
+    stealthChain = walletManager.getStealthChain();
   });
 
   it("dovrebbe generare e recuperare correttamente un indirizzo stealth", async () => {

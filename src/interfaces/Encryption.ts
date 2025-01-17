@@ -1,4 +1,8 @@
 import { ethers } from "ethers";
+import Gun from 'gun';
+import "gun/sea";
+
+const SEA = Gun.SEA;
 
 export interface KeyPair {
   epub: string;
@@ -34,22 +38,18 @@ export async function deriveSharedKey(
       );
     }
 
-    // Usa il metodo di hashing diretto per evitare problemi di codifica
-    const theirPubHash = ethers.keccak256(ethers.toUtf8Bytes(theirPub));
-    const myPubHash = ethers.keccak256(ethers.toUtf8Bytes(myKeyPair.epub));
-
-    // Combina i due hash per ottenere il segreto condiviso
-    const sharedKey = ethers.keccak256(
-      ethers.concat([ethers.getBytes(theirPubHash), ethers.getBytes(myPubHash)])
-    );
-
-    if (!sharedKey) {
+    // Usa SEA.secret per derivare il segreto condiviso
+    const sharedSecret = await SEA.secret(theirPub, myKeyPair);
+    if (!sharedSecret) {
       throw new Error("Impossibile generare la chiave condivisa");
     }
 
+    // Converti il segreto condiviso in formato hex
+    const sharedSecretHex = ethers.keccak256(ethers.toUtf8Bytes(sharedSecret));
+
     return {
       epub: theirPub,
-      epriv: sharedKey,
+      epriv: sharedSecretHex,
     };
   } catch (error) {
     if (error instanceof Error) {
