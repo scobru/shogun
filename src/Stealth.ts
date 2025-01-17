@@ -31,11 +31,15 @@ async function deriveSharedKey(theirPub: string, myKeyPair: KeyPair): Promise<Ke
       throw new Error("Keypair non valido per la derivazione della chiave condivisa");
     }
 
-    // Usa lo stesso metodo sia per la generazione che per il recupero
+    // Usa il metodo di hashing diretto per evitare problemi di codifica
+    const theirPubHash = ethers.keccak256(ethers.toUtf8Bytes(theirPub));
+    const myPubHash = ethers.keccak256(ethers.toUtf8Bytes(myKeyPair.epub));
+    
+    // Combina i due hash per ottenere il segreto condiviso
     const sharedKey = ethers.keccak256(
       ethers.concat([
-        ethers.getBytes(ethers.keccak256(ethers.toUtf8Bytes(theirPub))),
-        ethers.getBytes(ethers.keccak256(ethers.toUtf8Bytes(myKeyPair.epub)))
+        ethers.getBytes(theirPubHash),
+        ethers.getBytes(myPubHash)
       ])
     );
 
