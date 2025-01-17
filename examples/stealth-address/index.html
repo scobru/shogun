@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hugo - Esempio Indirizzi Stealth</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+            border: 1px solid #d6e9c6;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+            border: 1px solid #ebccd1;
+        }
+        .section {
+            margin-top: 30px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .key-info {
+            word-break: break-all;
+            font-family: monospace;
+            background-color: #f1f1f1;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Hugo - Esempio Indirizzi Stealth</h1>
+        
+        <!-- Sezione Account -->
+        <div class="section">
+            <h2>Account</h2>
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" placeholder="Inserisci username">
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" placeholder="Inserisci password">
+            </div>
+            <button id="createAccount">Crea Account</button>
+            <button id="login">Login</button>
+            <button id="logout" disabled>Logout</button>
+        </div>
+
+        <!-- Sezione Chiavi Stealth -->
+        <div class="section">
+            <h2>Chiavi Stealth</h2>
+            <button id="generateKeys" disabled>Genera Chiavi Stealth</button>
+            <div id="keysInfo" style="display: none;">
+                <h3>Chiavi Generate:</h3>
+                <p><strong>Chiave di Spesa:</strong></p>
+                <div id="spendingKey" class="key-info"></div>
+                <p><strong>Chiave di Visualizzazione:</strong></p>
+                <div id="viewingKey" class="key-info"></div>
+            </div>
+        </div>
+
+        <!-- Sezione Indirizzo Stealth -->
+        <div class="section">
+            <h2>Genera Indirizzo Stealth</h2>
+            <div class="form-group">
+                <label for="recipientUsername">Username Destinatario:</label>
+                <input type="text" id="recipientUsername" placeholder="Username del destinatario">
+            </div>
+            <button id="generateStealthAddress" disabled>Genera Indirizzo Stealth</button>
+            <div id="stealthAddressInfo" style="display: none;">
+                <h3>Indirizzo Stealth Generato:</h3>
+                <p><strong>Indirizzo:</strong></p>
+                <div id="stealthAddress" class="key-info"></div>
+                <p><strong>Chiave Pubblica Effimera:</strong></p>
+                <div id="ephemeralPublicKey" class="key-info"></div>
+            </div>
+        </div>
+
+        <!-- Sezione Recupero Indirizzo -->
+        <div class="section">
+            <h2>Recupera Indirizzo Stealth</h2>
+            <div class="form-group">
+                <label for="stealthAddressInput">Indirizzo Stealth:</label>
+                <input type="text" id="stealthAddressInput" placeholder="Inserisci l'indirizzo stealth">
+            </div>
+            <div class="form-group">
+                <label for="ephemeralKeyInput">Chiave Pubblica Effimera:</label>
+                <input type="text" id="ephemeralKeyInput" placeholder="Inserisci la chiave pubblica effimera">
+            </div>
+            <button id="recoverStealthAddress" disabled>Recupera Indirizzo</button>
+            <div id="recoveredAddressInfo" style="display: none;">
+                <h3>Wallet Recuperato:</h3>
+                <p><strong>Indirizzo:</strong></p>
+                <div id="recoveredAddress" class="key-info"></div>
+                <p><strong>Chiave Privata:</strong></p>
+                <div id="recoveredPrivateKey" class="key-info"></div>
+            </div>
+        </div>
+
+        <div id="status" class="status" style="display: none;"></div>
+    </div>
+    <script type="module" src="main.js"></script>
+</body>
+</html> 

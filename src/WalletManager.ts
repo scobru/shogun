@@ -5,7 +5,6 @@
 
 import Gun from "gun";
 import "gun/sea";
-import { createHash } from "crypto";
 import { ethers } from "ethers";
 
 import { Wallet } from "./interfaces/Wallet";
@@ -22,6 +21,19 @@ declare module "gun" {
 }
 
 const SEA = Gun.SEA;
+
+/**
+ * Calcola l'hash SHA-256 di un input
+ * @param input - Input da hashare
+ * @returns Promise che risolve nell'hash in formato hex
+ */
+async function sha256(input: string): Promise<string> {
+  const msgBuffer = new TextEncoder().encode(input);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+}
 
 /**
  * Main class for managing wallet and related functionality
@@ -370,17 +382,22 @@ export class WalletManager {
         throw new Error("Missing public key");
       }
 
-      const timestamp = Date.now();
-      const random = Math.random().toString(36).substring(2, 15);
-      const salt = `${gunKeyPair.pub}_${timestamp}_${random}`;
+      // Genera entropia casuale usando crypto.getRandomValues
+      const randomBytes = new Uint8Array(32);
+      crypto.getRandomValues(randomBytes);
+      const entropy = Array.from(randomBytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      // Combina l'entropia con la chiave pubblica per generare il salt
+      const salt = `${entropy}_${gunKeyPair.pub}_${Date.now()}`;
 
       const wallet = await this.createWalletFromSalt(gunKeyPair, salt);
-      // Save entropy directly in Wallet
-      wallet.entropy = salt;
+      wallet.entropy = entropy;
 
       return {
         walletObj: wallet,
-        entropy: salt,
+        entropy: entropy,
       };
     } catch (error: any) {
       throw new Error(`Error creating wallet: ${error.message}`);
@@ -407,11 +424,12 @@ export class WalletManager {
       }
 
       // Generate address by hashing derivedKey
-      const hash = createHash("sha256")
-        .update(Buffer.from(derivedKey as string, "utf8"))
-        .digest("hex");
+      const hash = await sha256(derivedKey as string);
+      
+      // Prendi solo gli ultimi 40 caratteri per creare un indirizzo Ethereum valido
+      const address = "0x" + hash.slice(-40);
 
-      return new Wallet("0x" + hash);
+      return new Wallet(address);
     } catch (error: any) {
       throw new Error(`Error recreating wallet: ${error.message}`);
     }

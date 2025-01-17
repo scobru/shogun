@@ -553,7 +553,7 @@ describe("WalletManager e StealthChain Test Suite", function () {
 
         const { stealthAddress, ephemeralPublicKey } =
           await stealthChain.generateStealthAddress(
-            correctViewingKeyPair.epriv,
+            correctViewingKeyPair.epub,
             receiverSpendingPrivateKey
           );
 
@@ -756,5 +756,107 @@ describe("EthereumManager Test Suite", function () {
       
       assert(pubKey, "Dovrebbe accettare la password generata dalla firma");
     });
+  });
+});
+
+describe("StealthChain Test Suite", function () {
+  this.timeout(30000);
+  let walletManager;
+  let stealthChain;
+  let gun;
+
+  beforeEach(async () => {
+    const Gun = require('gun');
+    gun = Gun();
+    walletManager = new WalletManager(gun);
+    stealthChain = new StealthChain(gun);
+  });
+
+  it("dovrebbe generare e recuperare correttamente un indirizzo stealth", async () => {
+    // Genera le chiavi del destinatario
+    const receiverPair = await SEA.pair();
+    console.log("Receiver pair:", receiverPair);
+
+    // Genera le chiavi stealth
+    const stealthKeys = await stealthChain.generateStealthKeys(receiverPair);
+    console.log("Generated stealth keys:", stealthKeys);
+
+    // Genera l'indirizzo stealth
+    const { stealthAddress, ephemeralPublicKey } = await stealthChain.generateStealthAddress(
+      receiverPair.epub,  // Usa la chiave pubblica di crittografia
+      stealthKeys.spendingKey
+    );
+    console.log("Generated stealth address:", stealthAddress);
+    console.log("Ephemeral public key:", ephemeralPublicKey);
+
+    // Recupera l'indirizzo stealth
+    const recoveredWallet = await stealthChain.openStealthAddress(
+      stealthAddress,
+      ephemeralPublicKey,
+      receiverPair,  // Passa il keypair completo
+      stealthKeys.spendingKey
+    );
+    console.log("Recovered wallet:", recoveredWallet.address);
+
+    // Verifica che l'indirizzo recuperato corrisponda
+    assert.equal(
+      recoveredWallet.address.toLowerCase(),
+      stealthAddress.toLowerCase(),
+      "L'indirizzo stealth recuperato non corrisponde"
+    );
+  });
+
+  it("dovrebbe generare indirizzi diversi per lo stesso destinatario", async () => {
+    // Genera le chiavi del destinatario
+    const receiverPair = await SEA.pair();
+
+    // Genera le chiavi stealth
+    const stealthKeys = await stealthChain.generateStealthKeys(receiverPair);
+
+    // Genera il primo indirizzo stealth
+    const result1 = await stealthChain.generateStealthAddress(
+      receiverPair.epub,
+      stealthKeys.spendingKey
+    );
+
+    // Genera il secondo indirizzo stealth
+    const result2 = await stealthChain.generateStealthAddress(
+      receiverPair.epub,
+      stealthKeys.spendingKey
+    );
+
+    // Verifica che gli indirizzi siano diversi
+    assert.notEqual(
+      result1.stealthAddress.toLowerCase(),
+      result2.stealthAddress.toLowerCase(),
+      "Gli indirizzi stealth dovrebbero essere diversi"
+    );
+
+    // Recupera entrambi gli indirizzi
+    const recovered1 = await stealthChain.openStealthAddress(
+      result1.stealthAddress,
+      result1.ephemeralPublicKey,
+      receiverPair,
+      stealthKeys.spendingKey
+    );
+
+    const recovered2 = await stealthChain.openStealthAddress(
+      result2.stealthAddress,
+      result2.ephemeralPublicKey,
+      receiverPair,
+      stealthKeys.spendingKey
+    );
+
+    // Verifica che entrambi gli indirizzi siano stati recuperati correttamente
+    assert.equal(
+      recovered1.address.toLowerCase(),
+      result1.stealthAddress.toLowerCase(),
+      "Il primo indirizzo stealth non è stato recuperato correttamente"
+    );
+    assert.equal(
+      recovered2.address.toLowerCase(),
+      result2.stealthAddress.toLowerCase(),
+      "Il secondo indirizzo stealth non è stato recuperato correttamente"
+    );
   });
 });
