@@ -1,3 +1,4 @@
-export { GunKeyPair } from './GunKeyPair';
+export type { GunKeyPair } from './GunKeyPair';
 export { Wallet } from './Wallet';
-export { WalletResult } from './WalletResult'; 
+export type { WalletResult } from './WalletResult'; 
+

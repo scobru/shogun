@@ -20,9 +20,9 @@
 <br />
 <br />
 
-**HUGO** è una versione decentralizzata di Hedgehog che gestisce il wallet e le chiavi private dell'utente direttamente nel browser, utilizzando Gun.js come database decentralizzato. Espone una semplice API che permette di creare un sistema di autenticazione per consentire agli utenti di registrarsi e accedere al proprio wallet su più browser e dispositivi.
+**HUGO** is a decentralized version of Hedgehog that manages user wallets and private keys directly in the browser, using Gun.js as a decentralized database. It exposes a simple API that allows you to create an authentication system to enable users to register and access their wallet across multiple browsers and devices.
 
-Con HUGO:
+With HUGO:
 
 * 😍 Gli utenti possono creare account nella tua DApp con username + password
 * 😱 Gli utenti non devono preoccuparsi delle chiavi private o delle frasi mnemoniche

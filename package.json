@@ -1,12 +1,11 @@
 {
-  "name": "@audius/hedgehog",
+  "name": "@scobru/hugo",
   "version": "2.1.0",
-  "description": "A Metamask alternative that empowers you to build good UX",
+  "description": "A Metamask alternative that empowers you to build good UX with decentralized wallet management using Gun.js",
   "browser": {
     "node-localstorage": false
   },
   "dependencies": {
-    "ethereumjs-wallet": "^1.0.2",
     "ethers": "^6.13.5",
     "gun": "^0.2020.1239"
   },
@@ -24,16 +23,22 @@
     "ts-mocha": "^10.0.0",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "4.7.4"
+    "typescript": "^5.7.3"
   },
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
     "build": "tsc",
     "lint": "standard",
     "lint:fix": "npm run lint -- --fix",
     "typecheck": "tsc",
     "pretest": "npm run build",
-    "test": "mocha tests/**/*.test.js"
+    "test": "mocha tests/**/*.test.js",
+    "prepublishOnly": "npm run build"
   },
   "standard": {
     "globals": [
@@ -46,11 +51,40 @@
       "beforeEach"
     ]
   },
-  "author": "",
+  "author": {
+    "name": "Scobru",
+    "url": "https://github.com/scobru"
+  },
   "license": "MIT",
+  "keywords": [
+    "ethereum",
+    "wallet",
+    "web3",
+    "dapp",
+    "gundb",
+    "decentralized",
+    "blockchain",
+    "cryptocurrency",
+    "stealth-address"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scobru/hugo.git"
+  },
+  "bugs": {
+    "url": "https://github.com/scobru/hugo/issues"
+  },
+  "homepage": "https://github.com/scobru/hugo#readme",
   "mocha": {
-    "require": ["ts-node/register"],
-    "extension": ["ts"],
+    "require": [
+      "ts-node/register"
+    ],
+    "extension": [
+      "ts"
+    ],
     "spec": "tests/**/*.test.js"
+  },
+  "engines": {
+    "node": ">=16.0.0"
   }
 }

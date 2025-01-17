@@ -1,26 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 200 150" fill="none" stroke="none">
-  <!-- Background -->
-  <rect width="200" height="150" fill="#e0f7fa" />
-
-  <!-- Body -->
-  <ellipse cx="100" cy="90" rx="60" ry="40" fill="#8d6e63" />
-
-  <!-- Spikes -->
-  <path d="M40,80 L20,60 L45,75 Z" fill="#5d4037" />
-  <path d="M60,70 L40,50 L65,65 Z" fill="#5d4037" />
-  <path d="M80,60 L60,40 L85,55 Z" fill="#5d4037" />
-  <path d="M100,50 L80,30 L105,45 Z" fill="#5d4037" />
-  <path d="M120,60 L140,40 L115,55 Z" fill="#5d4037" />
-  <path d="M140,70 L160,50 L135,65 Z" fill="#5d4037" />
-  <path d="M160,80 L180,60 L155,75 Z" fill="#5d4037" />
-
-  <!-- Face -->
-  <circle cx="85" cy="100" r="6" fill="#000" /> <!-- Left Eye -->
-  <circle cx="115" cy="100" r="6" fill="#000" /> <!-- Right Eye -->
-  <circle cx="100" cy="115" r="7" fill="#000" /> <!-- Nose -->
-  <path d="M95,120 Q100,125 105,120" stroke="#000" stroke-width="2" fill="none" /> <!-- Smile -->
-
-  <!-- Legs -->
-  <ellipse cx="75" cy="130" rx="10" ry="5" fill="#5d4037" /> <!-- Left Leg -->
-  <ellipse cx="125" cy="130" rx="10" ry="5" fill="#5d4037" /> <!-- Right Leg -->
+<svg width="240" height="240" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a1a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a1a1a;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="240" height="240" fill="url(#bgGradient)"/>
+  <circle cx="120" cy="100" r="65" fill="#ffffff"/>
+  <circle cx="120" cy="100" r="50" fill="#4a5568"/>
+  <path d="M150 95 L165 95 L157.5 105 Z" fill="#ffffff" transform="rotate(-15, 157.5, 100)"/>
+  <text x="50" y="225" fill="#ffffff" font-family="Arial, sans-serif" font-size="48" font-weight="bold" letter-spacing="2">HUGO</text>
 </svg>
