@@ -23,9 +23,8 @@ export class WalletManager {
     // Inizializza Gun con le opzioni corrette per i test
     this.gun = new Gun({
       peers: ['https://gun-relay.scobrudot.dev/gun'],
-      localStorage: false,
-      radisk: false,
-      store: false
+      localStorage: true,
+      radisk: true
     });
     this.user = this.gun.user();
   }
