@@ -38,7 +38,10 @@
     "typecheck": "tsc",
     "pretest": "npm run build",
     "test": "mocha tests/**/*.test.js",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "prepare": "npm run build",
+    "version": "git add -A src",
+    "postversion": "git push && git push --tags"
   },
   "standard": {
     "globals": [
