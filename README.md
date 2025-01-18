@@ -253,3 +253,50 @@ const gunKeyPair = walletManager.getCurrentUserKeyPair();
 const { walletObj, entropy } = await WalletManager.createWalletObj(gunKeyPair);
 await walletManager.saveWalletToGun(walletObj, username);
 ```
+
+## Struttura Nodi Gun
+
+HUGO utilizza Gun.js come database decentralizzato. Ecco la struttura dei nodi principali:
+
+### Nodi Pubblici
+
+- `wallets/${publicKey}`: Contiene i wallet pubblici dell'utente
+  ```json
+  {
+    "publicKey": "0x123...",
+    "entropy": "encrypted_data",
+    "timestamp": 1234567890
+  }
+  ```
+
+- `stealth/${publicKey}`: Contiene le chiavi pubbliche stealth dell'utente
+  ```json
+  {
+    "spendingKey": "0x123...",
+    "viewingKeyPair": {
+      "pub": "public_key",
+      "epub": "encrypted_public_key"
+    }
+  }
+  ```
+
+### Nodi Privati (Criptati)
+
+- `~${userPub}/stealthKeys/${publicKey}`: Contiene le chiavi private stealth dell'utente
+  ```json
+  {
+    "privateKey": "encrypted_private_key",
+    "publicKey": "public_key",
+    "pub": "public_key",
+    "priv": "encrypted_private_key",
+    "epub": "encrypted_public_key",
+    "epriv": "encrypted_private_key"
+  }
+  ```
+
+### Note sulla Sicurezza
+
+- I nodi privati sono accessibili solo all'utente autenticato
+- Le chiavi private sono sempre criptate prima di essere salvate
+- I nodi pubblici contengono solo dati che possono essere condivisi
+- Gun.js gestisce automaticamente la sincronizzazione tra i peer
