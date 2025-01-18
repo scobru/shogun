@@ -59,7 +59,7 @@ export class WalletManager {
     // Initialize Gun with correct options for testing
     this.gun = new Gun({
       peers: ["https://gun-relay.scobrudot.dev/gun"],
-      localStorage: false,
+      localStorage: true,
       radisk:false,
       rtc: {
         enable: true,
