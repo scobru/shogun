@@ -73,12 +73,92 @@ describe("StealthChain Test Suite", function () {
 
   it("dovrebbe gestire errori con chiavi non valide", async function() {
     try {
-      await stealthChain.generateStealthAddress("invalid_key");
+      // Prova a generare un indirizzo stealth con chiavi non valide
+      await stealthChain.generateStealthAddress(
+        "invalid_pub_key",
+        "invalid_epub_key"
+      );
       assert.fail("Dovrebbe lanciare un errore");
     } catch (error) {
-      assert(error.message.includes("non valid") || 
-             error.message.includes("conversione") || 
-             error.message.includes("Impossibile generare il segreto condiviso"));
+      assert(error instanceof Error, "Dovrebbe lanciare un errore");
+      assert(error.message.includes("Impossibile generare il segreto condiviso") ||
+             error.message.includes("invalid") ||
+             error.message.includes("Invalid"),
+             "L'errore dovrebbe indicare che le chiavi sono invalide");
+    }
+  });
+
+  it("dovrebbe permettere al destinatario di recuperare l'indirizzo stealth", async function() {
+    this.timeout(15000);
+    
+    try {
+      // Setup mittente
+      const senderAlias = generateUniqueUsername();
+      await walletManager.createAccount(senderAlias, "password");
+      
+      // Genera e salva chiavi stealth del mittente
+      const senderKeys = await stealthChain.generateStealthKeys();
+      await stealthChain.saveStealthKeys(senderKeys);
+      
+      // Attendi sincronizzazione
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Setup destinatario
+      const recipientWalletManager = new WalletManager();
+      const recipientStealthChain = recipientWalletManager.getStealthChain();
+      
+      const recipientAlias = generateUniqueUsername();
+      await recipientWalletManager.createAccount(recipientAlias, "password");
+      
+      // Genera e salva chiavi stealth del destinatario
+      const recipientKeys = await recipientStealthChain.generateStealthKeys();
+      await recipientStealthChain.saveStealthKeys(recipientKeys);
+      
+      // Attendi sincronizzazione
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Verifica che le chiavi del destinatario siano valide
+      assert(recipientKeys.stealthKeyPair.pub, "Dovrebbe avere una chiave pubblica");
+      assert(recipientKeys.stealthKeyPair.epub, "Dovrebbe avere una chiave epub");
+      
+      // Il mittente genera un indirizzo stealth per il destinatario
+      const result = await stealthChain.generateStealthAddress(
+        recipientKeys.stealthKeyPair.pub,
+        recipientKeys.stealthKeyPair.epub
+      );
+      
+      assert(result.stealthAddress, "Dovrebbe generare un indirizzo stealth");
+      assert(result.ephemeralPublicKey, "Dovrebbe generare una chiave pubblica effimera");
+      assert(result.encryptedWallet, "Dovrebbe generare un wallet cifrato");
+      
+      console.log("📝 Dati generati:", {
+        stealthAddress: result.stealthAddress,
+        ephemeralPublicKey: result.ephemeralPublicKey,
+        encryptedWallet: result.encryptedWallet?.substring(0, 50) + "..."
+      });
+      
+      // Il destinatario recupera l'indirizzo stealth
+      const recoveredWallet = await recipientStealthChain.openStealthAddress(
+        result.stealthAddress,
+        result.encryptedWallet,
+        result.ephemeralPublicKey
+      );
+      
+      // Verifica che l'indirizzo recuperato corrisponda
+      assert(recoveredWallet, "Dovrebbe recuperare il wallet");
+      assert(recoveredWallet.address, "Il wallet dovrebbe avere un indirizzo");
+      assert.strictEqual(
+        recoveredWallet.address.toLowerCase(),
+        result.stealthAddress.toLowerCase(),
+        "L'indirizzo recuperato dovrebbe corrispondere all'indirizzo stealth originale"
+      );
+      
+      // Cleanup
+      recipientWalletManager.gun.off();
+      
+    } catch (error) {
+      console.error("❌ Errore nel test di recupero stealth:", error);
+      throw error;
     }
   });
 }); 

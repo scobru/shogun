@@ -99,15 +99,18 @@ describe("EthereumManager Test Suite", function () {
     });
 
     it("dovrebbe gestire errori di firma", async function () {
+      // Usa una chiave privata invalida (32 bytes ma non è una chiave valida)
+      const invalidKey = "0x1234567890123456789012345678901234567890123456789012345678901234";
+      ethereumManager.setCustomProvider(TEST_RPC_URL, invalidKey);
+      
       try {
-        // Usa una chiave privata invalida (deve essere 32 bytes)
-        const invalidKey = "0x" + "1".repeat(64); // 32 bytes ma non è una chiave valida
-        ethereumManager.setCustomProvider(TEST_RPC_URL, invalidKey);
-        
         await ethereumManager.loginWithEthereum();
         assert.fail("Dovrebbe fallire con chiave privata non valida");
       } catch (error) {
-        assert(error, "Dovrebbe lanciare un errore");
+        assert(error instanceof Error, "Dovrebbe lanciare un errore");
+        assert(error.message.includes("invalid") || error.message.includes("Invalid") || 
+               error.message.includes("failed") || error.message.includes("Failed"),
+               "L'errore dovrebbe indicare che la chiave è invalida");
       }
     });
   });
