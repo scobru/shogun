@@ -46,10 +46,11 @@ async function sha256(input: string): Promise<string> {
  * Main class for managing wallet and related functionality
  */
 export class WalletManager {
-  private gun: any;
+  protected gun: any;  // Temporaneamente usando any per far funzionare i test
   private user: any;
   private ethereumManager: EthereumManager;
   private stealthChain: StealthChain;
+  private isAuthenticating = false;
 
   /**
    * Creates a WalletManager instance
@@ -60,7 +61,7 @@ export class WalletManager {
     this.gun = new Gun({
       peers: ["https://gun-relay.scobrudot.dev/gun"],
       localStorage: false,
-      radisk:false,
+      radisk: false,
       rtc: {
         enable: true,
         trickle: true,
@@ -68,11 +69,11 @@ export class WalletManager {
       axe: true,
       web: false,      
     });
+
     this.user = this.gun.user();
     this.ethereumManager = new EthereumManager(this);
     this.stealthChain = new StealthChain(this.gun);
     
-
     this.gun.on("rtc:peer", (peer: any) => {
       console.log("Nuovo peer connesso:", peer);
     });
@@ -106,6 +107,10 @@ export class WalletManager {
     return this.user._.sea;
   }
 
+  private async waitForAuth(): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
   /**
    * Creates a GunDB account using alias and passphrase
    * @param {string} alias - Account username
@@ -113,45 +118,61 @@ export class WalletManager {
    * @returns {Promise<void>}
    */
   public async createAccount(alias: string, passphrase: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      // Prima verifica se l'utente è già autenticato
-      if (this.user.is) {
-        console.log("Utente già autenticato, effettuo logout");
-        this.user.leave(); // Logout dell'utente corrente
+    try {
+      // Se c'è un'autenticazione in corso, aspetta un po' e riprova
+      if (this.isAuthenticating) {
+        await this.waitForAuth();
+        this.user.leave();
+        await this.waitForAuth();
       }
 
-      // Prova a creare l'account
-      this.user.create(alias, passphrase, async (ack: any) => {
-        if (ack.err) {
-          // Se l'errore indica che l'utente esiste già, prova a fare il login
-          if (
-            ack.err.includes("already created") ||
-            ack.err.includes("already being created")
-          ) {
-            console.log("Account già esistente, provo ad effettuare il login");
-            try {
-              await this.login(alias, passphrase);
-              resolve();
-            } catch (loginError) {
-              reject(loginError);
+      this.isAuthenticating = true;
+
+      return new Promise((resolve, reject) => {
+        console.log("Tentativo di creazione account per:", alias);
+
+        const timeoutId = setTimeout(() => {
+          this.isAuthenticating = false;
+          this.user.leave();
+          reject(new Error("Timeout durante la creazione dell'account"));
+        }, 15000);
+
+        this.user.create(alias, passphrase, async (ack: any) => {
+          clearTimeout(timeoutId);
+          
+          if (ack.err) {
+            this.isAuthenticating = false;
+            if (ack.err.includes("already created") || ack.err.includes("being created")) {
+              console.log("Account già esistente o in fase di creazione, attendo...");
+              await this.waitForAuth();
+              try {
+                await this.login(alias, passphrase);
+                resolve();
+              } catch (loginError) {
+                reject(loginError);
+              }
+              return;
             }
+            reject(new Error(`Errore durante la creazione dell'account: ${ack.err}`));
             return;
           }
-          reject(
-            new Error(`Errore durante la creazione dell'account: ${ack.err}`)
-          );
-          return;
-        }
-        try {
-          // Dopo la creazione, effettua il login
-          console.log("Account creato con successo, effettuo login");
-          await this.login(alias, passphrase);
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
+
+          try {
+            console.log("Account creato con successo, effettuo login");
+            await this.login(alias, passphrase);
+            resolve();
+          } catch (error) {
+            reject(error);
+          } finally {
+            this.isAuthenticating = false;
+          }
+        });
       });
-    });
+    } catch (error) {
+      this.isAuthenticating = false;
+      this.user.leave();
+      throw error;
+    }
   }
 
   /**
@@ -161,28 +182,81 @@ export class WalletManager {
    * @returns {Promise<string>} Public key if login successful
    */
   public async login(alias: string, passphrase: string): Promise<string> {
-    await new Promise<void>((resolve, reject) => {
-      this.user.auth(alias, passphrase, (ack: any) => {
-        if (ack.err) {
-          reject(new Error("Password errata o utente non trovato"));
-        } else {
-          resolve();
+    try {
+      // Se c'è un'autenticazione in corso, aspetta un po' e riprova
+      if (this.isAuthenticating) {
+        await this.waitForAuth();
+        this.user.leave();
+        await this.waitForAuth();
+      }
+
+      this.isAuthenticating = true;
+      console.log("Inizio processo di login per:", alias);
+
+      return new Promise<string>((resolve, reject) => {
+        // Se l'utente è già autenticato con le stesse credenziali, restituisci la chiave pubblica
+        if (this.user.is?.alias === alias) {
+          console.log("Utente già autenticato con le stesse credenziali");
+          this.isAuthenticating = false;
+          resolve(this.user.is.pub);
+          return;
         }
+
+        // Timeout di sicurezza
+        const timeoutId = setTimeout(() => {
+          this.isAuthenticating = false;
+          this.user.leave();
+          reject(new Error("Timeout durante l'autenticazione"));
+        }, 15000);
+
+        this.user.auth(alias, passphrase, (ack: any) => {
+          clearTimeout(timeoutId);
+          console.log("Risposta auth:", ack);
+
+          if (ack.err) {
+            this.isAuthenticating = false;
+            if (ack.err.includes("being created")) {
+              // Se l'utente è in fase di creazione, aspetta e riprova
+              setTimeout(async () => {
+                try {
+                  const result = await this.login(alias, passphrase);
+                  resolve(result);
+                } catch (error) {
+                  reject(error);
+                }
+              }, 2000);
+              return;
+            }
+            reject(new Error(ack.err));
+            return;
+          }
+
+          if (!this.user.is?.pub) {
+            this.isAuthenticating = false;
+            reject(new Error("Login fallito: chiave pubblica non trovata"));
+            return;
+          }
+
+          console.log("Login completato con successo");
+          this.isAuthenticating = false;
+          resolve(this.user.is.pub);
+        });
       });
-    });
-
-    if (!this.user.is?.pub) {
-      throw new Error("Login fallito: chiave pubblica non trovata");
+    } catch (error) {
+      this.isAuthenticating = false;
+      this.user.leave();
+      throw error;
     }
-
-    return this.user.is.pub;
   }
 
   /**
    * Logs out current user from GunDB
    */
   public logout(): void {
-    this.user.leave();
+    if (this.user.is) {
+      this.user.leave();
+    }
+    this.isAuthenticating = false;
   }
 
   /**
@@ -445,5 +519,28 @@ export class WalletManager {
         }
       }, 25000);
     });
+  }
+
+  /**
+   * Gets the Gun instance
+   * @returns The Gun instance
+   */
+  public getGun(): any {
+    return this.gun;
+  }
+
+  async loginWithPrivateKey(privateKey: string): Promise<string> {
+    try {
+      // Prima impostiamo il wallet
+      this.ethereumManager.setCustomProvider("", privateKey);
+      // Poi facciamo il login
+      const pubKey = await this.ethereumManager.loginWithEthereum();
+      if (!pubKey) {
+        throw new Error("Chiave privata non valida");
+      }
+      return pubKey;
+    } catch (error) {
+      throw new Error("Chiave privata non valida");
+    }
   }
 }
