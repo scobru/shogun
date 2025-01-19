@@ -76,6 +76,18 @@
             border-radius: 4px;
             margin: 5px 0;
         }
+        .info-box {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+        }
+        .code-box {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #f1f1f1;
+        }
     </style>
 </head>
 <body>
@@ -141,17 +153,12 @@
                 <label for="ephemeralKeyInput">Chiave Pubblica Effimera:</label>
                 <input type="text" id="ephemeralKeyInput" placeholder="Inserisci la chiave pubblica effimera">
             </div>
-            <div class="form-group">
-                <label for="encryptedWalletInput">Wallet Cifrato:</label>
-                <input type="text" id="encryptedWalletInput" placeholder="Inserisci il wallet cifrato">
-            </div>
-            <button id="recoverStealthAddress" disabled>Recupera Indirizzo</button>
-            <div id="recoveredAddressInfo" style="display: none;">
-                <h3>Wallet Recuperato:</h3>
-                <p><strong>Indirizzo:</strong></p>
-                <div id="recoveredAddress" class="key-info"></div>
-                <p><strong>Chiave Privata:</strong></p>
-                <div id="recoveredPrivateKey" class="key-info"></div>
+            <button id="recoverStealthAddress">Recupera Indirizzo</button>
+            <div id="recoveredAddressInfo" class="info-box" style="display: none;">
+                <h3>Indirizzo Recuperato:</h3>
+                <div id="recoveredAddress" class="code-box"></div>
+                <h3>Chiave Privata:</h3>
+                <div id="recoveredPrivateKey" class="code-box"></div>
             </div>
         </div>
 

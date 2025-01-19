@@ -126,6 +126,7 @@ generateKeysBtn.addEventListener('click', async () => {
     try {
         // Verifica che l'utente sia autenticato
         const publicKey = walletManager.getPublicKey();
+        const username = usernameInput.value.trim();
         if (!publicKey) {
             showStatus('Devi effettuare il login prima di generare le chiavi', true);
             return;
@@ -142,9 +143,9 @@ generateKeysBtn.addEventListener('click', async () => {
 
         const stealthKeyPair = result.stealthKeyPair;
 
-        // Salva le chiavi
-        await stealthChain.saveStealthKeys(result);
-        console.log("💾 Chiavi salvate");
+        // Salva le chiavi con l'username
+        await stealthChain.saveStealthKeys(username, stealthKeyPair);
+        console.log("💾 Chiavi salvate per l'utente:", username);
 
         // Mostra le chiavi
         spendingKeyDiv.innerHTML = `
@@ -168,7 +169,7 @@ generateKeysBtn.addEventListener('click', async () => {
 
         // Verifica che le chiavi siano state salvate correttamente
         try {
-            const savedKeys = await stealthChain.retrieveStealthKeys(publicKey);
+            const savedKeys = await stealthChain.retrieveStealthKeys(username);
             console.log("📖 Chiavi recuperate dopo il salvataggio:", savedKeys);
 
             if (savedKeys && savedKeys.stealthKeyPair && savedKeys.stealthKeyPair.pub && savedKeys.stealthKeyPair.epub) {
@@ -212,10 +213,10 @@ generateStealthAddressBtn.addEventListener('click', async () => {
             return;
         }
         
-        // Genera l'indirizzo stealth
+        // Genera l'indirizzo stealth usando le chiavi corrette
         const result = await stealthChain.generateStealthAddress(
-            keys.pub,
-            keys.epub
+            keys.epub,  // Usa la chiave pubblica di visualizzazione
+            keys.pub    // Usa la chiave pubblica di spesa
         );
 
         if (!result || !result.stealthAddress || !result.ephemeralPublicKey || !result.encryptedWallet) {
@@ -223,12 +224,20 @@ generateStealthAddressBtn.addEventListener('click', async () => {
             return;
         }
 
+        // Salva il wallet in GunDB usando la chiave pubblica del destinatario
+        console.log("💾 Salvataggio wallet in GunDB per il destinatario:", recipientUsername);
+        await walletManager.getGun().get('wallets').get(keys.pub).put({
+            publicKey: keys.pub,
+            entropy: result.encryptedWallet,
+            timestamp: Date.now()
+        });
+
         stealthAddressDiv.textContent = result.stealthAddress;
         ephemeralPublicKeyDiv.textContent = result.ephemeralPublicKey;
         document.getElementById('encryptedWallet').textContent = result.encryptedWallet;
         stealthAddressInfoDiv.style.display = 'block';
 
-        showStatus('Indirizzo stealth generato con successo!');
+        showStatus('Indirizzo stealth generato e wallet salvato con successo!');
     } catch (error) {
         console.error("❌ Errore completo:", error);
         showStatus(`Errore nella generazione dell'indirizzo stealth: ${error.message}`, true);
@@ -239,10 +248,9 @@ recoverStealthAddressBtn.addEventListener('click', async () => {
     try {
         const stealthAddress = stealthAddressInput.value.trim();
         const ephemeralPublicKey = ephemeralKeyInput.value.trim();
-        const encryptedWallet = document.getElementById('encryptedWalletInput').value.trim();
 
-        if (!stealthAddress || !ephemeralPublicKey || !encryptedWallet) {
-            showStatus('Indirizzo stealth, chiave pubblica effimera e wallet cifrato sono richiesti', true);
+        if (!stealthAddress || !ephemeralPublicKey) {
+            showStatus('Indirizzo stealth e chiave pubblica effimera sono richiesti', true);
             return;
         }
 
@@ -253,38 +261,37 @@ recoverStealthAddressBtn.addEventListener('click', async () => {
             return;
         }
 
-        // Recupera le chiavi stealth dell'utente
-        const userKeys = await stealthChain.retrieveStealthKeys();
-        console.log("🔐 Chiavi utente recuperate:", userKeys);
+        // Recupera il wallet cifrato da GunDB
+        console.log("📥 Recupero wallet cifrato da GunDB per la chiave:", publicKey);
+        const walletData = await new Promise((resolve) => {
+            walletManager.getGun().get('wallets').get(publicKey).once((data) => {
+                console.log("📦 Dati wallet recuperati:", data);
+                resolve(data);
+            });
+        });
 
-        if (!userKeys || !userKeys.stealthKeyPair) {
-            showStatus('Chiavi stealth non trovate, generane di nuove', true);
+        if (!walletData || !walletData.entropy) {
+            showStatus('Nessun wallet trovato per questo utente', true);
             return;
         }
 
-        // Prepara i dati per il recupero
-        console.log("🔑 Tentativo di recupero con:", {
-            stealthAddress,
-            ephemeralPublicKey,
-            encryptedWallet
-        });
+        const encryptedWallet = walletData.entropy;
+        console.log("🔐 Wallet cifrato recuperato:", encryptedWallet);
 
         // Recupera l'indirizzo stealth
-        const recoveredWallet = await stealthChain.openStealthAddress(
+        const result = await stealthChain.openStealthAddress(
             stealthAddress,
             ephemeralPublicKey,
             encryptedWallet
         );
 
-        if (!recoveredWallet || !recoveredWallet.address || !recoveredWallet.privateKey) {
+        if (!result || !result.recoveredAddress || !result.recoveredPrivateKey) {
             showStatus('Errore nel recupero dell\'indirizzo stealth', true);
             return;
         }
 
-        console.log("✅ Wallet recuperato:", recoveredWallet);
-
-        recoveredAddressDiv.textContent = recoveredWallet.address;
-        recoveredPrivateKeyDiv.textContent = recoveredWallet.privateKey;
+        recoveredAddressDiv.textContent = result.recoveredAddress;
+        recoveredPrivateKeyDiv.textContent = result.recoveredPrivateKey;
         recoveredAddressInfoDiv.style.display = 'block';
 
         showStatus('Indirizzo stealth recuperato con successo!');
