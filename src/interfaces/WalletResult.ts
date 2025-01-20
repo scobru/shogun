@@ -8,5 +8,5 @@ export interface WalletResult {
 export interface StealthAddressResult {
   stealthAddress: string;
   ephemeralPublicKey: string;
-  encryptedWallet: string;
+  recipientPublicKey: string;
 }

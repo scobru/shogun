@@ -1,8 +1,11 @@
-import { ethers } from 'ethers';
-import type { WalletResult, StealthAddressResult } from './interfaces/WalletResult';
-import Gun from 'gun';
-import 'gun/sea';
-import { WalletManager } from './WalletManager';
+import { ethers } from "ethers";
+import type {
+  WalletResult,
+  StealthAddressResult,
+} from "./interfaces/WalletResult";
+import Gun from "gun";
+import "gun/sea";
+import { WalletManager } from "./WalletManager";
 const SEA = Gun.SEA;
 
 interface KeyPair {
@@ -12,7 +15,7 @@ interface KeyPair {
   epriv: string;
 }
 
-interface StealthKeys {
+interface StealthKeyPairWrapper {
   stealthKeyPair: KeyPair;
 }
 
@@ -79,102 +82,159 @@ export class StealthChain {
     return cleanKey.replace(/[.]/g, "+");
   }
 
-  async generateStealthKeys(): Promise<KeyPair> {
-    const pair = await SEA.pair();
-    if (!pair || !pair.pub || !pair.priv || !pair.epub || !pair.epriv) {
-      throw new Error("Chiavi non valide: generazione fallita");
-    }
-    return pair;
+  async generateStealthKeys(): Promise<StealthKeyPairWrapper> {
+    const user = this.gun.user();
+
+    return new Promise((resolve, reject) => {
+      let isResolved = false;
+
+      const checkExistingKeys = () => {
+        user.get("stealthKeys").on((data: any) => {
+          if (data && !isResolved) {
+            isResolved = true;
+            console.log("Stealth Keys Already Created!", data);
+            resolve(data as StealthKeyPairWrapper);
+            return;
+          }
+        });
+
+        // Se non ci sono chiavi esistenti, ne generiamo di nuove dopo un breve delay
+        setTimeout(() => {
+          if (!isResolved) {
+            generateNewKeys();
+          }
+        }, 100);
+      };
+
+      const generateNewKeys = async () => {
+        try {
+          const pair = await SEA.pair();
+          if (!pair || !pair.pub || !pair.priv || !pair.epub || !pair.epriv) {
+            if (!isResolved) {
+              isResolved = true;
+              reject(new Error("Chiavi non valide: generazione fallita"));
+            }
+            return;
+          }
+
+          const stealthKeyPair: StealthKeyPairWrapper = {
+            stealthKeyPair: pair,
+          };
+
+          // Salva le chiavi e attendi la conferma
+          user.get("stealthKeys").put(stealthKeyPair);
+
+          // Verifica che le chiavi siano state salvate correttamente
+          user.get("stealthKeys").on((savedData: any) => {
+            if (savedData && !isResolved) {
+              isResolved = true;
+              resolve(stealthKeyPair);
+            }
+          });
+        } catch (error) {
+          if (!isResolved) {
+            isResolved = true;
+            reject(new Error("Chiavi non valide: " + (error as Error).message));
+          }
+        }
+      };
+
+      // Imposta un timeout più lungo per Gun
+      setTimeout(() => {
+        if (!isResolved) {
+          isResolved = true;
+          reject(new Error("Chiavi non valide: timeout nella generazione"));
+        }
+      }, 20000);
+
+      // Avvia il processo
+      checkExistingKeys();
+    });
   }
 
   private async deriveStealthPrivateKey(sharedSecret: string): Promise<string> {
     // Usa il segreto condiviso come entropia per generare la chiave privata
-    const hash = ethers.keccak256(
-      ethers.toUtf8Bytes(sharedSecret)
-    );
+    const hash = ethers.keccak256(ethers.toUtf8Bytes(sharedSecret));
     return hash;
   }
 
   async generateStealthAddress(
-    recipientPublicKey: string,
-    recipientEphemeralPublicKey: string
+    recipientPublicKey: string
   ): Promise<StealthAddressResult> {
-    try {
-      // Verifica che le chiavi siano nel formato corretto
-      if (!recipientPublicKey || !recipientEphemeralPublicKey) {
-        throw new Error("Chiavi non valide: parametri mancanti");
-      }
+    if (!recipientPublicKey) {
+      throw new Error("Chiavi non valide: parametri mancanti");
+    }
 
-      // Genera una coppia di chiavi effimere per questa transazione
-      const ephemeralKeyPair = await SEA.pair();
-      if (!ephemeralKeyPair?.epub || !ephemeralKeyPair?.epriv) {
-        throw new Error("Chiavi non valide: impossibile generare le chiavi effimere");
-      }
+    return new Promise((resolve, reject) => {
+      let isResolved = false;
 
-      console.log("🔑 Generazione chiavi effimere completata", ephemeralKeyPair);
+      // Recupera le chiavi del destinatario
+      this.gun
+        .get(recipientPublicKey)
+        .get("stealthKeys")
+        .on(async (data: any) => {
+          if (!isResolved && data) {
+            try {
+              const ephemeralKeyPair = await SEA.pair();
+              if (!ephemeralKeyPair?.epub || !ephemeralKeyPair?.epriv) {
+                throw new Error(
+                  "Chiavi non valide: generazione chiavi effimere fallita"
+                );
+              }
 
-      // Prepara le chiavi del destinatario
-      const recipientKeys = {
-        epub: recipientEphemeralPublicKey
-      };
+              const sharedSecret = await SEA.secret(data, ephemeralKeyPair);
+              if (!sharedSecret) {
+                throw new Error(
+                  "Chiavi non valide: generazione segreto condiviso fallita"
+                );
+              }
 
-      // Genera il segreto condiviso
-      try {
-        const sharedSecret = await SEA.secret(recipientEphemeralPublicKey, ephemeralKeyPair);
+              const stealthPrivateKey = await this.deriveStealthPrivateKey(
+                sharedSecret
+              );
+              const stealthWallet = new ethers.Wallet(stealthPrivateKey);
+              const stealthAddress = stealthWallet.address;
 
-        if (!sharedSecret) {
-          throw new Error("Chiavi non valide: impossibile generare il segreto condiviso");
-        }
-
-        console.log("🤝 Segreto condiviso generato");
-
-        // Genera l'indirizzo stealth usando il segreto condiviso
-        const stealthPrivateKey = await this.deriveStealthPrivateKey(sharedSecret);
-        const stealthWallet = new ethers.Wallet(stealthPrivateKey);
-        
-        console.log("💼 Wallet stealth generato:", stealthWallet.address);
-
-        // Prepara i dati del wallet da cifrare
-        const walletData = JSON.stringify({
-          address: stealthWallet.address,
-          privateKey: stealthWallet.privateKey
+              isResolved = true;
+              resolve({
+                stealthAddress: stealthAddress,
+                ephemeralPublicKey: ephemeralKeyPair.epub,
+                recipientPublicKey,
+              });
+            } catch (error) {
+              if (!isResolved) {
+                isResolved = true;
+                reject(
+                  new Error("Chiavi non valide: " + (error as Error).message)
+                );
+              }
+            }
+          }
         });
 
-        // Cifra il wallet con il segreto condiviso
-        const encryptedWallet = await SEA.encrypt(walletData, sharedSecret);
-
-        if (!encryptedWallet) {
-          throw new Error("Chiavi non valide: impossibile cifrare il wallet");
+      // Timeout di sicurezza
+      setTimeout(() => {
+        if (!isResolved) {
+          isResolved = true;
+          reject(
+            new Error(
+              "Chiavi non valide: timeout nella generazione dell'indirizzo"
+            )
+          );
         }
-
-        console.log("🔒 Wallet cifrato con successo");
-
-        return {
-          stealthAddress: stealthWallet.address,
-          ephemeralPublicKey: ephemeralKeyPair.epub,
-          encryptedWallet
-        };
-      } catch (innerError: any) {
-        console.error("❌ Errore interno:", innerError);
-        if (innerError.code === "ERR_CRYPTO_ECDH_INVALID_PUBLIC_KEY") {
-          throw new Error("Chiavi non valide: formato chiave pubblica non valido");
-        }
-        throw new Error("Chiavi non valide: " + (innerError.message || "errore sconosciuto"));
-      }
-    } catch (error: any) {
-      console.error("❌ Errore nella generazione dell'indirizzo stealth:", error);
-      throw error;
-    }
+      }, 20000);
+    });
   }
 
   async openStealthAddress(
     stealthAddress: string,
-    ephemeralPublicKey: string,
-    encryptedWallet: string
+    ephemeralPublicKey: string
   ): Promise<WalletResult> {
     try {
       // Recupera le chiavi stealth dell'utente
-      const keys = await this.retrieveStealthKeys();
+      const user = this.gun.user();
+      const keys = await user.get("stealthKeys");
+
       if (!keys?.stealthKeyPair?.epriv || !keys?.stealthKeyPair?.priv) {
         throw new Error("Chiavi stealth non trovate o incomplete");
       }
@@ -182,93 +242,136 @@ export class StealthChain {
       console.log("🔐 Decifratura con chiave di visualizzazione...");
       console.log("📝 Chiavi utente:", keys.stealthKeyPair);
       console.log("🔑 Chiave effimera:", ephemeralPublicKey);
-      
+
       // Prepara le chiavi nel formato corretto per SEA.secret
       const viewingKeyPair = {
         epriv: keys.stealthKeyPair.epriv,
-        epub: keys.stealthKeyPair.epub
+        epub: keys.stealthKeyPair.epub,
       };
 
       // Genera il segreto condiviso usando la chiave privata di visualizzazione
       const sharedSecret = await SEA.secret(ephemeralPublicKey, viewingKeyPair);
 
       if (!sharedSecret) {
-        throw new Error("Impossibile generare il segreto condiviso per la decifratura");
+        throw new Error(
+          "Impossibile generare il segreto condiviso per la decifratura"
+        );
       }
 
       console.log("🔑 Tentativo di decifratura del wallet...");
-      console.log("🔐 Wallet cifrato:", encryptedWallet);
 
       // Decifra il wallet
-      const wallet = await SEA.decrypt(encryptedWallet, sharedSecret) as WalletResult;
-      
-      console.log("📦 Wallet decifrato:", wallet);
+      const stealthPrivateKey = await this.deriveStealthPrivateKey(
+        sharedSecret
+      );
+      const stealthWallet = new ethers.Wallet(stealthPrivateKey);
 
-      if (!wallet || typeof wallet !== 'object') {
+      console.log("📦 Wallet decifrato:", stealthWallet);
+
+      if (!stealthWallet || typeof stealthWallet !== "object") {
         throw new Error("Impossibile decifrare il wallet");
       }
 
-      if (!wallet.address || !wallet.privateKey) {
+      if (!stealthWallet.address || !stealthWallet.privateKey) {
         throw new Error("Dati del wallet mancanti dopo la decifratura");
       }
 
       // Verifica che l'indirizzo decrittato corrisponda all'indirizzo stealth
-      if (wallet.address.toLowerCase() !== stealthAddress.toLowerCase()) {
-        throw new Error("L'indirizzo decrittato non corrisponde all'indirizzo stealth");
+      if (
+        stealthWallet.address.toLowerCase() !== stealthAddress.toLowerCase()
+      ) {
+        throw new Error(
+          "L'indirizzo decrittato non corrisponde all'indirizzo stealth"
+        );
       }
 
-      return wallet;
+      return stealthWallet;
     } catch (error: any) {
       console.error("❌ Errore nel recupero dell'indirizzo stealth:", error);
-      throw new Error(error.message || "Errore nel recupero dell'indirizzo stealth");
+      throw new Error(
+        error.message || "Errore nel recupero dell'indirizzo stealth"
+      );
     }
   }
 
-  async retrieveStealthKeys(): Promise<StealthKeys | null> {
+  async retrieveStealthKeysFromRegistry(userPub: string): Promise<string | null> {
     try {
-      const user = this.gun.user();
-      if (!user.is) {
-        throw new Error("Utente non autenticato");
+      const stealthPubKey = await this.gun.get('stealthKeys').get(userPub);
+      
+      if (!stealthPubKey) {
+        console.log("❌ Impossibile trovare le chiavi dell'utente nel nodo pubblico");
+        return null;
       }
 
-      return new Promise((resolve) => {
-        user.get("stealthKeys").once((data: any) => {
-          if (!data || !data.pub || !data.priv || !data.epub || !data.epriv) {
-            console.log("❌ Chiavi incomplete o non trovate");
-            resolve(null);
-            return;
-          }
+      return stealthPubKey;
+    } catch (error) {
+      console.error("❌ Errore nel recupero delle chiavi dal registro:", error);
+      return null;
+    }
+  }
 
-          resolve({
-            stealthKeyPair: {
-              pub: data.pub,
-              priv: data.priv,
-              epub: data.epub,
-              epriv: data.epriv
-            }
-          });
+  async retrieveStealthKeysFromUser(): Promise<StealthKeyPairWrapper | null> {
+    const user = this.gun.user();
+    if (!user.is) {
+      return null;
+    }
+
+    let isResolved = false;
+    let result: StealthKeyPairWrapper | null = null;
+    let timeoutId: NodeJS.Timeout;
+
+    try {
+      const data: any = await new Promise((resolve, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error("Chiavi non valide: timeout nel recupero"));
+        }, 20000);
+
+        user.get("stealthKeys").once((d: any) => {
+          clearTimeout(timeoutId);
+          resolve(d);
         });
       });
 
+      if (!data) {
+        return null;
+      }
+
+      return {
+        stealthKeyPair: {
+          pub: data.stealthKeyPair.pub,
+          priv: data.stealthKeyPair.priv,
+          epub: data.stealthKeyPair.epub,
+          epriv: data.stealthKeyPair.epriv,
+        },
+      };
     } catch (error) {
-      console.error("❌ Errore nel recupero delle chiavi stealth:", error);
       throw error;
     }
   }
 
   async saveStealthKeys(stealthKeyPair: KeyPair): Promise<void> {
     if (!this.gun.user().is) {
-      throw new Error("Utente non autenticato");
+      throw new Error("Chiavi non valide: utente non autenticato");
     }
 
-    // Salva direttamente usando il callback di Gun
-    this.gun.user().get("stealthKeys").put(stealthKeyPair, (ack: { err: string | null }) => {
-      if (ack.err) {
-        console.error("❌ Errore nel salvataggio:", ack.err);
-        throw new Error("Errore nel salvataggio delle chiavi: " + ack.err);
-      }
-      console.log("✅ Chiavi salvate con successo");
-    });
+    // Save stealth KeyPair into user node
+    const saveWrappedKeyPair = await this.gun
+      .user()
+      .get("stealthKeys")
+      .put(stealthKeyPair);
+    if (saveWrappedKeyPair.err) {
+      throw new Error("Chiavi non valide: " + saveWrappedKeyPair.err);
+    }
+
+    const publicKey = this.gun.user()._.sea.pub;
+
+    // Save only ephemeral pub key in a public node.
+    const saveEphemeralKey = await this.gun
+      .get("stealthKeys")
+      .get(publicKey)
+      .put(stealthKeyPair.epub);
+    if (saveEphemeralKey.err) {
+      throw new Error("Chiavi non valide: " + saveEphemeralKey.err);
+    }
   }
 }
-
