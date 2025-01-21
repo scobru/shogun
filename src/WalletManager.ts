@@ -211,7 +211,6 @@ export class WalletManager {
 
         this.user.auth(alias, passphrase, (ack: any) => {
           clearTimeout(timeoutId);
-          console.log("Risposta auth:", ack);
 
           if (ack.err) {
             this.isAuthenticating = false;

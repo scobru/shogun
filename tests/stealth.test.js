@@ -13,119 +13,259 @@ describe("StealthChain Test Suite", function () {
   let walletManager;
   let stealthChain;
   
-  beforeEach(async function() {
-    walletManager = new WalletManager();
-    stealthChain = walletManager.getStealthChain();
-    const alias = "test_" + Math.random().toString(36).substring(7);
-    await walletManager.createAccount(alias, "password123!");
-  });
-
-  afterEach(function() {
-    if (walletManager.getGun()) {
-      walletManager.getGun().off();
-    }
-  });
-
-  it("dovrebbe generare chiavi stealth valide", async function() {
+  beforeEach(function(done) {
+    console.log("🚀 Inizializzazione test...");
+    
+    // Aumenta il timeout per questo hook
+    this.timeout(30000);
+    
     try {
-      const stealthKeyPair = await stealthChain.generateStealthKeys();
-      assert(stealthKeyPair && stealthKeyPair.stealthKeyPair, "Il keyPair dovrebbe esistere");
-      assert(stealthKeyPair.stealthKeyPair.pub, "Dovrebbe contenere la chiave pubblica");
-      assert(stealthKeyPair.stealthKeyPair.priv, "Dovrebbe contenere la chiave privata");
-      assert(stealthKeyPair.stealthKeyPair.epub, "Dovrebbe contenere la chiave pubblica effimera");
-      assert(stealthKeyPair.stealthKeyPair.epriv, "Dovrebbe contenere la chiave privata effimera");
+      console.log("📦 Creazione WalletManager...");
+      walletManager = new WalletManager();
+      
+      console.log("🔗 Ottenimento StealthChain...");
+      stealthChain = walletManager.getStealthChain();
+      
+      const alias = "test_" + Math.random().toString(36).substring(7);
+      console.log("🔑 Creazione account di test:", alias);
+      
+      // Funzione per verificare il login
+      const checkLogin = () => {
+        const user = walletManager.getGun().user();
+        return user && user.is && user.is.pub;
+      };
+      
+      walletManager.createAccount(alias, "password123!", (err) => {
+        if (err) {
+          console.error("❌ Errore nella creazione account:", err);
+          done(err);
+          return;
+        }
+        
+        console.log("🔄 Verifica login...");
+        
+        // Polling per verificare il login
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        const checkLoginStatus = () => {
+          if (checkLogin()) {
+            console.log("✅ Account di test creato e login completato");
+            done();
+          } else if (attempts < maxAttempts) {
+            attempts++;
+            console.log(`⏳ Attesa login... Tentativo ${attempts}/${maxAttempts}`);
+            setTimeout(checkLoginStatus, 1000);
+          } else {
+            const error = new Error("Login non completato dopo i tentativi massimi");
+            console.error("❌", error.message);
+            done(error);
+          }
+        };
+        
+        checkLoginStatus();
+      });
     } catch (error) {
-      assert.fail(`Errore inatteso: ${error.message}`);
+      console.error("❌ Errore critico nel beforeEach:", error);
+      done(error);
     }
   });
 
-  it("dovrebbe salvare e recuperare chiavi stealth", async function() {
+  afterEach(function(done) {
     try {
-      // Genera le chiavi
-      const stealthKeyPair = await stealthChain.generateStealthKeys();
-      
-      // Verifica che le chiavi siano state generate correttamente
-      assert(stealthKeyPair && stealthKeyPair.stealthKeyPair, "Le chiavi dovrebbero essere generate");
-      
-      // Salva le chiavi
-      await stealthChain.saveStealthKeys(stealthKeyPair.stealthKeyPair);
-      
-      // Aspetta un momento per assicurarsi che il salvataggio sia completato
-      await new Promise(resolve => setTimeout(resolve, 8000)); // Aumentato a 8 secondi
-      
-      // Recupera le chiavi
-      const retrievedKeys = await stealthChain.retrieveStealthKeysFromUser();
-      
-      // Verifica che le chiavi siano state recuperate correttamente
-      assert(retrievedKeys, "Le chiavi dovrebbero essere recuperate");
-      assert(retrievedKeys.stealthKeyPair, "Dovrebbe contenere stealthKeyPair");
-      
-      // Verifica ogni campo delle chiavi separatamente
-      const expected = stealthKeyPair.stealthKeyPair;
-      const actual = retrievedKeys.stealthKeyPair;
-      assert.strictEqual(actual.pub, expected.pub, "La chiave pubblica dovrebbe corrispondere");
-      assert.strictEqual(actual.priv, expected.priv, "La chiave privata dovrebbe corrispondere");
-      assert.strictEqual(actual.epub, expected.epub, "La chiave pubblica effimera dovrebbe corrispondere");
-      assert.strictEqual(actual.epriv, expected.epriv, "La chiave privata effimera dovrebbe corrispondere");
-
-      // Verifica che la chiave pubblica effimera sia stata salvata nel registro pubblico
-      const publicKey = walletManager.getGun().user()._.sea.pub;
-      const pubStealthKey = await stealthChain.retrieveStealthKeysFromRegistry(publicKey);
-      assert(pubStealthKey, "La chiave pubblica effimera dovrebbe essere nel registro");
-      assert.strictEqual(pubStealthKey, expected.epub, "La chiave pubblica effimera dovrebbe corrispondere");
+      if (walletManager && walletManager.getGun()) {
+        walletManager.getGun().off();
+      }
+      done();
     } catch (error) {
-      assert.fail(`Errore nel salvataggio/recupero delle chiavi: ${error.message}`);
+      console.error("❌ Errore nel afterEach:", error);
+      done(error);
     }
   });
 
-  it("dovrebbe gestire errori con chiavi non valide", async function() {
-    try {
-      await stealthChain.generateStealthAddress("invalid_pub_key");
-      assert.fail("Dovrebbe lanciare un errore");
-    } catch (error) {
-      assert(error.message.includes("Chiavi non valide"), 
-             "L'errore dovrebbe indicare un problema con le chiavi");
-    }
+  it("dovrebbe generare chiavi stealth valide", function(done) {
+    stealthChain.generateStealthKeys((err, stealthKeyPair) => {
+      if (err) {
+        console.error("❌ Errore nella generazione chiavi:", err);
+        done(err);
+        return;
+      }
+      
+      try {
+        assert(stealthKeyPair && stealthKeyPair.stealthKeyPair, "Il keyPair dovrebbe esistere");
+        const keys = stealthKeyPair.stealthKeyPair;
+        assert(keys.pub, "Dovrebbe contenere la chiave pubblica");
+        assert(keys.priv, "Dovrebbe contenere la chiave privata");
+        assert(keys.epub, "Dovrebbe contenere la chiave pubblica effimera");
+        assert(keys.epriv, "Dovrebbe contenere la chiave privata effimera");
+        console.log("✅ Test generazione chiavi completato con successo");
+        done();
+      } catch (error) {
+        console.error("❌ Errore nelle asserzioni:", error);
+        done(error);
+      }
+    });
   });
 
-  it("dovrebbe permettere al destinatario di recuperare l'indirizzo stealth", async function() {
-    try {
-      // Genera e salva le chiavi per il destinatario
-      const recipientKeys = await stealthChain.generateStealthKeys();
-      await stealthChain.saveStealthKeys(recipientKeys.stealthKeyPair);
-      
-      // Aspetta un momento per assicurarsi che il salvataggio sia completato
-      await new Promise(resolve => setTimeout(resolve, 2000));
+  it("dovrebbe salvare e recuperare chiavi stealth", function(done) {
+    stealthChain.generateStealthKeys((err, stealthKeyPair) => {
+      if (err) {
+        console.error("❌ Errore nella generazione chiavi:", err);
+        done(err);
+        return;
+      }
 
-      // Ottieni la chiave pubblica del destinatario
-      const publicKey = walletManager.getGun().user()._.sea.pub;
-      
-      // Verifica che la chiave pubblica effimera sia stata salvata
-      const pubStealthKey = await stealthChain.retrieveStealthKeysFromRegistry(publicKey);
-      assert(pubStealthKey, "La chiave pubblica effimera dovrebbe essere nel registro");
+      try {
+        assert(stealthKeyPair && stealthKeyPair.stealthKeyPair, "Le chiavi dovrebbero essere generate");
+        
+        stealthChain.saveStealthKeys(stealthKeyPair.stealthKeyPair, (saveErr) => {
+          if (saveErr) {
+            console.error("❌ Errore nel salvataggio chiavi:", saveErr);
+            done(saveErr);
+            return;
+          }
 
-      // Genera un indirizzo stealth usando la chiave pubblica del destinatario
-      const result = await stealthChain.generateStealthAddress(publicKey);
+          console.log("✅ Chiavi salvate, tentativo di recupero...");
+          stealthChain.retrieveStealthKeysFromUser((retrieveErr, retrievedKeys) => {
+            if (retrieveErr) {
+              console.error("❌ Errore nel recupero chiavi:", retrieveErr);
+              done(retrieveErr);
+              return;
+            }
 
-      assert(result.stealthAddress, "Dovrebbe generare un indirizzo stealth");
-      assert(result.ephemeralPublicKey, "Dovrebbe generare una chiave pubblica effimera");
-      assert.strictEqual(result.recipientPublicKey, publicKey, "Dovrebbe includere la chiave pubblica del destinatario");
+            try {
+              assert(retrievedKeys, "Le chiavi dovrebbero essere recuperate");
+              
+              const expected = stealthKeyPair.stealthKeyPair;
+              assert.strictEqual(retrievedKeys.pub, expected.pub, "La chiave pubblica dovrebbe corrispondere");
+              assert.strictEqual(retrievedKeys.priv, expected.priv, "La chiave privata dovrebbe corrispondere");
+              assert.strictEqual(retrievedKeys.epub, expected.epub, "La chiave pubblica effimera dovrebbe corrispondere");
+              assert.strictEqual(retrievedKeys.epriv, expected.epriv, "La chiave privata effimera dovrebbe corrispondere");
 
-      // Il destinatario recupera l'indirizzo stealth
-      const recoveredWallet = await stealthChain.openStealthAddress(
-        result.stealthAddress,
-        result.ephemeralPublicKey
-      );
+              const publicKey = walletManager.getGun().user()._.sea.pub;
+              console.log("🔍 Verifica chiavi nel registro per:", publicKey);
+              
+              stealthChain.retrieveStealthKeysFromRegistry(publicKey, (regErr, pubStealthKey) => {
+                if (regErr) {
+                  console.error("❌ Errore nel recupero dal registro:", regErr);
+                  done(regErr);
+                  return;
+                }
 
-      assert(recoveredWallet.address, "Dovrebbe recuperare un indirizzo");
-      assert(recoveredWallet.privateKey, "Dovrebbe recuperare una chiave privata");
-      assert.strictEqual(
-        recoveredWallet.address.toLowerCase(),
-        result.stealthAddress.toLowerCase(),
-        "L'indirizzo recuperato dovrebbe corrispondere"
-      );
-    } catch (error) {
-      assert.fail(`Errore nel test dell'indirizzo stealth: ${error.message}`);
-    }
+                try {
+                  assert(pubStealthKey, "La chiave pubblica effimera dovrebbe essere nel registro");
+                  assert.strictEqual(pubStealthKey, expected.epub, "La chiave pubblica effimera dovrebbe corrispondere");
+                  console.log("✅ Test salvataggio e recupero completato con successo");
+                  done();
+                } catch (error) {
+                  console.error("❌ Errore nelle asserzioni finali:", error);
+                  done(error);
+                }
+              });
+            } catch (error) {
+              console.error("❌ Errore nelle asserzioni di recupero:", error);
+              done(error);
+            }
+          });
+        });
+      } catch (error) {
+        console.error("❌ Errore generale nel test:", error);
+        done(error);
+      }
+    });
+  });
+
+  it("dovrebbe gestire errori con chiavi non valide", function(done) {
+    stealthChain.generateStealthAddress("invalid_pub_key", (err) => {
+      try {
+        assert(err && err.message && err.message.includes("Chiavi non valide"), 
+               "L'errore dovrebbe indicare un problema con le chiavi");
+        console.log("✅ Test gestione errori completato con successo");
+        done();
+      } catch (error) {
+        console.error("❌ Errore nel test di gestione errori:", error);
+        done(error);
+      }
+    });
+  });
+
+  it("dovrebbe permettere al destinatario di recuperare l'indirizzo stealth", function(done) {
+    stealthChain.generateStealthKeys((err, recipientKeys) => {
+      if (err) {
+        console.error("❌ Errore nella generazione chiavi:", err);
+        done(err);
+        return;
+      }
+
+      stealthChain.saveStealthKeys(recipientKeys.stealthKeyPair, (saveErr) => {
+        if (saveErr) {
+          console.error("❌ Errore nel salvataggio chiavi:", saveErr);
+          done(saveErr);
+          return;
+        }
+
+        const publicKey = walletManager.getGun().user()._.sea.pub;
+        console.log("🔍 Recupero chiavi dal registro per:", publicKey);
+        
+        stealthChain.retrieveStealthKeysFromRegistry(publicKey, (regErr, pubStealthKey) => {
+          if (regErr) {
+            console.error("❌ Errore nel recupero dal registro:", regErr);
+            done(regErr);
+            return;
+          }
+
+          try {
+            assert(pubStealthKey, "La chiave pubblica effimera dovrebbe essere nel registro");
+
+            stealthChain.generateStealthAddress(publicKey, (genErr, result) => {
+              if (genErr) {
+                console.error("❌ Errore nella generazione indirizzo stealth:", genErr);
+                done(genErr);
+                return;
+              }
+
+              try {
+                assert(result.stealthAddress, "Dovrebbe generare un indirizzo stealth");
+                assert(result.ephemeralPublicKey, "Dovrebbe generare una chiave pubblica effimera");
+                assert.strictEqual(result.recipientPublicKey, publicKey, "Dovrebbe includere la chiave pubblica del destinatario");
+
+                stealthChain.openStealthAddress(
+                  result.stealthAddress,
+                  result.ephemeralPublicKey,
+                  (openErr, recoveredWallet) => {
+                    if (openErr) {
+                      console.error("❌ Errore nell'apertura indirizzo stealth:", openErr);
+                      done(openErr);
+                      return;
+                    }
+
+                    try {
+                      assert(recoveredWallet.address, "Dovrebbe recuperare un indirizzo");
+                      assert(recoveredWallet.privateKey, "Dovrebbe recuperare una chiave privata");
+                      assert.strictEqual(
+                        recoveredWallet.address.toLowerCase(),
+                        result.stealthAddress.toLowerCase(),
+                        "L'indirizzo recuperato dovrebbe corrispondere"
+                      );
+                      console.log("✅ Test recupero indirizzo stealth completato con successo");
+                      done();
+                    } catch (error) {
+                      console.error("❌ Errore nelle asserzioni finali:", error);
+                      done(error);
+                    }
+                  }
+                );
+              } catch (error) {
+                console.error("❌ Errore nelle asserzioni dell'indirizzo:", error);
+                done(error);
+              }
+            });
+          } catch (error) {
+            console.error("❌ Errore nelle asserzioni del registro:", error);
+            done(error);
+          }
+        });
+      });
+    });
   });
 }); 
