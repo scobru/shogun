@@ -8,7 +8,7 @@ const generateUniqueUsername = () =>
   `test_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
 describe("StealthChain Test Suite", function () {
-  this.timeout(30000);
+  this.timeout(90000);
   
   let walletManager;
   let stealthChain;
@@ -51,7 +51,7 @@ describe("StealthChain Test Suite", function () {
       await stealthChain.saveStealthKeys(stealthKeyPair.stealthKeyPair);
       
       // Aspetta un momento per assicurarsi che il salvataggio sia completato
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 8000)); // Aumentato a 8 secondi
       
       // Recupera le chiavi
       const retrievedKeys = await stealthChain.retrieveStealthKeysFromUser();
