@@ -115,9 +115,14 @@ export class WalletManager {
    * Creates a GunDB account using alias and passphrase
    * @param {string} alias - Account username
    * @param {string} passphrase - Account password
+   * @param {Function} callback - Optional callback function
    * @returns {Promise<void>}
    */
-  public async createAccount(alias: string, passphrase: string): Promise<void> {
+  public async createAccount(
+    alias: string,
+    passphrase: string,
+    callback?: (error?: Error) => void
+  ): Promise<void> {
     try {
       // Se c'è un'autenticazione in corso, aspetta un po' e riprova
       if (this.isAuthenticating) {
@@ -134,36 +139,43 @@ export class WalletManager {
         const timeoutId = setTimeout(() => {
           this.isAuthenticating = false;
           this.user.leave();
-          reject(new Error("Timeout durante la creazione dell'account"));
-        }, 15000);
+          const error = new Error("Timeout durante la creazione dell'account");
+          if (callback) callback(error);
+          reject(error);
+        }, 30000); // Aumentato a 30 secondi
 
         this.user.create(alias, passphrase, async (ack: any) => {
-          clearTimeout(timeoutId);
-          
-          if (ack.err) {
-            this.isAuthenticating = false;
-            if (ack.err.includes("already created") || ack.err.includes("being created")) {
-              console.log("Account già esistente o in fase di creazione, attendo...");
-              await this.waitForAuth();
-              try {
-                await this.login(alias, passphrase);
-                resolve();
-              } catch (loginError) {
-                reject(loginError);
+          try {
+            if (ack.err) {
+              this.isAuthenticating = false;
+              if (ack.err.includes("already created") || ack.err.includes("being created")) {
+                console.log("Account già esistente o in fase di creazione, attendo...");
+                await this.waitForAuth();
+                try {
+                  await this.login(alias, passphrase);
+                  if (callback) callback();
+                  resolve();
+                } catch (loginError) {
+                  if (callback) callback(loginError as Error);
+                  reject(loginError);
+                }
+                return;
               }
+              const error = new Error(`Errore durante la creazione dell'account: ${ack.err}`);
+              if (callback) callback(error);
+              reject(error);
               return;
             }
-            reject(new Error(`Errore durante la creazione dell'account: ${ack.err}`));
-            return;
-          }
 
-          try {
             console.log("Account creato con successo, effettuo login");
             await this.login(alias, passphrase);
+            if (callback) callback();
             resolve();
           } catch (error) {
+            if (callback) callback(error as Error);
             reject(error);
           } finally {
+            clearTimeout(timeoutId);
             this.isAuthenticating = false;
           }
         });
@@ -171,6 +183,7 @@ export class WalletManager {
     } catch (error) {
       this.isAuthenticating = false;
       this.user.leave();
+      if (callback) callback(error as Error);
       throw error;
     }
   }
@@ -207,38 +220,42 @@ export class WalletManager {
           this.isAuthenticating = false;
           this.user.leave();
           reject(new Error("Timeout durante l'autenticazione"));
-        }, 15000);
+        }, 30000); // Aumentato a 30 secondi
 
         this.user.auth(alias, passphrase, (ack: any) => {
-          clearTimeout(timeoutId);
-
-          if (ack.err) {
-            this.isAuthenticating = false;
-            if (ack.err.includes("being created")) {
-              // Se l'utente è in fase di creazione, aspetta e riprova
-              setTimeout(async () => {
-                try {
-                  const result = await this.login(alias, passphrase);
-                  resolve(result);
-                } catch (error) {
-                  reject(error);
-                }
-              }, 2000);
+          try {
+            if (ack.err) {
+              this.isAuthenticating = false;
+              if (ack.err.includes("being created")) {
+                // Se l'utente è in fase di creazione, aspetta e riprova
+                setTimeout(async () => {
+                  try {
+                    const result = await this.login(alias, passphrase);
+                    resolve(result);
+                  } catch (error) {
+                    reject(error);
+                  }
+                }, 2000);
+                return;
+              }
+              reject(new Error(ack.err));
               return;
             }
-            reject(new Error(ack.err));
-            return;
-          }
 
-          if (!this.user.is?.pub) {
+            if (!this.user.is?.pub) {
+              this.isAuthenticating = false;
+              reject(new Error("Login fallito: chiave pubblica non trovata"));
+              return;
+            }
+
+            console.log("Login completato con successo");
             this.isAuthenticating = false;
-            reject(new Error("Login fallito: chiave pubblica non trovata"));
-            return;
+            resolve(this.user.is.pub);
+          } catch (error) {
+            reject(error);
+          } finally {
+            clearTimeout(timeoutId);
           }
-
-          console.log("Login completato con successo");
-          this.isAuthenticating = false;
-          resolve(this.user.is.pub);
         });
       });
     } catch (error) {
