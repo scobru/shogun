@@ -34,7 +34,7 @@ async function registerWithPasskey() {
         showSuccess('Account creato con successo!');
         updateWalletInfo();
     } catch (error) {
-        showError('Errore nella registrazione: ' + error.message);
+        handlePasskeyError(error);
     }
 }
 
@@ -50,7 +50,7 @@ async function loginWithPasskey() {
         showSuccess('Login effettuato con successo!');
         updateWalletInfo();
     } catch (error) {
-        showError('Errore nel login: ' + error.message);
+        handlePasskeyError(error);
     }
 }
 
@@ -95,6 +95,46 @@ async function exportData() {
     }
 }
 
+async function importData(event) {
+    try {
+        const file = event.target.files[0];
+        if (!file) {
+            showError('Seleziona un file da importare');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const username = document.getElementById('loginUsername').value;
+                if (!username) {
+                    showError('Inserisci uno username per l\'importazione');
+                    return;
+                }
+
+                await walletManager.importAllData(e.target.result, username);
+                showSuccess('Dati importati con successo!');
+                updateWalletInfo();
+            } catch (error) {
+                showError('Errore nell\'importazione: ' + error.message);
+            }
+        };
+        reader.readAsText(file);
+    } catch (error) {
+        showError('Errore nella lettura del file: ' + error.message);
+    }
+}
+
+function handlePasskeyError(error) {
+    if (error.name === 'NotAllowedError') {
+        showError('Operazione annullata dall\'utente');
+    } else if (error.name === 'SecurityError') {
+        showError('Errore di sicurezza: assicurati di essere su HTTPS');
+    } else {
+        showError(error.message);
+    }
+}
+
 function logout() {
     walletManager.logout();
     document.getElementById('walletInfo').classList.add('hidden');
@@ -121,6 +161,7 @@ function showSuccess(message) {
 window.registerWithPasskey = registerWithPasskey;
 window.loginWithPasskey = loginWithPasskey;
 window.exportData = exportData;
+window.importData = importData;
 window.logout = logout;
 
 // Inizializza l'app
