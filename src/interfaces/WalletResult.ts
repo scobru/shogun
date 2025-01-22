@@ -1,8 +1,8 @@
-import type { Wallet } from './Wallet';
+import { Wallet } from './Wallet';
 
 export interface WalletResult {
-  address: string;
-  privateKey: string;
+  walletObj: Wallet;
+  entropy: string;
 }
 
 export interface StealthAddressResult {

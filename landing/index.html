@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="description" content="SHOGUN - Decentralized Wallet Manager with Gun.js, Stealth Addresses, and Multi-chain Support" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SHOGUN - Decentralized Wallet Manager</title>
+
+  <!-- Google Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg-dark: #0a0a0a;
+      --color-text: #ffffff;
+      --color-accent-1: #7e57c2; /* viola */
+      --color-accent-2: #44c0c6; /* azzurro acqua */
+      --font-family: 'Inter', sans-serif;
+      --border-radius: 8px;
+      --card-bg: rgba(255, 255, 255, 0.05);
+      --card-border: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Aggiungo animazioni di base */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .feature-card, .api-card {
+      animation: fadeIn 0.6s ease-out;
+      backdrop-filter: blur(10px);
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--border-radius);
+      padding: 2rem;
+      transition: all 0.3s ease;
+    }
+
+    .feature-card:hover, .api-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+      border-color: var(--color-accent-1);
+    }
+
+    /* HERO migliorato */
+    .hero {
+      min-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, 
+        rgba(126, 87, 194, 0.1), 
+        rgba(68, 192, 198, 0.1)
+      );
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(
+        circle at center,
+        var(--color-accent-1) 0%,
+        transparent 50%
+      );
+      opacity: 0.1;
+      animation: rotate 20s linear infinite;
+    }
+
+    @keyframes rotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .hero h1 {
+      font-size: 4rem;
+      margin-bottom: 1.5rem;
+      background: linear-gradient(to right, var(--color-accent-1), var(--color-accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-align: center;
+    }
+
+    .hero p {
+      font-size: 1.2rem;
+      line-height: 1.8;
+      max-width: 800px;
+      text-align: center;
+      margin-bottom: 3rem;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .cta-btn {
+      padding: 1rem 2rem;
+      font-size: 1.1rem;
+      font-weight: 500;
+      border-radius: var(--border-radius);
+      transition: all 0.3s ease;
+      text-decoration: none;
+    }
+
+    .cta-btn:first-child {
+      background: linear-gradient(to right, var(--color-accent-1), var(--color-accent-2));
+      color: white;
+      border: none;
+    }
+
+    .cta-btn:last-child {
+      background: transparent;
+      border: 1px solid var(--color-accent-2);
+      color: var(--color-accent-2);
+    }
+
+    .cta-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Features migliorato */
+    .features {
+      padding: 6rem 2rem;
+      background: var(--bg-dark);
+    }
+
+    .features h2 {
+      font-size: 3rem;
+      text-align: center;
+      margin-bottom: 4rem;
+      background: linear-gradient(to right, var(--color-accent-1), var(--color-accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .feature-card h3 {
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+      color: var(--color-accent-2);
+    }
+
+    .feature-card ul {
+      list-style: none;
+    }
+
+    .feature-card ul li {
+      margin-bottom: 1rem;
+      padding-left: 1.5rem;
+      position: relative;
+    }
+
+    .feature-card ul li::before {
+      content: '→';
+      position: absolute;
+      left: 0;
+      color: var(--color-accent-1);
+    }
+
+    /* Come Funziona migliorato */
+    .how-it-works {
+      padding: 6rem 2rem;
+      background: linear-gradient(135deg, 
+        rgba(126, 87, 194, 0.05), 
+        rgba(68, 192, 198, 0.05)
+      );
+    }
+
+    .explanation-card {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 3rem;
+      background: var(--card-bg);
+      border-radius: var(--border-radius);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(10px);
+    }
+
+    .how-it-works h2 {
+      font-size: 3rem;
+      text-align: center;
+      margin-bottom: 3rem;
+      background: linear-gradient(to right, var(--color-accent-1), var(--color-accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* API Reference migliorato */
+    .api-section {
+      padding: 6rem 2rem;
+      background: var(--bg-dark);
+    }
+
+    .api-section h2 {
+      font-size: 3rem;
+      text-align: center;
+      margin-bottom: 4rem;
+      background: linear-gradient(to right, var(--color-accent-1), var(--color-accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .api-method {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 1rem;
+      border-radius: var(--border-radius);
+      margin: 1rem 0;
+      font-family: 'Fira Code', monospace;
+      border: 1px solid var(--card-border);
+    }
+
+    /* Navbar migliorato */
+    nav {
+      background: rgba(26, 26, 26, 0.8);
+      backdrop-filter: blur(10px);
+      position: fixed;
+      width: 100%;
+      top: 0;
+      z-index: 1000;
+      padding: 1.5rem 2rem;
+    }
+
+    .logo-container {
+      gap: 1.5rem;
+    }
+
+    .logo-text {
+      font-size: 1.5rem;
+      background: linear-gradient(to right, var(--color-accent-1), var(--color-accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* Aggiustamenti per il fixed navbar */
+    body {
+      padding-top: 80px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: var(--font-family);
+    }
+
+    body {
+      background: var(--bg-dark);
+      color: var(--color-text);
+      line-height: 1.5;
+    }
+
+    /* NAVBAR */
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
+      background-color: #1a1a1a;
+    }
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .logo-svg {
+      width: 40px;
+      height: 40px;
+    }
+
+    .logo-text {
+      font-weight: 600;
+      font-size: 1.3rem;
+    }
+
+    .nav-links {
+      list-style: none;
+      display: flex;
+      gap: 1.5rem;
+    }
+
+    .nav-links li a {
+      color: var(--color-text);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.3s;
+    }
+
+    .nav-links li a:hover {
+      color: var(--color-accent-2);
+    }
+
+    /* FEATURES / WHY SHOGUN */
+    .features {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 3rem 1.5rem;
+      background: #1a1a1a;
+      text-align: center;
+    }
+
+    .features h2 {
+      font-size: 2rem;
+      margin-bottom: 2rem;
+      font-weight: 600;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .feature-card {
+      background: #1e1e1e;
+      padding: 1.5rem;
+      border-radius: var(--border-radius);
+      transition: transform 0.3s;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+    }
+
+    .feature-card:hover {
+      transform: translateY(-5px);
+    }
+
+    .feature-card h3 {
+      font-size: 1.2rem;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+
+    .feature-card p {
+      font-size: 0.95rem;
+      line-height: 1.4;
+      opacity: 0.85;
+    }
+
+    /* CODE SNIPPET */
+    .code-section {
+      padding: 3rem 1.5rem;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .code-tabs {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .code-tab {
+      padding: 0.5rem 1rem;
+      background: #2b2b2b;
+      border: none;
+      color: #d4d4d4;
+      cursor: pointer;
+      border-radius: var(--border-radius);
+      font-family: 'Fira Code', monospace;
+    }
+
+    .code-tab.active {
+      background: var(--color-accent-1);
+      color: white;
+    }
+
+    .code-snippet {
+      background: #2b2b2b;
+      padding: 1.5rem;
+      border-radius: var(--border-radius);
+      text-align: left;
+      color: #d4d4d4;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.9rem;
+      overflow-x: auto;
+      line-height: 1.6;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .code-snippet .comment { color: #6a9955; }
+    .code-snippet .keyword { color: #c586c0; }
+    .code-snippet .string { color: #ce9178; }
+    .code-snippet .function { color: #dcdcaa; }
+    .code-snippet .type { color: #4ec9b0; }
+
+    /* CTA FINALE */
+    .cta-final {
+      text-align: center;
+      padding: 2rem 1.5rem;
+      background: linear-gradient(135deg, var(--color-accent-2), var(--color-accent-1));
+    }
+
+    .cta-final h2 {
+      font-size: 1.8rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+
+    .cta-final p {
+      max-width: 600px;
+      margin: 0 auto 2rem;
+      font-size: 1rem;
+      line-height: 1.4;
+      font-weight: 300;
+    }
+
+    .cta-final .btn-secondary {
+      background-color: #fff;
+      color: #000;
+      padding: 0.8rem 1.6rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: var(--border-radius);
+      text-decoration: none;
+      transition: background-color 0.3s;
+    }
+
+    .cta-final .btn-secondary:hover {
+      background-color: #e1e1e1;
+    }
+
+    /* API REFERENCE */
+    .api-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .api-card {
+      background: #2b2b2b;
+      padding: 1.5rem;
+      border-radius: var(--border-radius);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: transform 0.3s;
+    }
+
+    .api-card:hover {
+      transform: translateY(-5px);
+    }
+
+    .api-card h3 {
+      color: var(--color-accent-2);
+      margin-bottom: 1rem;
+    }
+
+    .api-method {
+      font-family: 'Fira Code', monospace;
+      color: #d4d4d4;
+      margin: 0.5rem 0;
+      font-size: 0.9rem;
+    }
+
+    /* FOOTER */
+    footer {
+      text-align: center;
+      padding: 1.5rem;
+      font-size: 0.85rem;
+      color: #888;
+    }
+
+    footer a {
+      color: var(--color-accent-2);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 768px) {
+      .hero h1 {
+        font-size: 2rem;
+      }
+      .features-grid {
+        flex-direction: column;
+        align-items: center;
+      }
+      .code-section {
+        padding: 2rem 1rem;
+      }
+    }
+
+    .use-case.special {
+      border-left: 4px solid var(--color-accent-1);
+      background: linear-gradient(145deg, #2b2b2b, #1e1e1e);
+    }
+
+    .important-note {
+      background: linear-gradient(145deg, rgba(126, 87, 194, 0.1), rgba(68, 192, 198, 0.1));
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <nav>
+    <div class="logo-container">
+      <svg class="logo-svg" width="40" height="40" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:var(--color-accent-1);stop-opacity:1" />
+            <stop offset="100%" style="stop-color:var(--color-accent-2);stop-opacity:1" />
+          </linearGradient>
+        </defs>
+        <rect width="240" height="240" fill="url(#bgGradient)"/>
+        <circle cx="120" cy="120" r="80" fill="#ffffff"/>
+        <circle cx="120" cy="120" r="60" fill="#4a5568"/>
+        <path d="M150 115 L165 115 L157.5 125 Z" fill="#ffffff" transform="rotate(-15, 157.5, 120)"/>
+      </svg>
+      <span class="logo-text">SHOGUN</span>
+    </div>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#api">API</a></li>
+      <li><a href="#docs">Docs</a></li>
+      <li><a href="https://github.com/scobru/shogun" target="_blank">GitHub</a></li>
+    </ul>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <h1>SHOGUN - Privacy-First Wallet Manager</h1>
+    <p>
+      Un wallet manager decentralizzato che utilizza Gun.js per gestire wallet e chiavi private direttamente nel browser.
+      Offre un sistema completo di autenticazione con supporto per indirizzi stealth e crittografia end-to-end.
+    </p>
+    <div class="hero-buttons">
+      <a href="https://github.com/scobru/shogun" class="cta-btn" target="_blank">View on GitHub</a>
+      <a href="#docs" class="cta-btn secondary">View Docs</a>
+    </div>
+  </section>
+
+  <!-- CORE FEATURES -->
+  <section class="features" id="features">
+    <h2>Caratteristiche Principali</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <h3>🔐 Sicurezza Avanzata</h3>
+        <ul>
+          <li>Gestione sicura delle chiavi private</li>
+          <li>Supporto per indirizzi stealth</li>
+          <li>Crittografia end-to-end</li>
+          <li>Backup crittografati</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h3>🌐 Decentralizzazione</h3>
+        <ul>
+          <li>Storage distribuito con Gun.js</li>
+          <li>Sincronizzazione P2P</li>
+          <li>Nessun server centrale</li>
+          <li>Integrazione Web3</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h3>🔄 Portabilità</h3>
+        <ul>
+          <li>Import/export completo dei dati</li>
+          <li>Supporto multi-dispositivo</li>
+          <li>Gestione locale e remota</li>
+          <li>Backup automatici</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how-it-works">
+    <h2>Come Funziona?</h2>
+    <div class="explanation-card">
+      <p>
+        SHOGUN utilizza Gun.js come base per creare un sistema completamente decentralizzato di gestione wallet.
+        Le chiavi private sono gestite localmente, mentre la sincronizzazione e lo storage avvengono in modo distribuito.
+        Gli indirizzi stealth forniscono un ulteriore livello di privacy per le transazioni.
+      </p>
+      <p class="important-note">
+        Tutte le operazioni critiche avvengono nel browser dell'utente. I dati sensibili non lasciano mai
+        il dispositivo dell'utente e sono sempre crittografati end-to-end.
+      </p>
+    </div>
+  </section>
+
+  <!-- USAGE GUIDE -->
+  <section class="usage-guide">
+    <h2>Casi d'Uso</h2>
+    <div class="use-cases-grid">
+      <div class="use-case good">
+        <h3>✅ Applicazioni Ideali</h3>
+        <ul>
+          <li>
+            <strong>Transazioni Private</strong>
+            <p>Perfetto per chi cerca la massima privacy nelle transazioni grazie agli indirizzi stealth.</p>
+          </li>
+          <li>
+            <strong>Storage Decentralizzato</strong>
+            <p>Ideale per applicazioni che necessitano di storage distribuito e sincronizzazione P2P.</p>
+          </li>
+          <li>
+            <strong>DApp con Focus sulla Privacy</strong>
+            <p>Per applicazioni che richiedono un elevato livello di privacy e decentralizzazione.</p>
+          </li>
+        </ul>
+      </div>
+      
+      <div class="use-case special">
+        <h3>🔒 Caratteristiche Tecniche</h3>
+        <ul>
+          <li>Indirizzi Stealth per Privacy Massima</li>
+          <li>Integrazione Gun.js per Vera Decentralizzazione</li>
+          <li>Crittografia End-to-End</li>
+          <li>Backup Crittografati</li>
+          <li>Supporto Multi-Chain</li>
+          <li>WebAuthn/Passkey Support</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- CODE EXAMPLES -->
+  <section class="code-section" id="docs">
+    <h2>Quick Start</h2>
+    <div class="code-tabs">
+      <button class="code-tab active">Basic Usage</button>
+      <button class="code-tab">Ethereum Integration</button>
+      <button class="code-tab">Stealth Addresses</button>
+    </div>
+    <div class="code-snippet">
+<pre><code><span class="comment">// Inizializza WalletManager</span>
+<span class="keyword">import</span> { <span class="type">WalletManager</span>, <span class="type">StorageType</span> } <span class="keyword">from</span> <span class="string">'./src/WalletManager'</span>;
+
+<span class="keyword">const</span> manager = <span class="keyword">new</span> <span class="type">WalletManager</span>();
+
+<span class="comment">// Crea un account</span>
+<span class="keyword">try</span> {
+  <span class="keyword">await</span> manager.<span class="function">createAccount</span>(<span class="string">'username'</span>, <span class="string">'password'</span>);
+  console.<span class="function">log</span>(<span class="string">'Account creato!'</span>);
+} <span class="keyword">catch</span> (error) {
+  console.<span class="function">error</span>(<span class="string">'Errore:'</span>, error);
+}
+
+<span class="comment">// Crea e salva un wallet</span>
+<span class="keyword">const</span> gunKeyPair = manager.<span class="function">getCurrentUserKeyPair</span>();
+<span class="keyword">const</span> { walletObj, entropy } = <span class="keyword">await</span> <span class="type">WalletManager</span>.<span class="function">createWalletObj</span>(gunKeyPair);
+
+<span class="comment">// Salva sia su Gun che in localStorage</span>
+<span class="keyword">await</span> manager.<span class="function">saveWallet</span>(walletObj, pubKey, <span class="type">StorageType</span>.BOTH);</code></pre>
+    </div>
+  </section>
+
+  <!-- API REFERENCE -->
+  <section class="api-section" id="api">
+    <h2>API Reference</h2>
+    <div class="api-grid">
+      <div class="api-card">
+        <h3>WalletManager</h3>
+        <div class="api-method">createAccount(alias: string, passphrase: string)</div>
+        <div class="api-method">login(alias: string, passphrase: string)</div>
+        <div class="api-method">saveWallet(wallet: Wallet, publicKey: string)</div>
+        <div class="api-method">retrieveWallet(publicKey: string)</div>
+      </div>
+      <div class="api-card">
+        <h3>EthereumManager</h3>
+        <div class="api-method">setCustomProvider(rpcUrl: string, privateKey: string)</div>
+        <div class="api-method">createAccountWithEthereum()</div>
+        <div class="api-method">loginWithEthereum()</div>
+      </div>
+      <div class="api-card">
+        <h3>StealthChain</h3>
+        <div class="api-method">generateStealthKeys()</div>
+        <div class="api-method">generateStealthAddress(recipientPublicKey: string)</div>
+        <div class="api-method">openStealthAddress(address: string, ephemeralKey: string)</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ROADMAP -->
+  <section class="features">
+    <h2>Roadmap</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <h3>🔑 WebAuthn/Passkey</h3>
+        <ul>
+          <li>Autenticazione biometrica</li>
+          <li>Supporto FIDO2</li>
+          <li>Integrazione Gun.js</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h3>📜 Smart-Contracts</h3>
+        <ul>
+          <li>StealthChain Contracts</li>
+          <li>Multi-chain support</li>
+          <li>DeFi integration</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h3>⚡ Layer 2</h3>
+        <ul>
+          <li>Scaling solutions</li>
+          <li>Performance optimization</li>
+          <li>Gas optimization</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA FINALE -->
+  <section class="cta-final">
+    <h2>Inizia ora con SHOGUN</h2>
+    <p>
+      Unisciti alla community, contribuisci su GitHub o esplora la documentazione per saperne di più 
+      sull'approccio di SHOGUN ai wallet decentralizzati.
+    </p>
+    <div class="cta-buttons">
+      <a href="https://github.com/scobru/shogun" target="_blank" class="btn-secondary">
+        GitHub
+      </a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <p>
+      © 2025 SHOGUN – MIT License |
+      <a href="mailto:support@shogun-wallet.com">Supporto</a> |
+      <a href="https://github.com/scobru/shogun">GitHub</a>
+    </p>
+  </footer>
+
+</body>
+</html>

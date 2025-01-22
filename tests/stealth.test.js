@@ -3,15 +3,15 @@
 const { describe, it, beforeEach, afterEach } = require("mocha");
 const assert = require("assert");
 
-// Importa la classe che vogliamo testare
+// Import the class we want to test
 const { StealthChain } = require("../src/StealthChain");
 
-// Importa (o istanzia) il WalletManager
-// L'importante è che poi possiamo estrarre la stessa istanza di Gun usata da esso
+// Import (or instantiate) the WalletManager
+// The important thing is that we can extract the same Gun instance used by it
 const { WalletManager } = require("../src/WalletManager");
 
 /**
- * Crea un alias random per evitare conflitti di nomi utente
+ * Create a random alias to avoid username conflicts
  */
 function generateRandomAlias() {
   const suffix = Math.random().toString(36).substring(2);
@@ -19,54 +19,54 @@ function generateRandomAlias() {
 }
 
 /**
- * Esegue una pausa (ad esempio per dare tempo a Gun di sincronizzare)
+ * Execute a pause (for example to give Gun time to sync)
  */
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
- * Polling generico, chiama `checkFn` ripetutamente finché non ritorna true
- * o finché non scadono i tentativi.
+ * Generic polling, calls `checkFn` repeatedly until it returns true
+ * or until attempts are exhausted.
  */
 async function waitUntil(checkFn, maxAttempts = 15, interval = 500) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (await checkFn()) return true;
     await sleep(interval);
   }
-  throw new Error(`Condizione non soddisfatta dopo ${maxAttempts} tentativi`);
+  throw new Error(`Condition not met after ${maxAttempts} attempts`);
 }
 
-describe("StealthChain (usando l'istanza Gun del WalletManager)", function () {
+describe("StealthChain (using WalletManager's Gun instance)", function () {
   this.timeout(120000);
 
-  let manager;        // L'istanza di WalletManager
-  let gun;            // L'istanza di Gun estratta da manager
-  let user;           // L'utente Gun per creare/loggare manualmente
-  let stealthChain;   // L'istanza di StealthChain basata su gun
+  let manager;        // WalletManager instance
+  let gun;            // Gun instance extracted from manager
+  let user;           // Gun user for manual creation/login
+  let stealthChain;   // StealthChain instance based on gun
 
   beforeEach(async function () {
     this.timeout(30000);
     
-    console.log("\n=== Setup: creazione manager e recupero Gun ===");
-    // 1. Creiamo un nuovo manager
+    console.log("\n=== Setup: creating manager and retrieving Gun ===");
+    // 1. Create a new manager
     manager = new WalletManager();
 
-    // 2. Ricaviamo l'istanza di Gun dal manager
+    // 2. Get Gun instance from manager
     gun = manager.getGun();
     if (!gun) {
-      throw new Error("Impossibile ottenere l'istanza Gun dal manager");
+      throw new Error("Unable to get Gun instance from manager");
     }
 
-    // 3. Creiamo l'utente Gun manualmente (senza usare manager.createAccount)
+    // 3. Create Gun user manually (without using manager.createAccount)
     user = gun.user();
 
     const alias = generateRandomAlias();
-    const passphrase = "passwordProva";
+    const passphrase = "passwordTest";
 
-    console.log("Creazione utente con alias:", alias);
+    console.log("Creating user with alias:", alias);
 
-    // Prova a creare l'utente con più tentativi
+    // Try to create user with multiple attempts
     let attempts = 0;
     const maxAttempts = 3;
     
@@ -76,18 +76,18 @@ describe("StealthChain (usando l'istanza Gun del WalletManager)", function () {
           user.create(alias, passphrase, async (ack) => {
             if (ack.err) {
               if (ack.err.includes("already created")) {
-                console.log("Account già esistente, provo il login...");
+                console.log("Account already exists, trying login...");
                 user.auth(alias, passphrase, (authAck) => {
-                  if (authAck.err) reject(new Error(`Login fallito: ${authAck.err}`));
+                  if (authAck.err) reject(new Error(`Login failed: ${authAck.err}`));
                   else resolve();
                 });
               } else {
-                reject(new Error(`Errore creazione utente: ${ack.err}`));
+                reject(new Error(`User creation error: ${ack.err}`));
               }
             } else {
-              console.log("Account creato, effettuo login...");
+              console.log("Account created, performing login...");
               user.auth(alias, passphrase, (authAck) => {
-                if (authAck.err) reject(new Error(`Login fallito: ${authAck.err}`));
+                if (authAck.err) reject(new Error(`Login failed: ${authAck.err}`));
                 else resolve();
               });
             }
@@ -97,202 +97,202 @@ describe("StealthChain (usando l'istanza Gun del WalletManager)", function () {
       } catch (error) {
         attempts++;
         if (attempts === maxAttempts) throw error;
-        console.log(`Tentativo ${attempts} fallito, riprovo...`);
+        console.log(`Attempt ${attempts} failed, retrying...`);
         await sleep(1000);
       }
     }
 
-    // Attendi che Gun sia pronto
+    // Wait for Gun to be ready
     await sleep(2000);
 
-    // Verifica di essere loggati con più tentativi
+    // Verify login with multiple attempts
     await waitUntil(() => {
       const isLogged = !!gun.user().is;
-      if (!isLogged) console.log("Attendo login...");
+      if (!isLogged) console.log("Waiting for login...");
       return isLogged;
     }, 15, 1000);
 
-    console.log("🔑 Utente creato/loggato con successo:", user.is.pub);
+    console.log("🔑 User created/logged in successfully:", user.is.pub);
 
-    // 4. Istanzia StealthChain usando la Gun di manager
+    // 4. Instantiate StealthChain using manager's Gun
     stealthChain = new StealthChain(gun);
 
-    // Verifica che StealthChain sia pronto
+    // Verify StealthChain is ready
     if (!stealthChain) {
-      throw new Error("StealthChain non inizializzato correttamente");
+      throw new Error("StealthChain not properly initialized");
     }
 
-    console.log("=== Setup completato ===\n");
+    console.log("=== Setup completed ===\n");
   });
 
   afterEach(async function () {
-    console.log("\n=== Teardown: logout utente e disconnessione Gun ===");
+    console.log("\n=== Teardown: user logout and Gun disconnection ===");
     try {
       if (gun && gun.user()) {
         gun.user().leave();
-        console.log("👤 Utente disconnesso da Gun");
+        console.log("👤 User disconnected from Gun");
       }
-      // Gun non ha un vero "close", ma possiamo togliere i listener
+      // Gun doesn't have a real "close", but we can remove listeners
       if (gun && gun.off) {
         gun.off();
       }
       await sleep(1000);
     } catch (err) {
-      console.warn("❌ Errore in afterEach:", err.message);
+      console.warn("❌ Error in afterEach:", err.message);
     }
-    console.log("=== Fine Teardown ===\n");
+    console.log("=== Teardown completed ===\n");
   });
 
-  it("dovrebbe generare chiavi stealth e salvarle", async function () {
-    console.log("Test: generazione e salvataggio chiavi stealth");
-    // 1. Genera chiavi stealth
+  it("should generate stealth keys and save them", async function () {
+    console.log("Test: generating and saving stealth keys");
+    // 1. Generate stealth keys
     const generatedKeyPair = await new Promise((resolve, reject) => {
       stealthChain.generateStealthKeys((err, result) => {
         if (err) {
-          console.error("Errore nella generazione delle chiavi:", err);
+          console.error("Error generating keys:", err);
           return reject(err);
         }
-        console.log("Chiavi generate:", result);
+        console.log("Keys generated:", result);
         resolve(result);
       });
     });
 
-    // Verifica che le chiavi siano state generate correttamente
-    assert(generatedKeyPair, "generateStealthKeys non ha restituito nulla");
-    assert(generatedKeyPair.pub, "Manca la chiave pubblica");
-    assert(generatedKeyPair.priv, "Manca la chiave privata");
-    assert(generatedKeyPair.epub, "Manca la chiave pubblica effimera");
-    assert(generatedKeyPair.epriv, "Manca la chiave privata effimera");
+    // Verify keys were generated correctly
+    assert(generatedKeyPair, "generateStealthKeys returned nothing");
+    assert(generatedKeyPair.pub, "Missing public key");
+    assert(generatedKeyPair.priv, "Missing private key");
+    assert(generatedKeyPair.epub, "Missing ephemeral public key");
+    assert(generatedKeyPair.epriv, "Missing ephemeral private key");
 
-    // Attendi che Gun sia pronto prima di salvare
+    // Wait for Gun to be ready before saving
     await sleep(1000);
 
-    // Salva le chiavi stealth con gestione errori
+    // Save stealth keys with error handling
     await new Promise((resolve, reject) => {
       stealthChain.saveStealthKeys(generatedKeyPair, (err) => {
         if (err) {
-          console.error("Errore nel salvataggio delle chiavi:", err);
+          console.error("Error saving keys:", err);
           return reject(err);
         }
-        console.log("Chiavi salvate con successo");
+        console.log("Keys saved successfully");
         resolve();
       });
     });
 
-    // Attendi che Gun sincronizzi i dati
+    // Wait for Gun to sync data
     await sleep(2000);
 
-    // Recupera le chiavi con gestione errori
+    // Retrieve keys with error handling
     const retrievedKeys = await new Promise((resolve, reject) => {
       stealthChain.retrieveStealthKeysFromUser((err, keys) => {
         if (err) {
-          console.error("Errore nel recupero delle chiavi:", err);
+          console.error("Error retrieving keys:", err);
           return reject(err);
         }
-        console.log("Chiavi recuperate:", keys);
+        console.log("Keys retrieved:", keys);
         resolve(keys);
       });
     });
 
-    // Verifica le chiavi recuperate
-    assert(retrievedKeys, "Nessuna chiave recuperata");
+    // Verify retrieved keys
+    assert(retrievedKeys, "No keys retrieved");
     assert.strictEqual(
       retrievedKeys.pub,
       generatedKeyPair.pub,
-      "Le chiavi stealth recuperate non corrispondono (pub)"
+      "Retrieved stealth keys don't match (pub)"
     );
     assert.strictEqual(
       retrievedKeys.priv,
       generatedKeyPair.priv,
-      "Le chiavi stealth recuperate non corrispondono (priv)"
+      "Retrieved stealth keys don't match (priv)"
     );
-    console.log("✅ Chiavi stealth generate e salvate con successo");
+    console.log("✅ Stealth keys generated and saved successfully");
   });
 
-  it("dovrebbe generare e 'aprire' un indirizzo stealth", async function () {
-    console.log("Test: generazione e apertura di un indirizzo stealth");
+  it("should generate and 'open' a stealth address", async function () {
+    console.log("Test: generating and opening a stealth address");
     
-    // 1. Genera + Salva chiavi stealth
-    console.log("Generazione chiavi stealth...");
+    // 1. Generate + Save stealth keys
+    console.log("Generating stealth keys...");
     const generatedKeyPair = await new Promise((resolve, reject) => {
       stealthChain.generateStealthKeys((err, result) => {
         if (err) {
-          console.error("Errore nella generazione delle chiavi:", err);
+          console.error("Error generating keys:", err);
           return reject(err);
         }
-        console.log("Chiavi generate:", result);
+        console.log("Keys generated:", result);
         resolve(result);
       });
     });
 
-    // Attendi che Gun sia pronto
+    // Wait for Gun to be ready
     await sleep(1000);
 
-    console.log("Salvataggio chiavi stealth...");
+    console.log("Saving stealth keys...");
     await new Promise((resolve, reject) => {
       stealthChain.saveStealthKeys(generatedKeyPair, (err) => {
         if (err) {
-          console.error("Errore nel salvataggio delle chiavi:", err);
+          console.error("Error saving keys:", err);
           return reject(err);
         }
-        console.log("Chiavi salvate con successo");
+        console.log("Keys saved successfully");
         resolve();
       });
     });
 
-    // Attendi che Gun sincronizzi i dati
+    // Wait for Gun to sync data
     await sleep(2000);
 
-    // 2. Genera l'indirizzo stealth per la stessa chiave pubblica (autodestinatario)
+    // 2. Generate stealth address for the same public key (self-recipient)
     const myPublicKey = user.is.pub;
-    console.log("Generazione indirizzo stealth per:", myPublicKey);
+    console.log("Generating stealth address for:", myPublicKey);
     
     const stealthData = await new Promise((resolve, reject) => {
       stealthChain.generateStealthAddress(myPublicKey, (err, data) => {
         if (err) {
-          console.error("Errore nella generazione dell'indirizzo stealth:", err);
+          console.error("Error generating stealth address:", err);
           return reject(err);
         }
-        console.log("Indirizzo stealth generato:", data);
+        console.log("Stealth address generated:", data);
         resolve(data);
       });
     });
 
-    assert(stealthData.stealthAddress, "Manca l'indirizzo stealth generato");
-    assert(stealthData.ephemeralPublicKey, "Manca la ephemeralPublicKey generata");
+    assert(stealthData.stealthAddress, "Missing generated stealth address");
+    assert(stealthData.ephemeralPublicKey, "Missing generated ephemeralPublicKey");
     assert.strictEqual(
       stealthData.recipientPublicKey,
       myPublicKey,
-      "Recipient public key non corrisponde"
+      "Recipient public key doesn't match"
     );
 
-    // Attendi che Gun sincronizzi i dati
+    // Wait for Gun to sync data
     await sleep(2000);
 
-    // 3. Apri l'indirizzo stealth
-    console.log("Apertura indirizzo stealth...");
+    // 3. Open stealth address
+    console.log("Opening stealth address...");
     const recoveredWallet = await new Promise((resolve, reject) => {
       stealthChain.openStealthAddress(
         stealthData.stealthAddress,
         stealthData.ephemeralPublicKey,
         (err, wallet) => {
           if (err) {
-            console.error("Errore nell'apertura dell'indirizzo stealth:", err);
+            console.error("Error opening stealth address:", err);
             return reject(err);
           }
-          console.log("Wallet recuperato:", wallet.address);
+          console.log("Wallet recovered:", wallet.address);
           resolve(wallet);
         }
       );
     });
 
-    assert(recoveredWallet.address, "Il wallet decrittato non ha un indirizzo");
-    assert(recoveredWallet.privateKey, "Il wallet decrittato non ha una chiave privata");
+    assert(recoveredWallet.address, "Decrypted wallet has no address");
+    assert(recoveredWallet.privateKey, "Decrypted wallet has no private key");
     assert.strictEqual(
       recoveredWallet.address.toLowerCase(),
       stealthData.stealthAddress.toLowerCase(),
-      "L'indirizzo recuperato non corrisponde a quello generato"
+      "Recovered address doesn't match generated one"
     );
-    console.log("✅ Indirizzo stealth generato e aperto con successo");
+    console.log("✅ Stealth address generated and opened successfully");
   });
 });

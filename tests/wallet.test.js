@@ -3,7 +3,7 @@ const assert = require("assert");
 const { WalletManager } = require("../src/WalletManager");
 const { Wallet } = require("../src/interfaces/Wallet");
 
-// Simula localStorage per Node.js
+// Simulate localStorage for Node.js
 if (typeof localStorage === 'undefined' || localStorage === null) {
   const LocalStorage = require('node-localstorage').LocalStorage;
   global.localStorage = new LocalStorage('./scratch');
@@ -22,10 +22,10 @@ describe("WalletManager Data Management", function() {
   beforeEach(async function() {
     walletManager = new WalletManager();
     testAlias = generateRandomAlias();
-    // Crea e autentica un utente di test
+    // Create and authenticate a test user
     await walletManager.createAccount(testAlias, "password123");
-    await walletManager.login(testAlias, "password123"); // Assicurati che l'utente sia loggato
-    assert(walletManager.user.is, "L'utente deve essere autenticato dopo il login");
+    await walletManager.login(testAlias, "password123"); // Make sure user is logged in
+    assert(walletManager.user.is, "User must be authenticated after login");
     testWallet = new Wallet("0xTestPublicKey", "testEntropy");
   });
 
@@ -35,16 +35,16 @@ describe("WalletManager Data Management", function() {
   });
 
   describe("Local Storage", function() {
-    it("dovrebbe salvare e recuperare un wallet localmente", async function() {
+    it("should save and retrieve a wallet locally", async function() {
       await walletManager.saveWalletLocally(testWallet, testAlias);
       const retrieved = await walletManager.retrieveWalletLocally(testAlias);
       
-      assert(retrieved, "Il wallet dovrebbe essere recuperato");
+      assert(retrieved, "Wallet should be retrieved");
       assert.strictEqual(retrieved.publicKey, testWallet.publicKey);
       assert.strictEqual(retrieved.entropy, testWallet.entropy);
     });
 
-    it("dovrebbe verificare correttamente i dati locali", async function() {
+    it("should correctly verify local data", async function() {
       await walletManager.saveWalletLocally(testWallet, testAlias);
       await walletManager.getStealthChain().saveStealthKeysLocally(testAlias, {
         spendingKey: "test",
@@ -52,81 +52,127 @@ describe("WalletManager Data Management", function() {
       });
 
       const status = await walletManager.checkLocalData(testAlias);
-      assert(status.hasWallet, "Dovrebbe avere un wallet");
-      assert(status.hasStealthKeys, "Dovrebbe avere chiavi stealth");
+      assert(status.hasWallet, "Should have a wallet");
+      assert(status.hasStealthKeys, "Should have stealth keys");
     });
 
-    it("dovrebbe pulire correttamente i dati locali", async function() {
+    it("should properly clean local data", async function() {
       await walletManager.saveWalletLocally(testWallet, testAlias);
       await walletManager.clearLocalData(testAlias);
       
       const status = await walletManager.checkLocalData(testAlias);
-      assert(!status.hasWallet, "Non dovrebbe avere un wallet");
-      assert(!status.hasStealthKeys, "Non dovrebbe avere chiavi stealth");
+      assert(!status.hasWallet, "Should not have a wallet");
+      assert(!status.hasStealthKeys, "Should not have stealth keys");
     });
   });
 
   describe("Gun KeyPair Export/Import", function() {
-    it("dovrebbe esportare e importare un keypair di Gun", async function() {
-      // Riautentica l'utente per sicurezza
+    it("should export and import a Gun keypair", async function() {
+      // Re-authenticate user for safety
       await walletManager.login(testAlias, "password123");
-      assert(walletManager.user.is, "L'utente dovrebbe essere autenticato");
+      assert(walletManager.user.is, "User should be authenticated");
       
       const exported = await walletManager.exportGunKeyPair();
-      // Salva il keypair corrente
+      // Save current keypair
       const originalPubKey = walletManager.getPublicKey();
       
-      // Re-importa senza logout
+      // Re-import without logout
       const importedPubKey = await walletManager.importGunKeyPair(exported);
-      assert(importedPubKey, "Dovrebbe restituire una chiave pubblica");
+      assert(importedPubKey, "Should return a public key");
       assert.strictEqual(importedPubKey, originalPubKey);
     });
 
-    it("dovrebbe gestire keypair non validi", async function() {
+    it("should handle invalid keypairs", async function() {
       try {
         await walletManager.importGunKeyPair('{"invalid":"data"}');
-        assert.fail("Dovrebbe lanciare un errore");
+        assert.fail("Should throw an error");
       } catch (error) {
-        assert(error.message.includes("non valida"));
+        assert(error.message.includes("Error importing key pair"), "Error message should mention importing key pair");
       }
     });
   });
 
   describe("Complete Data Export/Import", function() {
-    it("dovrebbe esportare e importare tutti i dati", async function() {
-      // Riautentica l'utente per sicurezza
+    it("should export and import all data", async function() {
+      // Re-authenticate user for safety
       await walletManager.login(testAlias, "password123");
-      assert(walletManager.user.is, "L'utente dovrebbe essere autenticato");
+      assert(walletManager.user.is, "User should be authenticated");
       
-      // Setup: salva alcuni dati
+      // Setup: save some data
       await walletManager.saveWalletLocally(testWallet, testAlias);
       await walletManager.getStealthChain().saveStealthKeysLocally(testAlias, {
         spendingKey: "test",
         viewingKey: "test"
       });
 
-      // Esporta
+      // Export
       const exported = await walletManager.exportAllData(testAlias);
       
-      // Pulisci i dati locali ma mantieni l'autenticazione
+      // Clean local data but maintain authentication
       await walletManager.clearLocalData(testAlias);
 
-      // Importa nella stessa sessione
+      // Import in same session
       await walletManager.importAllData(exported, testAlias);
       
-      // Verifica
+      // Verify
       const status = await walletManager.checkLocalData(testAlias);
-      assert(status.hasWallet, "Dovrebbe avere un wallet dopo l'import");
-      assert(status.hasStealthKeys, "Dovrebbe avere chiavi stealth dopo l'import");
+      assert(status.hasWallet, "Should have a wallet after import");
+      assert(status.hasStealthKeys, "Should have stealth keys after import");
     });
 
-    it("dovrebbe gestire dati di export non validi", async function() {
+    it("should handle invalid export data", async function() {
       try {
         await walletManager.importAllData('{"invalid":"data"}', testAlias);
-        assert.fail("Dovrebbe lanciare un errore");
+        assert.fail("Should throw an error");
       } catch (error) {
-        assert(error.message.includes("non valido"));
+        assert(error.message.includes("Error importing data"), "Error message should mention importing data");
       }
+    });
+  });
+
+  describe("Wallet Creation", function() {
+    it("should create a wallet object from Gun keypair", async function() {
+      // Re-authenticate user for safety
+      await walletManager.login(testAlias, "password123");
+      const gunKeyPair = walletManager.getCurrentUserKeyPair();
+      
+      const result = await WalletManager.createWalletObj(gunKeyPair);
+      
+      assert(result.walletObj instanceof Wallet, "Should return a Wallet instance");
+      assert(result.entropy, "Should have entropy");
+      assert(result.walletObj.publicKey.startsWith("0x"), "Public key should start with 0x");
+      assert(result.walletObj.entropy === result.entropy, "Entropy should match");
+    });
+
+    it("should create wallet from salt", async function() {
+      await walletManager.login(testAlias, "password123");
+      const gunKeyPair = walletManager.getCurrentUserKeyPair();
+      const testSalt = "test_salt_123";
+      
+      const wallet = await WalletManager.createWalletFromSalt(gunKeyPair, testSalt);
+      
+      assert(wallet instanceof Wallet, "Should return a Wallet instance");
+      assert(wallet.publicKey.startsWith("0x"), "Public key should start with 0x");
+    });
+
+    it("should fail wallet creation with invalid Gun keypair", async function() {
+      const invalidKeyPair = { pub: null };
+      try {
+        await WalletManager.createWalletObj(invalidKeyPair);
+        assert.fail("Should throw an error");
+      } catch (error) {
+        assert(error.message.includes("Missing public key"));
+      }
+    });
+
+    it("should create different wallets with different salts", async function() {
+      await walletManager.login(testAlias, "password123");
+      const gunKeyPair = walletManager.getCurrentUserKeyPair();
+      
+      const wallet1 = await WalletManager.createWalletFromSalt(gunKeyPair, "salt1");
+      const wallet2 = await WalletManager.createWalletFromSalt(gunKeyPair, "salt2");
+      
+      assert.notStrictEqual(wallet1.publicKey, wallet2.publicKey, "Wallets should have different public keys");
     });
   });
 }); 

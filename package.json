@@ -1,19 +1,16 @@
 {
-  "name": "@scobru/hugo",
-  "version": "2.1.0",
+  "name": "@scobru/shogun",
+  "version": "1.0.0",
   "description": "A Metamask alternative that empowers you to build good UX with decentralized wallet management using Gun.js",
   "browser": {
     "node-localstorage": false
   },
   "dependencies": {
-    "@simplewebauthn/browser": "^13.1.0",
-    "@simplewebauthn/server": "^13.1.0",
     "ethers": "^6.13.5",
     "gun": "^0.2020.1239",
     "jest": "^29.7.0"
   },
   "devDependencies": {
-    "@simplewebauthn/typescript-types": "^8.3.4",
     "@tsconfig/node16-strictest": "1.0.3",
     "@types/chai": "^5.0.1",
     "@types/mocha": "^10.0.10",

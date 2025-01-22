@@ -5,17 +5,16 @@
 
 import Gun from "gun";
 import "gun/sea";
-import "gun/lib/webrtc"; // Abilita WebRTC in GunDB
+import "gun/lib/webrtc"; // Enables WebRTC in GunDB
 import "gun/lib/radisk";
 import "gun/lib/axe";
-
+import { createHash } from "crypto";
 
 import { Wallet } from "./interfaces/Wallet";
 import { EthereumManager } from "./EthereumManager";
 import { StealthChain } from "./StealthChain";
 import type { GunKeyPair } from "./interfaces/GunKeyPair";
-import { PasskeyManager } from "./PasskeyManager";
-
+import { WalletResult } from "./interfaces";
 
 // Extend Gun type definitions
 declare module "gun" {
@@ -26,30 +25,59 @@ declare module "gun" {
 
 const SEA = Gun.SEA;
 
+enum StorageType {
+  GUN,
+  LOCAL,
+  BOTH,
+}
+
 /**
- * Calcola l'hash SHA-256 di un input
- * @param input - Input da hashare
- * @returns Promise che risolve nell'hash in formato hex
+ * Helper class for managing local storage operations
  */
-async function sha256(input: string): Promise<string> {
-  const msgBuffer = new TextEncoder().encode(input);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-  return hashHex;
+class LocalStorageManager {
+  static async saveWallet(wallet: Wallet, alias: string): Promise<void> {
+    localStorage.setItem(`wallet_${alias}`, JSON.stringify(wallet));
+  }
+
+  static async retrieveWallet(alias: string): Promise<Wallet | null> {
+    const walletData = localStorage.getItem(`wallet_${alias}`);
+    if (!walletData) return null;
+    try {
+      const parsed = JSON.parse(walletData);
+      return new Wallet(parsed.publicKey, parsed.entropy);
+    } catch (error) {
+      console.error("Error retrieving local wallet:", error);
+      return null;
+    }
+  }
+
+  static async checkData(alias: string): Promise<{
+    hasWallet: boolean;
+    hasStealthKeys: boolean;
+    hasPasskey: boolean;
+  }> {
+    return {
+      hasWallet: localStorage.getItem(`wallet_${alias}`) !== null,
+      hasStealthKeys: localStorage.getItem(`stealthKeys_${alias}`) !== null,
+      hasPasskey: localStorage.getItem(`passkey_${alias}`) !== null,
+    };
+  }
+
+  static async clearData(alias: string): Promise<void> {
+    localStorage.removeItem(`wallet_${alias}`);
+    localStorage.removeItem(`stealthKeys_${alias}`);
+    localStorage.removeItem(`passkey_${alias}`);
+  }
 }
 
 /**
  * Main class for managing wallet and related functionality
  */
 export class WalletManager {
-  protected gun: any; // Temporaneamente usando any per far funzionare i test
+  private gun: any;
   private user: any;
   private ethereumManager: EthereumManager;
   private stealthChain: StealthChain;
-  private passkeyManager: PasskeyManager | null = null;
   private isAuthenticating = false;
 
   /**
@@ -57,36 +85,25 @@ export class WalletManager {
    * Initializes Gun, user and managers for Ethereum and StealthChain
    */
   constructor() {
-    // Initialize Gun with correct options for testing
-    this.gun = new Gun({
-      peers: ["https://gun-relay.scobrudot.dev/gun"],
-      localStorage: false,
-      radisk: false,
-      rtc: {
-        enable: true,
-        trickle: true,
-      },
+    this.gun = Gun({
+      peers: ["http://localhost:8765/gun"],
       axe: true,
-      web: false,
     });
-
     this.user = this.gun.user();
     this.ethereumManager = new EthereumManager(this);
     this.stealthChain = new StealthChain(this.gun);
 
-    this.gun.on("rtc:peer", (peer: any) => {
-      console.log("Nuovo peer connesso:", peer);
-    });
+    this.setupGunListeners();
+  }
 
-    this.gun.on("rtc:data", (msg: any) => {
-      console.log("Dati ricevuti via WebRTC:", msg);
-    });
-
-    try {
-      this.passkeyManager = new PasskeyManager();
-    } catch (error) {
-      console.warn("Passkey non supportate in questo browser:", error);
-    }
+  private setupGunListeners(): void {
+    this.gun.on("rtc:peer", (peer: any) =>
+      console.log("New peer connected:", peer)
+    );
+    this.gun.on("rtc:data", (msg: any) =>
+      console.log("Data received via WebRTC:", msg)
+    );
+    console.log("AXE relay enabled!");
   }
 
   /**
@@ -130,7 +147,7 @@ export class WalletManager {
     callback?: (error?: Error) => void
   ): Promise<void> {
     try {
-      // Se c'è un'autenticazione in corso, aspetta un po' e riprova
+      // If there's an authentication in progress, wait a bit and retry
       if (this.isAuthenticating) {
         await this.waitForAuth();
         this.user.leave();
@@ -140,15 +157,15 @@ export class WalletManager {
       this.isAuthenticating = true;
 
       return new Promise((resolve, reject) => {
-        console.log("Tentativo di creazione account per:", alias);
+        console.log("Attempting account creation for:", alias);
 
         const timeoutId = setTimeout(() => {
           this.isAuthenticating = false;
           this.user.leave();
-          const error = new Error("Timeout durante la creazione dell'account");
+          const error = new Error("Timeout during account creation");
           if (callback) callback(error);
           reject(error);
-        }, 30000); // Aumentato a 30 secondi
+        }, 30000); // Increased to 30 seconds
 
         this.user.create(alias, passphrase, async (ack: any) => {
           try {
@@ -159,7 +176,7 @@ export class WalletManager {
                 ack.err.includes("being created")
               ) {
                 console.log(
-                  "Account già esistente o in fase di creazione, attendo..."
+                  "Account already exists or is being created, waiting..."
                 );
                 await this.waitForAuth();
                 try {
@@ -173,14 +190,14 @@ export class WalletManager {
                 return;
               }
               const error = new Error(
-                `Errore durante la creazione dell'account: ${ack.err}`
+                `Error during account creation: ${ack.err}`
               );
               if (callback) callback(error);
               reject(error);
               return;
             }
 
-            console.log("Account creato con successo, effettuo login");
+            console.log("Account created successfully, performing login");
             await this.login(alias, passphrase);
             if (callback) callback();
             resolve();
@@ -209,7 +226,7 @@ export class WalletManager {
    */
   public async login(alias: string, passphrase: string): Promise<string> {
     try {
-      // Se c'è un'autenticazione in corso, aspetta un po' e riprova
+      // If there's an authentication in progress, wait a bit and retry
       if (this.isAuthenticating) {
         await this.waitForAuth();
         this.user.leave();
@@ -217,30 +234,30 @@ export class WalletManager {
       }
 
       this.isAuthenticating = true;
-      console.log("Inizio processo di login per:", alias);
+      console.log("Starting login process for:", alias);
 
       return new Promise<string>((resolve, reject) => {
-        // Se l'utente è già autenticato con le stesse credenziali, restituisci la chiave pubblica
+        // If user is already authenticated with same credentials, return public key
         if (this.user.is?.alias === alias) {
-          console.log("Utente già autenticato con le stesse credenziali");
+          console.log("User already authenticated with same credentials");
           this.isAuthenticating = false;
           resolve(this.user.is.pub);
           return;
         }
 
-        // Timeout di sicurezza
+        // Safety timeout
         const timeoutId = setTimeout(() => {
           this.isAuthenticating = false;
           this.user.leave();
-          reject(new Error("Timeout durante l'autenticazione"));
-        }, 30000); // Aumentato a 30 secondi
+          reject(new Error("Authentication timeout"));
+        }, 30000); // Increased to 30 seconds
 
         this.user.auth(alias, passphrase, (ack: any) => {
           try {
             if (ack.err) {
               this.isAuthenticating = false;
               if (ack.err.includes("being created")) {
-                // Se l'utente è in fase di creazione, aspetta e riprova
+                // If user is being created, wait and retry
                 setTimeout(async () => {
                   try {
                     const result = await this.login(alias, passphrase);
@@ -257,11 +274,11 @@ export class WalletManager {
 
             if (!this.user.is?.pub) {
               this.isAuthenticating = false;
-              reject(new Error("Login fallito: chiave pubblica non trovata"));
+              reject(new Error("Login failed: public key not found"));
               return;
             }
 
-            console.log("Login completato con successo");
+            console.log("Login completed successfully");
             this.isAuthenticating = false;
             resolve(this.user.is.pub);
           } catch (error) {
@@ -295,7 +312,7 @@ export class WalletManager {
    */
   public getPublicKey(): string {
     if (!this.user.is?.pub) {
-      throw new Error("Utente non autenticato");
+      throw new Error("User not authenticated");
     }
     return this.user.is.pub;
   }
@@ -317,22 +334,16 @@ export class WalletManager {
         ).join("");
 
         if (hex.length !== 64) {
-          throw new Error(
-            "Impossibile convertire la chiave privata: lunghezza non valida"
-          );
+          throw new Error("Unable to convert private key: invalid length");
         }
         return hex;
       } catch (error) {
-        throw new Error(
-          "Impossibile convertire la chiave privata: formato non valido"
-        );
+        throw new Error("Unable to convert private key: invalid format");
       }
     };
 
     if (!gunPrivateKey || typeof gunPrivateKey !== "string") {
-      throw new Error(
-        "Impossibile convertire la chiave privata: input non valido"
-      );
+      throw new Error("Unable to convert private key: invalid input");
     }
 
     try {
@@ -340,14 +351,15 @@ export class WalletManager {
       return hexPrivateKey;
     } catch (error) {
       if (error instanceof Error) {
-        throw new Error(
-          `Impossibile convertire la chiave privata: ${error.message}`
-        );
+        throw new Error(`Unable to convert private key: ${error.message}`);
       }
-      throw new Error(
-        "Impossibile convertire la chiave privata: errore sconosciuto"
-      );
+      throw new Error("Unable to convert private key: unknown error");
     }
+  }
+
+  public async loadMainWallet(gunPrivateKey: string): Promise<Wallet> {
+    const pk = await this.convertToEthPk(gunPrivateKey);
+    return new Wallet(pk);
   }
 
   /**
@@ -360,7 +372,7 @@ export class WalletManager {
     wallet: Wallet,
     publicKey: string
   ): Promise<void> {
-    console.log(`💾 Salvando wallet per ${publicKey}:`, wallet);
+    console.log(`💾 Saving wallet for ${publicKey}:`, wallet);
 
     return new Promise((resolve, reject) => {
       let hasResolved = false;
@@ -371,26 +383,26 @@ export class WalletManager {
         timestamp: Date.now(),
       };
 
-      console.log("📦 Dati wallet da salvare:", walletData);
+      console.log("📦 Wallet data to save:", walletData);
 
-      // Salva i dati direttamente
+      // Save data directly
       const node = this.gun.get("wallets").get(publicKey);
 
-      // Salva ogni campo separatamente
+      // Save each field separately
       node.get("publicKey").put(walletData.publicKey);
       node.get("entropy").put(walletData.entropy);
       node.get("timestamp").put(walletData.timestamp);
 
-      // Ascolta per confermare il salvataggio
+      // Listen to confirm save
       node.on((data: any) => {
-        console.log("📥 Dati ricevuti dopo il salvataggio:", data);
+        console.log("📥 Data received after save:", data);
         if (
           data &&
           data.publicKey === wallet.publicKey &&
           data.entropy === wallet.entropy &&
           !hasResolved
         ) {
-          console.log("✅ Wallet salvato con successo");
+          console.log("✅ Wallet saved successfully");
           hasResolved = true;
           resolve();
         }
@@ -398,21 +410,11 @@ export class WalletManager {
 
       setTimeout(() => {
         if (!hasResolved) {
-          console.error("⌛ Timeout nel salvataggio del wallet");
-          reject(new Error("Timeout nel salvataggio del wallet"));
+          console.error("⌛ Timeout saving wallet");
+          reject(new Error("Timeout saving wallet"));
         }
       }, 25000);
     });
-  }
-
-  /**
-   * Saves wallet locally using only Gun
-   * @param {Wallet} wallet - Wallet to save
-   * @param {string} alias - Username associated with wallet
-   * @returns {Promise<void>}
-   */
-  public async saveWalletLocally(wallet: Wallet, alias: string): Promise<void> {
-    localStorage.setItem(`wallet_${alias}`, JSON.stringify(wallet));
   }
 
   /**
@@ -424,17 +426,17 @@ export class WalletManager {
     alias: string
   ): Promise<{ spendingKey: string; viewingKey: string }> {
     if (!alias || typeof alias !== "string") {
-      throw new Error("Chiavi stealth non trovate: alias non valido");
+      throw new Error("Stealth keys not found: invalid alias");
     }
 
     return new Promise((resolve, reject) => {
       this.gun.get(`stealthKeys/${alias}`).once((data: any) => {
         if (!data) {
-          reject(new Error("Chiavi stealth non trovate"));
+          reject(new Error("Stealth keys not found"));
           return;
         }
         if (!data.spendingKey || !data.viewingKey) {
-          reject(new Error("Chiavi stealth non trovate o incomplete"));
+          reject(new Error("Stealth keys not found or incomplete"));
           return;
         }
         resolve({
@@ -443,9 +445,9 @@ export class WalletManager {
         });
       });
 
-      // Aggiungi un timeout per gestire il caso in cui Gun non risponda
+      // Add timeout to handle case where Gun doesn't respond
       setTimeout(() => {
-        reject(new Error("Chiavi stealth non trovate: timeout"));
+        reject(new Error("Stealth keys not found: timeout"));
       }, 5000);
     });
   }
@@ -456,7 +458,7 @@ export class WalletManager {
    * @returns {Promise<Wallet[]>} Array of wallets
    */
   public async retrieveWallets(publicKey: string): Promise<Wallet[]> {
-    console.log(`🔄 Recupero wallet per ${publicKey}`);
+    console.log(`🔄 Retrieving wallets for ${publicKey}`);
 
     return new Promise((resolve, reject) => {
       const wallets: Wallet[] = [];
@@ -466,10 +468,10 @@ export class WalletManager {
         .get("wallets")
         .get(publicKey)
         .once((data: any) => {
-          console.log(`📥 Dati ricevuti:`, data);
+          console.log(`📥 Data received:`, data);
 
           if (!data) {
-            console.log("❌ Nessun wallet trovato");
+            console.log("❌ No wallets found");
             hasResolved = true;
             resolve([]);
             return;
@@ -477,20 +479,20 @@ export class WalletManager {
 
           try {
             const wallet = new Wallet(data.publicKey, data.entropy);
-            console.log("✅ Wallet creato:", wallet);
+            console.log("✅ Wallet created:", wallet);
             wallets.push(wallet);
             hasResolved = true;
             resolve(wallets);
           } catch (error) {
-            console.error("❌ Errore nel parsing del wallet:", error);
+            console.error("❌ Error parsing wallet:", error);
             reject(error);
           }
         });
 
       setTimeout(() => {
         if (!hasResolved) {
-          console.error("⌛ Timeout nel recupero dei wallet");
-          reject(new Error("Timeout nel recupero dei wallet"));
+          console.error("⌛ Timeout retrieving wallets");
+          reject(new Error("Timeout retrieving wallets"));
         }
       }, 25000);
     });
@@ -504,18 +506,22 @@ export class WalletManager {
     return this.gun;
   }
 
+  public getUser(): any {
+    return this.gun.user();
+  }
+
   async loginWithPrivateKey(privateKey: string): Promise<string> {
     try {
-      // Prima impostiamo il wallet
+      // First set the wallet
       this.ethereumManager.setCustomProvider("", privateKey);
-      // Poi facciamo il login
+      // Then login
       const pubKey = await this.ethereumManager.loginWithEthereum();
       if (!pubKey) {
-        throw new Error("Chiave privata non valida");
+        throw new Error("Invalid private key");
       }
       return pubKey;
     } catch (error) {
-      throw new Error("Chiave privata non valida");
+      throw new Error("Invalid private key");
     }
   }
 
@@ -533,7 +539,7 @@ export class WalletManager {
       const parsed = JSON.parse(walletData);
       return new Wallet(parsed.publicKey, parsed.entropy);
     } catch (error) {
-      console.error("Errore nel recupero del wallet locale:", error);
+      console.error("Error retrieving local wallet:", error);
       return null;
     }
   }
@@ -545,7 +551,7 @@ export class WalletManager {
    */
   public async exportGunKeyPair(): Promise<string> {
     if (!this.user._.sea) {
-      throw new Error("Utente non autenticato");
+      throw new Error("User not authenticated");
     }
     return JSON.stringify(this.user._.sea);
   }
@@ -559,26 +565,30 @@ export class WalletManager {
   public async importGunKeyPair(keyPairJson: string): Promise<string> {
     try {
       const keyPair = JSON.parse(keyPairJson);
-      
+
       if (!keyPair.pub || !keyPair.priv || !keyPair.epub || !keyPair.epriv) {
-        throw new Error("Coppia di chiavi non valida");
+        throw new Error("Invalid key pair");
       }
 
       return new Promise((resolve, reject) => {
         this.user.auth(keyPair, (ack: any) => {
           if (ack.err) {
-            reject(new Error(`Errore nell'autenticazione: ${ack.err}`));
+            reject(new Error(`Authentication error: ${ack.err}`));
             return;
           }
           if (!this.user.is?.pub) {
-            reject(new Error("Autenticazione fallita: chiave pubblica non trovata"));
+            reject(new Error("Authentication failed: public key not found"));
             return;
           }
           resolve(this.user.is.pub);
         });
       });
     } catch (error) {
-      throw new Error(`Errore nell'importazione della coppia di chiavi: ${error instanceof Error ? error.message : 'errore sconosciuto'}`);
+      throw new Error(
+        `Error importing key pair: ${
+          error instanceof Error ? error.message : "unknown error"
+        }`
+      );
     }
   }
 
@@ -588,19 +598,11 @@ export class WalletManager {
    * @returns {Promise<{hasWallet: boolean, hasStealthKeys: boolean, hasPasskey: boolean}>} Object indicating what data exists
    */
   public async checkLocalData(alias: string): Promise<{
-    hasWallet: boolean,
-    hasStealthKeys: boolean,
-    hasPasskey: boolean
+    hasWallet: boolean;
+    hasStealthKeys: boolean;
+    hasPasskey: boolean;
   }> {
-    const walletData = localStorage.getItem(`wallet_${alias}`);
-    const stealthData = localStorage.getItem(`stealthKeys_${alias}`);
-    const passkeyData = localStorage.getItem(`passkey_${alias}`);
-    
-    return {
-      hasWallet: walletData !== null,
-      hasStealthKeys: stealthData !== null,
-      hasPasskey: passkeyData !== null
-    };
+    return LocalStorageManager.checkData(alias);
   }
 
   /**
@@ -609,9 +611,7 @@ export class WalletManager {
    * @returns {Promise<void>}
    */
   public async clearLocalData(alias: string): Promise<void> {
-    localStorage.removeItem(`wallet_${alias}`);
-    localStorage.removeItem(`stealthKeys_${alias}`);
-    localStorage.removeItem(`passkey_${alias}`);
+    await LocalStorageManager.clearData(alias);
   }
 
   /**
@@ -621,11 +621,13 @@ export class WalletManager {
    */
   public async exportAllData(alias: string): Promise<string> {
     if (!this.user._.sea) {
-      throw new Error("Utente non autenticato");
+      throw new Error("User not authenticated");
     }
 
     const wallet = await this.retrieveWalletLocally(alias);
-    const stealthKeys = await this.stealthChain.retrieveStealthKeysLocally(alias).catch(() => null);
+    const stealthKeys = await this.stealthChain
+      .retrieveStealthKeysLocally(alias)
+      .catch(() => null);
     const gunPair = this.user._.sea;
 
     const exportData = {
@@ -633,7 +635,7 @@ export class WalletManager {
       stealthKeys: stealthKeys,
       gunPair: gunPair,
       timestamp: Date.now(),
-      version: "1.0"
+      version: "1.0",
     };
 
     return JSON.stringify(exportData);
@@ -648,118 +650,120 @@ export class WalletManager {
   public async importAllData(jsonData: string, alias: string): Promise<void> {
     try {
       const importData = JSON.parse(jsonData);
-      
-      // Verifica versione e struttura
+
+      // Verify version and structure
       if (!importData.version || !importData.timestamp) {
-        throw new Error("Formato dati non valido");
+        throw new Error("Invalid data format");
       }
 
-      // Importa Gun pair e autentica
+      // Import Gun pair and authenticate
       if (importData.gunPair) {
         await this.importGunKeyPair(JSON.stringify(importData.gunPair));
       }
 
-      // Salva wallet se presente
+      // Save wallet if present
       if (importData.wallet) {
         await this.saveWalletLocally(importData.wallet, alias);
       }
 
-      // Salva stealth keys se presenti
+      // Save stealth keys if present
       if (importData.stealthKeys) {
-        await this.stealthChain.saveStealthKeysLocally(alias, importData.stealthKeys);
+        await this.stealthChain.saveStealthKeysLocally(
+          alias,
+          importData.stealthKeys
+        );
       }
     } catch (error) {
-      throw new Error(`Errore nell'importazione dei dati: ${error instanceof Error ? error.message : 'errore sconosciuto'}`);
+      throw new Error(
+        `Error importing data: ${
+          error instanceof Error ? error.message : "unknown error"
+        }`
+      );
     }
   }
 
   /**
-   * Crea un account usando Passkey
-   * @param {string} alias - Username per l'account
-   * @returns {Promise<void>}
+   * Creates a new wallet from Gun public key
    */
-  public async createAccountWithPasskey(alias: string): Promise<void> {
-    if (!this.passkeyManager) {
-      throw new Error("Passkey non supportate in questo browser");
-    }
-
+  public static async createWalletObj(gunKeyPair: GunKeyPair): Promise<WalletResult> {
     try {
-      // 1. Registra la Passkey
-      const passkeyData = await this.passkeyManager.registerPasskey(alias);
+      if (!gunKeyPair.pub) throw new Error("Missing public key");
 
-      // 2. Crea l'account Gun
-      await new Promise<void>((resolve, reject) => {
-        // Genera una password casuale sicura
-        const passphrase = crypto.randomUUID();
-        
-        this.user.create(alias, passphrase, async (ack: any) => {
-          if (ack.err) {
-            reject(new Error(`Errore nella creazione dell'account: ${ack.err}`));
-            return;
-          }
+      const salt = `${gunKeyPair.pub}_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      const wallet = await WalletManager.createWalletFromSalt(gunKeyPair, salt);
+      wallet.entropy = salt;
 
-          // Login con la password generata
-          try {
-            await this.login(alias, passphrase);
-            
-            // Salva le chiavi Gun criptate con la Passkey
-            const manager = this.passkeyManager;
-            if (manager && this.user._.sea) {
-              await manager.encryptAndSaveGunKeys(
-                alias,
-                this.user._.sea
-              );
-            }
-
-            resolve();
-          } catch (error) {
-            reject(error);
-          }
-        });
-      });
-    } catch (error) {
-      throw new Error(`Errore nella creazione dell'account con Passkey: ${error}`);
+      return { walletObj: wallet, entropy: salt };
+    } catch (error: any) {
+      throw new Error(`Error creating wallet: ${error.message}`);
     }
   }
 
   /**
-   * Login usando Passkey
-   * @param {string} alias - Username dell'account
-   * @returns {Promise<string>} Public key
+   * Creates a wallet from salt and Gun keypair
    */
-  public async loginWithPasskey(alias: string): Promise<string> {
-    if (!this.passkeyManager) {
-      throw new Error("Passkey non supportate in questo browser");
-    }
-
+  public static async createWalletFromSalt(gunKeyPair: GunKeyPair, salt: string): Promise<Wallet> {
     try {
-      // 1. Verifica la Passkey e ottieni le chiavi Gun
-      const gunKeys = await this.passkeyManager.verifyAndGetKeys(alias);
+      const derivedKey = await SEA.work(salt, gunKeyPair);
+      if (!derivedKey) throw new Error("Unable to generate derived key");
 
-      // 2. Login con le chiavi Gun
-      return new Promise((resolve, reject) => {
-        this.user.auth(gunKeys, (ack: any) => {
-          if (ack.err) {
-            reject(new Error(`Errore nel login: ${ack.err}`));
-            return;
-          }
-          if (!this.user.is?.pub) {
-            reject(new Error("Login fallito: chiave pubblica non trovata"));
-            return;
-          }
-          resolve(this.user.is.pub);
-        });
-      });
-    } catch (error) {
-      throw new Error(`Errore nel login con Passkey: ${error}`);
+      const hash = createHash("sha256")
+        .update(Buffer.from(derivedKey as string, "utf8"))
+        .digest("hex");
+
+      const wallet = new Wallet("0x" + hash);
+      wallet.entropy = salt;
+      return wallet;
+    } catch (error: any) {
+      throw new Error(`Error recreating wallet: ${error.message}`);
     }
   }
 
   /**
-   * Verifica se le Passkey sono supportate
-   * @returns {boolean} true se le Passkey sono supportate
+   * Unified wallet storage function
    */
-  public isPasskeySupported(): boolean {
-    return !!this.passkeyManager;
+  public async saveWallet(
+    wallet: Wallet,
+    publicKey: string,
+    storageType: StorageType = StorageType.BOTH
+  ): Promise<void> {
+    if (storageType === StorageType.LOCAL || storageType === StorageType.BOTH) {
+      await LocalStorageManager.saveWallet(wallet, publicKey);
+    }
+
+    if (storageType === StorageType.GUN || storageType === StorageType.BOTH) {
+      await this.saveWalletToGun(wallet, publicKey);
+    }
+  }
+
+  /**
+   * Save wallet locally using only Gun
+   */
+  public async saveWalletLocally(wallet: Wallet, alias: string): Promise<void> {
+    await LocalStorageManager.saveWallet(wallet, alias);
+  }
+
+  /**
+   * Unified wallet retrieval function
+   */
+  public async retrieveWallet(
+    publicKey: string,
+    storageType: StorageType = StorageType.BOTH
+  ): Promise<Wallet | null> {
+    if (storageType === StorageType.LOCAL) {
+      return LocalStorageManager.retrieveWallet(publicKey);
+    }
+
+    if (storageType === StorageType.GUN) {
+      const wallets = await this.retrieveWallets(publicKey);
+      return wallets[0] || null;
+    }
+
+    // Try local first, then Gun
+    const localWallet = await LocalStorageManager.retrieveWallet(publicKey);
+    if (localWallet) return localWallet;
+
+    const gunWallets = await this.retrieveWallets(publicKey);
+    return gunWallets[0] || null;
   }
 }

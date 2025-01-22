@@ -4,14 +4,12 @@ const { ethers } = require("ethers");
 const Gun = require('gun');
 
 const { WalletManager } = require("../src/WalletManager");
-const { Wallet } = require("../src/interfaces/Wallet");
-const { MESSAGE_TO_SIGN } = require("../src/utils/ethereum");
 
-// Funzione di utilità per attendere che i dati siano disponibili in Gun
+// Utility function to wait for data to be available in Gun
 async function waitForGunData(gun, path, timeout = 5000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new Error(`Timeout attendendo i dati per ${path}`));
+      reject(new Error(`Timeout waiting for data at ${path}`));
     }, timeout);
 
     gun.get(path).once((data) => {
@@ -21,7 +19,7 @@ async function waitForGunData(gun, path, timeout = 5000) {
   });
 }
 
-// Genera username unici
+// Generate unique usernames
 const generateUniqueUsername = () =>
   `test_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
@@ -37,10 +35,10 @@ describe("EthereumManager Test Suite", function () {
     walletManager = new WalletManager();
     ethereumManager = walletManager.getEthereumManager();
     
-    // Crea un wallet di test
+    // Create a test wallet
     testWallet = ethers.Wallet.createRandom();
     
-    // Configura il provider personalizzato
+    // Configure custom provider
     ethereumManager.setCustomProvider(TEST_RPC_URL, testWallet.privateKey);
   });
 
@@ -51,106 +49,106 @@ describe("EthereumManager Test Suite", function () {
     walletManager.logout();
   });
 
-  describe("Creazione Account", function () {
-    it("dovrebbe creare un account usando il wallet Ethereum", async function () {
+  describe("Account Creation", function () {
+    it("should create an account using Ethereum wallet", async function () {
       const username = await ethereumManager.createAccountWithEthereum();
       
-      assert(username, "Dovrebbe restituire un username");
+      assert(username, "Should return a username");
       assert.strictEqual(
         username,
         testWallet.address.toLowerCase(),
-        "Username dovrebbe essere l'indirizzo Ethereum in minuscolo"
+        "Username should be the lowercase Ethereum address"
       );
 
       const pubKey = walletManager.getPublicKey();
-      assert(pubKey, "Dovrebbe avere una chiave pubblica dopo la creazione");
+      assert(pubKey, "Should have a public key after creation");
     });
 
-    it("dovrebbe gestire errori del provider", async function () {
-      // Configura un provider con URL non valido
+    it("should handle provider errors", async function () {
+      // Configure provider with invalid URL
       ethereumManager.setCustomProvider("http://invalid-url", testWallet.privateKey);
 
       try {
         await ethereumManager.createAccountWithEthereum();
-        assert.fail("Dovrebbe fallire con provider non valido");
+        assert.fail("Should fail with invalid provider");
       } catch (error) {
-        assert(error, "Dovrebbe lanciare un errore");
+        assert(error, "Should throw an error");
       }
     });
   });
 
   describe("Login", function () {
-    it("dovrebbe fare login con un account esistente", async function () {
-      // Prima crea l'account
+    it("should login with an existing account", async function () {
+      // First create the account
       const username = await ethereumManager.createAccountWithEthereum();
       
       // Logout
       walletManager.logout();
       
-      // Prova il login
+      // Try login
       const pubKey = await ethereumManager.loginWithEthereum();
       
-      assert(pubKey, "Dovrebbe ottenere una chiave pubblica dopo il login");
+      assert(pubKey, "Should get a public key after login");
       assert.strictEqual(
         walletManager.getPublicKey(),
         pubKey,
-        "Le chiavi pubbliche dovrebbero corrispondere"
+        "Public keys should match"
       );
     });
 
-    it("dovrebbe gestire errori di firma", async function () {
+    it("should handle signature errors", async function () {
       try {
         await walletManager.loginWithPrivateKey("0xinvalid");
-        assert.fail("Dovrebbe lanciare un errore");
+        assert.fail("Should throw an error");
       } catch (error) {
         const errorMsg = error.message.toLowerCase();
         assert(
           errorMsg.includes("invalid") || 
           errorMsg.includes("non valida") || 
           errorMsg.includes("invalida"),
-          "L'errore dovrebbe indicare che la chiave non è valida"
+          "Error should indicate that the key is invalid"
         );
       }
     });
   });
 
-  describe("Integrazione con Gun", function () {
-    it("dovrebbe persistere i dati dell'account su Gun", async function () {
+  describe("Gun Integration", function () {
+    it("should persist account data to Gun", async function () {
       const username = await ethereumManager.createAccountWithEthereum();
       
-      // Attendi che i dati siano salvati su Gun
+      // Wait for data to be saved to Gun
       const savedData = await waitForGunData(
         walletManager.gun,
         `~@${username}`
       );
       
-      assert(savedData, "I dati dovrebbero essere salvati su Gun");
+      assert(savedData, "Data should be saved to Gun");
     });
 
-    it("dovrebbe sincronizzare i dati tra sessioni", async function () {
-      // Prima sessione: crea account
+    it("should sync data between sessions", async function () {
+      // First session: create account
       const username = await ethereumManager.createAccountWithEthereum();
       const firstPubKey = walletManager.getPublicKey();
       
-      // Attendi che i dati siano salvati
+      // Wait for data to be saved
       await waitForGunData(walletManager.gun, `~@${username}`);
       
-      // Simula nuova sessione
+      // Simulate new session
       walletManager.logout();
       
-      // Seconda sessione: login
+      // Second session: login
       const secondPubKey = await ethereumManager.loginWithEthereum();
       
       assert.strictEqual(
         firstPubKey,
         secondPubKey,
-        "Le chiavi pubbliche dovrebbero essere le stesse tra sessioni"
+        "Public keys should be the same between sessions"
       );
     });
   });
 
-  describe("Performance e Sicurezza", function () {
-    it("dovrebbe completare le operazioni entro limiti di tempo accettabili", async function () {
+  describe("Performance and Security", function () {
+    it("should complete operations within acceptable time limits", async function () {
       const startTime = performance.now();
       
       await ethereumManager.createAccountWithEthereum();
@@ -160,21 +158,21 @@ describe("EthereumManager Test Suite", function () {
       
       assert(
         duration < 5000,
-        "La creazione dell'account dovrebbe richiedere meno di 5 secondi"
+        "Account creation should take less than 5 seconds"
       );
     });
 
-    it("dovrebbe generare password sicure dalla firma", async function () {
-      // Prima crea l'account per ottenere la password generata
+    it("should generate secure passwords from signature", async function () {
+      // First create account to get generated password
       await ethereumManager.createAccountWithEthereum();
       
-      // Verifica che la password sia un hash di 64 caratteri (32 bytes)
+      // Verify password is a 64-character hash (32 bytes)
       const username = testWallet.address.toLowerCase();
       
-      // Prova a fare login con la stessa firma
+      // Try to login with same signature
       const pubKey = await ethereumManager.loginWithEthereum();
       
-      assert(pubKey, "Dovrebbe accettare la password generata dalla firma");
+      assert(pubKey, "Should accept password generated from signature");
     });
   });
 });
