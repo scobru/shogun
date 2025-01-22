@@ -496,14 +496,73 @@
     /* RESPONSIVE */
     @media (max-width: 768px) {
       .hero h1 {
+        font-size: 2.5rem;
+        padding: 0 1rem;
+      }
+
+      .hero p {
+        font-size: 1rem;
+        padding: 0 1rem;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr;
+        padding: 1rem;
+      }
+
+      .use-cases-grid {
+        grid-template-columns: 1fr;
+        padding: 1rem;
+      }
+
+      .api-grid {
+        grid-template-columns: 1fr;
+        padding: 1rem;
+      }
+
+      .code-tabs {
+        flex-wrap: wrap;
+      }
+
+      .code-tab {
+        flex: 1 1 auto;
+        text-align: center;
+        min-width: 120px;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      .mobile-menu-btn {
+        display: block;
+      }
+
+      .nav-links.active {
+        display: flex;
+        flex-direction: column;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: rgba(26, 26, 26, 0.95);
+        padding: 1rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .hero h1 {
         font-size: 2rem;
       }
-      .features-grid {
+
+      .hero-buttons {
         flex-direction: column;
-        align-items: center;
+        gap: 1rem;
       }
-      .code-section {
-        padding: 2rem 1rem;
+
+      .cta-btn {
+        width: 100%;
+        text-align: center;
       }
     }
 
@@ -515,25 +574,250 @@
     .important-note {
       background: linear-gradient(145deg, rgba(126, 87, 194, 0.1), rgba(68, 192, 198, 0.1));
     }
+
+    /* Use Cases Section */
+    .use-cases {
+      padding: 6rem 2rem;
+      background: var(--bg-dark);
+    }
+
+    .use-cases h2 {
+      font-size: 3rem;
+      text-align: center;
+      margin-bottom: 4rem;
+      background: linear-gradient(to right, var(--color-accent-1), var(--color-accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .use-cases-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .use-case-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--border-radius);
+      padding: 2rem;
+      transition: all 0.3s ease;
+    }
+
+    .use-case-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+      border-color: var(--color-accent-1);
+    }
+
+    .use-case-card h3 {
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+      color: var(--color-accent-2);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .use-case-card ul {
+      list-style: none;
+    }
+
+    .use-case-card ul li {
+      margin-bottom: 1.5rem;
+    }
+
+    .use-case-card ul li strong {
+      display: block;
+      color: var(--color-accent-1);
+      margin-bottom: 0.5rem;
+    }
+
+    .use-case-card ul li p {
+      color: rgba(255, 255, 255, 0.8);
+      line-height: 1.6;
+    }
+
+    .use-case-card.highlight {
+      border-left: 4px solid var(--color-accent-1);
+      background: linear-gradient(145deg, 
+        rgba(126, 87, 194, 0.1), 
+        rgba(68, 192, 198, 0.1)
+      );
+    }
   </style>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const tabs = document.querySelectorAll('.code-tab');
+      const codeSnippets = {
+        'Basic Usage': `<span class="comment">// Initialize with default Gun configuration</span>
+<span class="keyword">import</span> { <span class="type">WalletManager</span>, <span class="type">StorageType</span> } <span class="keyword">from</span> <span class="string">'@scobru/shogun'</span>;
+
+<span class="keyword">const</span> manager = <span class="keyword">new</span> <span class="type">WalletManager</span>();
+
+<span class="comment">// Create account</span>
+<span class="keyword">try</span> {
+  <span class="keyword">await</span> manager.<span class="function">createAccount</span>(<span class="string">'username'</span>, <span class="string">'password'</span>);
+  console.<span class="function">log</span>(<span class="string">'Account created successfully!'</span>);
+} <span class="keyword">catch</span> (error) {
+  console.<span class="function">error</span>(<span class="string">'Error creating account:'</span>, error);
+}
+
+<span class="comment">// Login</span>
+<span class="keyword">try</span> {
+  <span class="keyword">const</span> pubKey = <span class="keyword">await</span> manager.<span class="function">login</span>(<span class="string">'username'</span>, <span class="string">'password'</span>);
+  console.<span class="function">log</span>(<span class="string">'Logged in with public key:'</span>, pubKey);
+} <span class="keyword">catch</span> (error) {
+  console.<span class="function">error</span>(<span class="string">'Error logging in:'</span>, error);
+}
+
+<span class="comment">// 1. Create a new wallet from Gun key pair</span>
+<span class="keyword">const</span> gunKeyPair = manager.<span class="function">getCurrentUserKeyPair</span>();
+<span class="keyword">const</span> { walletObj, entropy } = <span class="keyword">await</span> <span class="type">WalletManager</span>.<span class="function">createWalletObj</span>(gunKeyPair);
+console.<span class="function">log</span>(<span class="string">'New wallet created:'</span>, walletObj);
+console.<span class="function">log</span>(<span class="string">'Entropy (save this!):'</span>, entropy);
+
+<span class="comment">// 2. Create a wallet from existing salt/entropy</span>
+<span class="keyword">const</span> existingWallet = <span class="keyword">await</span> <span class="type">WalletManager</span>.<span class="function">createWalletFromSalt</span>(gunKeyPair, entropy);
+console.<span class="function">log</span>(<span class="string">'Wallet recreated from entropy:'</span>, existingWallet);
+
+<span class="comment">// 3. Save wallet (both to Gun and localStorage)</span>
+<span class="keyword">await</span> manager.<span class="function">saveWallet</span>(walletObj, pubKey, <span class="type">StorageType</span>.BOTH);
+
+<span class="comment">// 4. Retrieve wallet</span>
+<span class="keyword">const</span> retrievedWallet = <span class="keyword">await</span> manager.<span class="function">retrieveWallet</span>(pubKey, <span class="type">StorageType</span>.BOTH);
+console.<span class="function">log</span>(<span class="string">'Retrieved wallet:'</span>, retrievedWallet);
+
+<span class="comment">// 5. Export wallet data</span>
+<span class="keyword">const</span> exportedData = <span class="keyword">await</span> manager.<span class="function">exportAllData</span>(<span class="string">'username'</span>);
+console.<span class="function">log</span>(<span class="string">'Exported wallet data:'</span>, exportedData);
+
+<span class="comment">// 6. Import wallet data</span>
+<span class="keyword">await</span> manager.<span class="function">importAllData</span>(exportedData, <span class="string">'username'</span>);
+
+<span class="comment">// 7. Check wallet status</span>
+<span class="keyword">const</span> status = <span class="keyword">await</span> manager.<span class="function">checkLocalData</span>(<span class="string">'username'</span>);
+console.<span class="function">log</span>(<span class="string">'Wallet status:'</span>, status);`,
+
+        'Ethereum Integration': `<span class="comment">// Initialize Ethereum manager</span>
+<span class="keyword">const</span> ethereumManager = manager.<span class="function">getEthereumManager</span>();
+
+<span class="comment">// Create account with MetaMask</span>
+<span class="keyword">try</span> {
+  <span class="keyword">const</span> username = <span class="keyword">await</span> ethereumManager.<span class="function">createAccountWithEthereum</span>();
+  console.<span class="function">log</span>(<span class="string">'Account created with address:'</span>, username);
+} <span class="keyword">catch</span> (error) {
+  console.<span class="function">error</span>(<span class="string">'Error creating account:'</span>, error);
+}
+
+<span class="comment">// Login with MetaMask</span>
+<span class="keyword">try</span> {
+  <span class="keyword">const</span> pubKey = <span class="keyword">await</span> ethereumManager.<span class="function">loginWithEthereum</span>();
+  console.<span class="function">log</span>(<span class="string">'Logged in with public key:'</span>, pubKey);
+} <span class="keyword">catch</span> (error) {
+  console.<span class="function">error</span>(<span class="string">'Error logging in:'</span>, error);
+}`,
+
+        'Stealth Addresses': `<span class="comment">// Initialize StealthChain</span>
+<span class="keyword">const</span> stealthChain = manager.<span class="function">getStealthChain</span>();
+
+<span class="comment">// 1. Generate stealth keys</span>
+stealthChain.<span class="function">generateStealthKeys</span>((err, keys) => {
+  <span class="keyword">if</span> (err) {
+    console.<span class="function">error</span>(<span class="string">'Error generating stealth keys:'</span>, err);
+    <span class="keyword">return</span>;
+  }
+  console.<span class="function">log</span>(<span class="string">'Stealth keys generated:'</span>, keys);
+  
+  <span class="comment">// Save the generated keys</span>
+  stealthChain.<span class="function">saveStealthKeys</span>(keys, (saveErr) => {
+    <span class="keyword">if</span> (saveErr) {
+      console.<span class="function">error</span>(<span class="string">'Error saving stealth keys:'</span>, saveErr);
+      <span class="keyword">return</span>;
+    }
+    console.<span class="function">log</span>(<span class="string">'Stealth keys saved successfully'</span>);
+  });
+});
+
+<span class="comment">// 2. Generate stealth address for recipient</span>
+stealthChain.<span class="function">generateStealthAddress</span>(recipientPubKey, (err, result) => {
+  <span class="keyword">if</span> (err) {
+    console.<span class="function">error</span>(<span class="string">'Error generating stealth address:'</span>, err);
+    <span class="keyword">return</span>;
+  }
+  <span class="keyword">const</span> { stealthAddress, ephemeralPublicKey } = result;
+  console.<span class="function">log</span>(<span class="string">'Stealth address generated:'</span>, stealthAddress);
+  console.<span class="function">log</span>(<span class="string">'Ephemeral public key:'</span>, ephemeralPublicKey);
+});
+
+<span class="comment">// 3. Retrieve stealth keys from user</span>
+stealthChain.<span class="function">retrieveStealthKeysFromUser</span>((err, keys) => {
+  <span class="keyword">if</span> (err) {
+    console.<span class="function">error</span>(<span class="string">'Error retrieving stealth keys:'</span>, err);
+    <span class="keyword">return</span>;
+  }
+  console.<span class="function">log</span>(<span class="string">'Retrieved stealth keys:'</span>, keys);
+});
+
+<span class="comment">// 4. Open stealth address</span>
+stealthChain.<span class="function">openStealthAddress</span>(stealthAddress, ephemeralKey, (err, wallet) => {
+  <span class="keyword">if</span> (err) {
+    console.<span class="function">error</span>(<span class="string">'Error opening stealth address:'</span>, err);
+    <span class="keyword">return</span>;
+  }
+  console.<span class="function">log</span>(<span class="string">'Opened wallet from stealth address:'</span>, wallet);
+});
+
+<span class="comment">// 5. Save stealth keys locally</span>
+<span class="keyword">const</span> stealthKeys = {
+  spendingKey: <span class="string">'your-spending-key'</span>,
+  viewingKey: <span class="string">'your-viewing-key'</span>
+};
+
+<span class="keyword">await</span> stealthChain.<span class="function">saveStealthKeysLocally</span>(<span class="string">'username'</span>, stealthKeys);
+
+<span class="comment">// 6. Retrieve stealth keys from local storage</span>
+<span class="keyword">const</span> localKeys = <span class="keyword">await</span> stealthChain.<span class="function">retrieveStealthKeysLocally</span>(<span class="string">'username'</span>);
+console.<span class="function">log</span>(<span class="string">'Retrieved local stealth keys:'</span>, localKeys);
+
+<span class="comment">// 7. Retrieve stealth keys from registry</span>
+stealthChain.<span class="function">retrieveStealthKeysFromRegistry</span>(publicKey, (err, keys) => {
+  <span class="keyword">if</span> (err) {
+    console.<span class="function">error</span>(<span class="string">'Error retrieving keys from registry:'</span>, err);
+    <span class="keyword">return</span>;
+  }
+  console.<span class="function">log</span>(<span class="string">'Retrieved keys from registry:'</span>, keys);
+});`
+      };
+
+      const codeContainer = document.querySelector('.code-snippet pre code');
+
+      tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          // Remove active class from all tabs
+          tabs.forEach(t => t.classList.remove('active'));
+          
+          // Add active class to clicked tab
+          tab.classList.add('active');
+          
+          // Update code content
+          const tabContent = codeSnippets[tab.textContent];
+          if (tabContent) {
+            codeContainer.innerHTML = tabContent;
+          }
+        });
+      });
+    });
+  </script>
 </head>
 <body>
 
   <!-- NAVBAR -->
   <nav>
     <div class="logo-container">
-      <svg class="logo-svg" width="40" height="40" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:var(--color-accent-1);stop-opacity:1" />
-            <stop offset="100%" style="stop-color:var(--color-accent-2);stop-opacity:1" />
-          </linearGradient>
-        </defs>
-        <rect width="240" height="240" fill="url(#bgGradient)"/>
-        <circle cx="120" cy="120" r="80" fill="#ffffff"/>
-        <circle cx="120" cy="120" r="60" fill="#4a5568"/>
-        <path d="M150 115 L165 115 L157.5 125 Z" fill="#ffffff" transform="rotate(-15, 157.5, 120)"/>
-      </svg>
       <span class="logo-text">SHOGUN</span>
     </div>
     <ul class="nav-links">
@@ -546,10 +830,24 @@
 
   <!-- HERO -->
   <section class="hero">
+    <img 
+      src="44effffe-f79d-43d9-9af7-040c3847d69d.webp" 
+      alt="SHOGUN Logo" 
+      style="
+        width: 200px;
+        height: 200px;
+        margin-bottom: 2rem;
+        border-radius: 50%;
+        box-shadow: 0 0 20px rgba(126, 87, 194, 0.3);
+        transition: transform 0.3s ease;
+      "
+      onmouseover="this.style.transform='scale(1.1)'"
+      onmouseout="this.style.transform='scale(1)'"
+    >
     <h1>SHOGUN - Privacy-First Wallet Manager</h1>
     <p>
-      Un wallet manager decentralizzato che utilizza Gun.js per gestire wallet e chiavi private direttamente nel browser.
-      Offre un sistema completo di autenticazione con supporto per indirizzi stealth e crittografia end-to-end.
+      A decentralized wallet manager using Gun.js to handle wallets and private keys directly in the browser.
+      Featuring a complete authentication system with stealth address support and end-to-end encryption.
     </p>
     <div class="hero-buttons">
       <a href="https://github.com/scobru/shogun" class="cta-btn" target="_blank">View on GitHub</a>
@@ -559,33 +857,33 @@
 
   <!-- CORE FEATURES -->
   <section class="features" id="features">
-    <h2>Caratteristiche Principali</h2>
+    <h2>Core Features</h2>
     <div class="features-grid">
       <div class="feature-card">
-        <h3>🔐 Sicurezza Avanzata</h3>
+        <h3>🔐 Advanced Security</h3>
         <ul>
-          <li>Gestione sicura delle chiavi private</li>
-          <li>Supporto per indirizzi stealth</li>
-          <li>Crittografia end-to-end</li>
-          <li>Backup crittografati</li>
+          <li>Secure private key management</li>
+          <li>Stealth address support</li>
+          <li>End-to-end encryption</li>
+          <li>Encrypted backups</li>
         </ul>
       </div>
       <div class="feature-card">
-        <h3>🌐 Decentralizzazione</h3>
+        <h3>🌐 Decentralization</h3>
         <ul>
-          <li>Storage distribuito con Gun.js</li>
-          <li>Sincronizzazione P2P</li>
-          <li>Nessun server centrale</li>
-          <li>Integrazione Web3</li>
+          <li>Distributed storage with Gun.js</li>
+          <li>P2P synchronization</li>
+          <li>No central server</li>
+          <li>Web3 integration</li>
         </ul>
       </div>
       <div class="feature-card">
-        <h3>🔄 Portabilità</h3>
+        <h3>🔄 Portability</h3>
         <ul>
-          <li>Import/export completo dei dati</li>
-          <li>Supporto multi-dispositivo</li>
-          <li>Gestione locale e remota</li>
-          <li>Backup automatici</li>
+          <li>Complete data import/export</li>
+          <li>Multi-device support</li>
+          <li>Local and remote management</li>
+          <li>Automatic backups</li>
         </ul>
       </div>
     </div>
@@ -593,57 +891,63 @@
 
   <!-- HOW IT WORKS -->
   <section class="how-it-works">
-    <h2>Come Funziona?</h2>
+    <h2>How It Works</h2>
     <div class="explanation-card">
       <p>
-        SHOGUN utilizza Gun.js come base per creare un sistema completamente decentralizzato di gestione wallet.
-        Le chiavi private sono gestite localmente, mentre la sincronizzazione e lo storage avvengono in modo distribuito.
-        Gli indirizzi stealth forniscono un ulteriore livello di privacy per le transazioni.
+        SHOGUN uses Gun.js as a foundation to create a fully decentralized wallet management system.
+        Private keys are managed locally, while synchronization and storage happen in a distributed manner.
+        Stealth addresses provide an additional layer of privacy for transactions.
       </p>
       <p class="important-note">
-        Tutte le operazioni critiche avvengono nel browser dell'utente. I dati sensibili non lasciano mai
-        il dispositivo dell'utente e sono sempre crittografati end-to-end.
+        All critical operations happen in the user's browser. Sensitive data never leaves the user's device
+        and is always encrypted end-to-end.
       </p>
     </div>
   </section>
 
-  <!-- USAGE GUIDE -->
-  <section class="usage-guide">
-    <h2>Casi d'Uso</h2>
+  <!-- USE CASES -->
+  <section class="use-cases" id="use-cases">
+    <h2>Use Cases</h2>
     <div class="use-cases-grid">
-      <div class="use-case good">
-        <h3>✅ Applicazioni Ideali</h3>
+      <div class="use-case-card">
+        <h3>🎯 Ideal Applications</h3>
         <ul>
           <li>
-            <strong>Transazioni Private</strong>
-            <p>Perfetto per chi cerca la massima privacy nelle transazioni grazie agli indirizzi stealth.</p>
+            <strong>Private Transactions</strong>
+            <p>Perfect for those seeking maximum privacy in transactions through stealth addresses.</p>
           </li>
           <li>
-            <strong>Storage Decentralizzato</strong>
-            <p>Ideale per applicazioni che necessitano di storage distribuito e sincronizzazione P2P.</p>
+            <strong>Decentralized Storage</strong>
+            <p>Ideal for applications requiring distributed storage and P2P synchronization.</p>
           </li>
           <li>
-            <strong>DApp con Focus sulla Privacy</strong>
-            <p>Per applicazioni che richiedono un elevato livello di privacy e decentralizzazione.</p>
+            <strong>Privacy-Focused DApps</strong>
+            <p>For applications requiring high levels of privacy and decentralization.</p>
           </li>
         </ul>
       </div>
       
-      <div class="use-case special">
-        <h3>🔒 Caratteristiche Tecniche</h3>
+      <div class="use-case-card highlight">
+        <h3>🔒 Technical Features</h3>
         <ul>
-          <li>Indirizzi Stealth per Privacy Massima</li>
-          <li>Integrazione Gun.js per Vera Decentralizzazione</li>
-          <li>Crittografia End-to-End</li>
-          <li>Backup Crittografati</li>
-          <li>Supporto Multi-Chain</li>
-          <li>WebAuthn/Passkey Support</li>
+          <li>
+            <strong>Privacy & Security</strong>
+            <p>Stealth Addresses for Maximum Privacy</p>
+            <p>End-to-End Encryption</p>
+            <p>Encrypted Backups</p>
+          </li>
+          <li>
+            <strong>Integration & Support</strong>
+            <p>Gun.js Integration for True Decentralization</p>
+            <p>Multi-Chain Support</p>
+            <p>WebAuthn/Passkey Support</p>
+          </li>
         </ul>
       </div>
     </div>
   </section>
 
-  <!-- CODE EXAMPLES -->
+  <!-- QUICK START -->
   <section class="code-section" id="docs">
     <h2>Quick Start</h2>
     <div class="code-tabs">
@@ -652,25 +956,54 @@
       <button class="code-tab">Stealth Addresses</button>
     </div>
     <div class="code-snippet">
-<pre><code><span class="comment">// Inizializza WalletManager</span>
-<span class="keyword">import</span> { <span class="type">WalletManager</span>, <span class="type">StorageType</span> } <span class="keyword">from</span> <span class="string">'./src/WalletManager'</span>;
+      <pre><code><span class="comment">// Initialize with default Gun configuration</span>
+<span class="keyword">import</span> { <span class="type">WalletManager</span>, <span class="type">StorageType</span> } <span class="keyword">from</span> <span class="string">'@scobru/shogun'</span>;
 
 <span class="keyword">const</span> manager = <span class="keyword">new</span> <span class="type">WalletManager</span>();
 
-<span class="comment">// Crea un account</span>
+<span class="comment">// Create account</span>
 <span class="keyword">try</span> {
   <span class="keyword">await</span> manager.<span class="function">createAccount</span>(<span class="string">'username'</span>, <span class="string">'password'</span>);
-  console.<span class="function">log</span>(<span class="string">'Account creato!'</span>);
+  console.<span class="function">log</span>(<span class="string">'Account created successfully!'</span>);
 } <span class="keyword">catch</span> (error) {
-  console.<span class="function">error</span>(<span class="string">'Errore:'</span>, error);
+  console.<span class="function">error</span>(<span class="string">'Error creating account:'</span>, error);
 }
 
-<span class="comment">// Crea e salva un wallet</span>
+<span class="comment">// Login</span>
+<span class="keyword">try</span> {
+  <span class="keyword">const</span> pubKey = <span class="keyword">await</span> manager.<span class="function">login</span>(<span class="string">'username'</span>, <span class="string">'password'</span>);
+  console.<span class="function">log</span>(<span class="string">'Logged in with public key:'</span>, pubKey);
+} <span class="keyword">catch</span> (error) {
+  console.<span class="function">error</span>(<span class="string">'Error logging in:'</span>, error);
+}
+
+<span class="comment">// 1. Create a new wallet from Gun key pair</span>
 <span class="keyword">const</span> gunKeyPair = manager.<span class="function">getCurrentUserKeyPair</span>();
 <span class="keyword">const</span> { walletObj, entropy } = <span class="keyword">await</span> <span class="type">WalletManager</span>.<span class="function">createWalletObj</span>(gunKeyPair);
+console.<span class="function">log</span>(<span class="string">'New wallet created:'</span>, walletObj);
+console.<span class="function">log</span>(<span class="string">'Entropy (save this!):'</span>, entropy);
 
-<span class="comment">// Salva sia su Gun che in localStorage</span>
-<span class="keyword">await</span> manager.<span class="function">saveWallet</span>(walletObj, pubKey, <span class="type">StorageType</span>.BOTH);</code></pre>
+<span class="comment">// 2. Create a wallet from existing salt/entropy</span>
+<span class="keyword">const</span> existingWallet = <span class="keyword">await</span> <span class="type">WalletManager</span>.<span class="function">createWalletFromSalt</span>(gunKeyPair, entropy);
+console.<span class="function">log</span>(<span class="string">'Wallet recreated from entropy:'</span>, existingWallet);
+
+<span class="comment">// 3. Save wallet (both to Gun and localStorage)</span>
+<span class="keyword">await</span> manager.<span class="function">saveWallet</span>(walletObj, pubKey, <span class="type">StorageType</span>.BOTH);
+
+<span class="comment">// 4. Retrieve wallet</span>
+<span class="keyword">const</span> retrievedWallet = <span class="keyword">await</span> manager.<span class="function">retrieveWallet</span>(pubKey, <span class="type">StorageType</span>.BOTH);
+console.<span class="function">log</span>(<span class="string">'Retrieved wallet:'</span>, retrievedWallet);
+
+<span class="comment">// 5. Export wallet data</span>
+<span class="keyword">const</span> exportedData = <span class="keyword">await</span> manager.<span class="function">exportAllData</span>(<span class="string">'username'</span>);
+console.<span class="function">log</span>(<span class="string">'Exported wallet data:'</span>, exportedData);
+
+<span class="comment">// 6. Import wallet data</span>
+<span class="keyword">await</span> manager.<span class="function">importAllData</span>(exportedData, <span class="string">'username'</span>);
+
+<span class="comment">// 7. Check wallet status</span>
+<span class="keyword">const</span> status = <span class="keyword">await</span> manager.<span class="function">checkLocalData</span>(<span class="string">'username'</span>);
+console.<span class="function">log</span>(<span class="string">'Wallet status:'</span>, status);</code></pre>
     </div>
   </section>
 
@@ -680,22 +1013,48 @@
     <div class="api-grid">
       <div class="api-card">
         <h3>WalletManager</h3>
-        <div class="api-method">createAccount(alias: string, passphrase: string)</div>
-        <div class="api-method">login(alias: string, passphrase: string)</div>
-        <div class="api-method">saveWallet(wallet: Wallet, publicKey: string)</div>
-        <div class="api-method">retrieveWallet(publicKey: string)</div>
+        <div class="api-method">createAccount(alias: string, passphrase: string): Promise<void></div>
+        <div class="api-method">login(alias: string, passphrase: string): Promise<string></div>
+        <div class="api-method">loginWithPrivateKey(privateKey: string): Promise<string></div>
+        <div class="api-method">logout(): void</div>
+        <div class="api-method">saveWallet(wallet: Wallet, publicKey: string, storageType?: StorageType): Promise<void></div>
+        <div class="api-method">retrieveWallet(publicKey: string, storageType?: StorageType): Promise<Wallet | null></div>
+        <div class="api-method">exportGunKeyPair(): Promise<string></div>
+        <div class="api-method">importGunKeyPair(keyPairJson: string): Promise<string></div>
+        <div class="api-method">exportAllData(alias: string): Promise<string></div>
+        <div class="api-method">importAllData(jsonData: string, alias: string): Promise<void></div>
+        <div class="api-method">checkLocalData(alias: string): Promise<{hasWallet: boolean, hasStealthKeys: boolean, hasPasskey: boolean}></div>
+        <div class="api-method">clearLocalData(alias: string): Promise<void></div>
       </div>
-      <div class="api-card">
-        <h3>EthereumManager</h3>
-        <div class="api-method">setCustomProvider(rpcUrl: string, privateKey: string)</div>
-        <div class="api-method">createAccountWithEthereum()</div>
-        <div class="api-method">loginWithEthereum()</div>
-      </div>
+
       <div class="api-card">
         <h3>StealthChain</h3>
-        <div class="api-method">generateStealthKeys()</div>
-        <div class="api-method">generateStealthAddress(recipientPublicKey: string)</div>
-        <div class="api-method">openStealthAddress(address: string, ephemeralKey: string)</div>
+        <div class="api-method">generateStealthKeys(cb: Callback<StealthKeyPair>): void</div>
+        <div class="api-method">generateStealthAddress(recipientPublicKey: string, cb: Callback<StealthAddressResult>): void</div>
+        <div class="api-method">openStealthAddress(stealthAddress: string, ephemeralKey: string, cb: Callback<Wallet>): void</div>
+        <div class="api-method">retrieveStealthKeysFromRegistry(publicKey: string, cb: Callback<string>): void</div>
+        <div class="api-method">retrieveStealthKeysFromUser(cb: Callback<StealthKeyPair>): void</div>
+        <div class="api-method">saveStealthKeys(stealthKeyPair: StealthKeyPair, cb: Callback<void>): void</div>
+        <div class="api-method">saveStealthKeysLocally(alias: string, stealthKeys: { spendingKey: string; viewingKey: string }): Promise<void></div>
+        <div class="api-method">retrieveStealthKeysLocally(alias: string): Promise<{ spendingKey: string; viewingKey: string }></div>
+      </div>
+
+      <div class="api-card">
+        <h3>Storage & Types</h3>
+        <div class="api-method">enum StorageType { GUN, LOCAL, BOTH }</div>
+        <div class="api-method">interface StealthKeyPair { pub: string; priv: string; epub: string; epriv: string }</div>
+        <div class="api-method">interface StealthAddressResult { stealthAddress: string; ephemeralPublicKey: string; recipientPublicKey: string }</div>
+        <div class="api-method">interface WalletResult { walletObj: Wallet; entropy: string }</div>
+      </div>
+
+      <div class="api-card">
+        <h3>Static Methods</h3>
+        <div class="api-method">WalletManager.createWalletObj(gunKeyPair: GunKeyPair): Promise<WalletResult></div>
+        <div class="api-method">WalletManager.createWalletFromSalt(gunKeyPair: GunKeyPair, salt: string): Promise<Wallet></div>
+        <div class="api-method">LocalStorageManager.saveWallet(wallet: Wallet, alias: string): Promise<void></div>
+        <div class="api-method">LocalStorageManager.retrieveWallet(alias: string): Promise<Wallet | null></div>
+        <div class="api-method">LocalStorageManager.checkData(alias: string): Promise<{hasWallet: boolean, hasStealthKeys: boolean, hasPasskey: boolean}></div>
+        <div class="api-method">LocalStorageManager.clearData(alias: string): Promise<void></div>
       </div>
     </div>
   </section>
@@ -705,27 +1064,11 @@
     <h2>Roadmap</h2>
     <div class="features-grid">
       <div class="feature-card">
-        <h3>🔑 WebAuthn/Passkey</h3>
+        <h3>🔐 Next Steps</h3>
         <ul>
-          <li>Autenticazione biometrica</li>
-          <li>Supporto FIDO2</li>
-          <li>Integrazione Gun.js</li>
-        </ul>
-      </div>
-      <div class="feature-card">
-        <h3>📜 Smart-Contracts</h3>
-        <ul>
-          <li>StealthChain Contracts</li>
-          <li>Multi-chain support</li>
-          <li>DeFi integration</li>
-        </ul>
-      </div>
-      <div class="feature-card">
-        <h3>⚡ Layer 2</h3>
-        <ul>
-          <li>Scaling solutions</li>
-          <li>Performance optimization</li>
-          <li>Gas optimization</li>
+          <li>WebAuthn/Passkey Authentication</li>
+          <li>StealthChain Smart-Contracts</li>
+          <li>Layer 2 Integration</li>
         </ul>
       </div>
     </div>
@@ -733,10 +1076,10 @@
 
   <!-- CTA FINALE -->
   <section class="cta-final">
-    <h2>Inizia ora con SHOGUN</h2>
+    <h2>Get Started with SHOGUN</h2>
     <p>
-      Unisciti alla community, contribuisci su GitHub o esplora la documentazione per saperne di più 
-      sull'approccio di SHOGUN ai wallet decentralizzati.
+      Join the community, contribute on GitHub, or explore the documentation to learn more 
+      about SHOGUN's approach to decentralized wallets.
     </p>
     <div class="cta-buttons">
       <a href="https://github.com/scobru/shogun" target="_blank" class="btn-secondary">
@@ -749,10 +1092,83 @@
   <footer>
     <p>
       © 2025 SHOGUN – MIT License |
-      <a href="mailto:support@shogun-wallet.com">Supporto</a> |
+      <a href="mailto:support@shogun-wallet.com">Support</a> |
       <a href="https://github.com/scobru/shogun">GitHub</a>
     </p>
   </footer>
+
+  <!-- TESTING -->
+  <section class="code-section">
+    <h2>Testing Examples</h2>
+    <div class="code-tabs">
+      <button class="code-tab active">Wallet Tests</button>
+      <button class="code-tab">Stealth Tests</button>
+    </div>
+    <div class="code-snippet">
+      <pre><code><span class="comment">// Test wallet creation and management</span>
+<span class="keyword">describe</span>(<span class="string">"Wallet Management"</span>, <span class="keyword">function</span>() {
+  <span class="keyword">let</span> walletManager;
+  <span class="keyword">let</span> testAlias;
+
+  <span class="keyword">beforeEach</span>(<span class="keyword">async</span> () => {
+    walletManager = <span class="keyword">new</span> <span class="type">WalletManager</span>();
+    testAlias = generateRandomAlias();
+    <span class="keyword">await</span> walletManager.<span class="function">createAccount</span>(testAlias, <span class="string">"password123"</span>);
+  });
+
+  <span class="keyword">it</span>(<span class="string">"should save and retrieve wallet"</span>, <span class="keyword">async</span> () => {
+    <span class="keyword">const</span> testWallet = <span class="keyword">new</span> <span class="type">Wallet</span>(<span class="string">"0xTestPublicKey"</span>);
+    <span class="keyword">await</span> walletManager.<span class="function">saveWalletLocally</span>(testWallet, testAlias);
+    <span class="keyword">const</span> retrieved = <span class="keyword">await</span> walletManager.<span class="function">retrieveWalletLocally</span>(testAlias);
+    <span class="function">assert</span>.strictEqual(retrieved.publicKey, testWallet.publicKey);
+  });
+
+  <span class="keyword">it</span>(<span class="string">"should export and import data"</span>, <span class="keyword">async</span> () => {
+    <span class="keyword">const</span> exported = <span class="keyword">await</span> walletManager.<span class="function">exportAllData</span>(testAlias);
+    <span class="keyword">await</span> walletManager.<span class="function">clearLocalData</span>(testAlias);
+    <span class="keyword">await</span> walletManager.<span class="function">importAllData</span>(exported, testAlias);
+    <span class="keyword">const</span> status = <span class="keyword">await</span> walletManager.<span class="function">checkLocalData</span>(testAlias);
+    <span class="function">assert</span>(status.hasWallet);
+  });
+});</code></pre>
+    </div>
+  </section>
+
+  <!-- API EXAMPLES -->
+  <section class="code-section">
+    <h2>Advanced Examples</h2>
+    <div class="code-tabs">
+      <button class="code-tab active">Data Export/Import</button>
+      <button class="code-tab">Key Management</button>
+    </div>
+    <div class="code-snippet">
+      <pre><code><span class="comment">// Complete data export/import example</span>
+<span class="keyword">async function</span> <span class="function">backupAndRestore</span>() {
+  <span class="keyword">const</span> manager = <span class="keyword">new</span> <span class="type">WalletManager</span>();
+  
+  <span class="comment">// Login and setup</span>
+  <span class="keyword">await</span> manager.<span class="function">login</span>(<span class="string">'username'</span>, <span class="string">'password'</span>);
+  
+  <span class="comment">// Create and save wallet</span>
+  <span class="keyword">const</span> gunKeyPair = manager.<span class="function">getCurrentUserKeyPair</span>();
+  <span class="keyword">const</span> { walletObj } = <span class="keyword">await</span> <span class="type">WalletManager</span>.<span class="function">createWalletObj</span>(gunKeyPair);
+  <span class="keyword">await</span> manager.<span class="function">saveWallet</span>(walletObj, manager.<span class="function">getPublicKey</span>());
+  
+  <span class="comment">// Export all data</span>
+  <span class="keyword">const</span> backup = <span class="keyword">await</span> manager.<span class="function">exportAllData</span>(<span class="string">'username'</span>);
+  
+  <span class="comment">// Clear local data</span>
+  <span class="keyword">await</span> manager.<span class="function">clearLocalData</span>(<span class="string">'username'</span>);
+  
+  <span class="comment">// Import data back</span>
+  <span class="keyword">await</span> manager.<span class="function">importAllData</span>(backup, <span class="string">'username'</span>);
+  
+  <span class="comment">// Verify data integrity</span>
+  <span class="keyword">const</span> status = <span class="keyword">await</span> manager.<span class="function">checkLocalData</span>(<span class="string">'username'</span>);
+  console.<span class="function">log</span>(<span class="string">'Data restored:'</span>, status);
+}</code></pre>
+    </div>
+  </section>
 
 </body>
 </html>
