@@ -544,10 +544,10 @@ export class WalletManager {
    * @throws {Error} If user is not authenticated
    */
   public async exportGunKeyPair(): Promise<string> {
-    if (!this.user.is?.sea) {
+    if (!this.user._.sea) {
       throw new Error("Utente non autenticato");
     }
-    return JSON.stringify(this.user.is.sea);
+    return JSON.stringify(this.user._.sea);
   }
 
   /**
@@ -620,13 +620,13 @@ export class WalletManager {
    * @returns {Promise<string>} JSON string containing all user data
    */
   public async exportAllData(alias: string): Promise<string> {
-    if (!this.user.is?.sea) {
+    if (!this.user._.sea) {
       throw new Error("Utente non autenticato");
     }
 
     const wallet = await this.retrieveWalletLocally(alias);
     const stealthKeys = await this.stealthChain.retrieveStealthKeysLocally(alias).catch(() => null);
-    const gunPair = this.user.is.sea;
+    const gunPair = this.user._.sea;
 
     const exportData = {
       wallet: wallet,

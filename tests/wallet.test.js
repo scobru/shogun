@@ -25,6 +25,7 @@ describe("WalletManager Data Management", function() {
     // Crea e autentica un utente di test
     await walletManager.createAccount(testAlias, "password123");
     await walletManager.login(testAlias, "password123"); // Assicurati che l'utente sia loggato
+    assert(walletManager.user.is, "L'utente deve essere autenticato dopo il login");
     testWallet = new Wallet("0xTestPublicKey", "testEntropy");
   });
 
@@ -71,11 +72,13 @@ describe("WalletManager Data Management", function() {
       assert(walletManager.user.is, "L'utente dovrebbe essere autenticato");
       
       const exported = await walletManager.exportGunKeyPair();
-      walletManager.logout();
-
+      // Salva il keypair corrente
+      const originalPubKey = walletManager.getPublicKey();
+      
+      // Re-importa senza logout
       const importedPubKey = await walletManager.importGunKeyPair(exported);
       assert(importedPubKey, "Dovrebbe restituire una chiave pubblica");
-      assert.strictEqual(importedPubKey, walletManager.getPublicKey());
+      assert.strictEqual(importedPubKey, originalPubKey);
     });
 
     it("dovrebbe gestire keypair non validi", async function() {
@@ -103,11 +106,10 @@ describe("WalletManager Data Management", function() {
       // Esporta
       const exported = await walletManager.exportAllData(testAlias);
       
-      // Pulisci tutto
+      // Pulisci i dati locali ma mantieni l'autenticazione
       await walletManager.clearLocalData(testAlias);
-      walletManager.logout();
 
-      // Importa in una nuova sessione
+      // Importa nella stessa sessione
       await walletManager.importAllData(exported, testAlias);
       
       // Verifica

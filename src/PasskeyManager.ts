@@ -56,8 +56,10 @@ export class PasskeyManager {
       const passkeyData: PasskeyAuthData = {
         username,
         credentialID: credential.id,
-        publicKey: credential.response.publicKey instanceof Uint8Array ? 
-          this.arrayBufferToBase64(credential.response.publicKey) : '',
+        publicKey: Buffer.isBuffer(credential.response.publicKey) ? 
+          this.arrayBufferToBase64(credential.response.publicKey) :
+          typeof credential.response.publicKey === 'string' ?
+            credential.response.publicKey : '',
         encryptedGunKeys: "", // Sarà popolato dopo
         counter: 0, // Inizializza a 0
       };
