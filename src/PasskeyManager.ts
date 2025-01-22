@@ -11,11 +11,27 @@ import type { GunKeyPair } from "./interfaces/GunKeyPair";
 
 export class PasskeyManager {
   private readonly rpName = "HUGO Wallet";
-  private readonly rpID = window.location.hostname;
+  private readonly rpID = window.location.host;
 
   constructor() {
     if (!window.PublicKeyCredential) {
       throw new Error("WebAuthn non è supportato in questo browser");
+    }
+    console.log("Inizializzazione PasskeyManager con rpID:", this.rpID);
+    
+    // Verifica il supporto per le piattform authenticator
+    PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+      .then(available => {
+        console.log("Platform authenticator disponibile:", available);
+      });
+
+    // Verifica se il browser supporta le credenziali residenti
+    if ('PublicKeyCredential' in window && 
+        'isConditionalMediationAvailable' in PublicKeyCredential) {
+      (PublicKeyCredential as any).isConditionalMediationAvailable()
+        .then((available: boolean) => {
+          console.log("Conditional mediation disponibile:", available);
+        });
     }
   }
 
@@ -28,23 +44,24 @@ export class PasskeyManager {
       console.log("RP ID:", this.rpID);
       
       // 1. Genera le opzioni per la creazione della credenziale
-      const challenge = this.generateChallenge();
-      console.log("Challenge generata:", challenge);
+      const challengeArray = new Uint8Array(32);
+      crypto.getRandomValues(challengeArray);
+      console.log("Challenge generata (bytes):", Array.from(challengeArray));
 
-      const userId = this.stringToBase64URL(username);
-      console.log("User ID codificato:", userId);
+      const userIdArray = new TextEncoder().encode(username);
+      console.log("User ID codificato (bytes):", Array.from(userIdArray));
 
-      const options: PublicKeyCredentialCreationOptionsJSON = {
-        challenge,
+      const options = {
         rp: {
           name: this.rpName,
           id: this.rpID,
         },
         user: {
-          id: userId,
+          id: Array.from(userIdArray),
           name: username,
           displayName: username,
         },
+        challenge: Array.from(challengeArray),
         pubKeyCredParams: [
           { alg: -7, type: "public-key" }, // ES256
           { alg: -257, type: "public-key" }, // RS256
@@ -59,11 +76,13 @@ export class PasskeyManager {
         excludeCredentials: []
       };
 
-      console.log("Opzioni di registrazione:", options);
+      console.log("Opzioni di registrazione:", JSON.stringify(options, null, 2));
 
       // 2. Avvia la registrazione
       console.log("Avvio registrazione con SimpleWebAuthn...");
-      const credential = await startRegistration({ optionsJSON: options });
+      const credential = await startRegistration({ 
+        optionsJSON: options as unknown as PublicKeyCredentialCreationOptionsJSON
+      });
       console.log("Credenziale ricevuta:", credential);
 
       // 3. Verifica e processa la risposta
@@ -89,7 +108,7 @@ export class PasskeyManager {
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : 'No stack trace'
       });
-      throw error; // Rilanciamo l'errore originale per mantenere lo stack trace
+      throw error;
     }
   }
 
@@ -203,29 +222,11 @@ export class PasskeyManager {
   }
 
   private bufferToBase64URLString(buffer: ArrayBuffer | Uint8Array): string {
-    try {
-      console.log("Conversione buffer in base64URL...");
-      const bytes = new Uint8Array(buffer);
-      let str = '';
-      for (const charCode of bytes) {
-        str += String.fromCharCode(charCode);
-      }
-      console.log("Stringa binaria generata");
-      
-      const base64String = btoa(str);
-      console.log("Stringa convertita in base64:", base64String);
-      
-      const base64URLString = base64String
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '');
-      console.log("Stringa convertita in base64URL:", base64URLString);
-      
-      return base64URLString;
-    } catch (error) {
-      console.error("Errore nella conversione buffer in base64URL:", error);
-      throw error;
-    }
+    const base64String = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+    return base64String
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
   }
 
   private arrayBufferToBase64URL(buffer: ArrayBuffer | Uint8Array): string {
