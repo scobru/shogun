@@ -104,6 +104,10 @@
             <pre id="walletData"></pre>
             <button onclick="logout()">Logout</button>
             <button onclick="exportData()">Esporta Dati</button>
+            <div class="form-group">
+                <label for="importFile">Importa backup:</label>
+                <input type="file" id="importFile" accept=".json" onchange="importData(event)">
+            </div>
         </div>
 
         <div id="status" class="status hidden"></div>
