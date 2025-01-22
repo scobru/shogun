@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HUGO Wallet - Demo Passkey</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background: #f2dede;
+            color: #a94442;
+        }
+        #walletInfo {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>HUGO Wallet - Demo Passkey</h1>
+        
+        <div id="supportCheck" class="status">
+            Verifica del supporto Passkey...
+        </div>
+
+        <div id="registrationForm" class="hidden">
+            <h2>Registrazione con Passkey</h2>
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" placeholder="Inserisci username">
+            </div>
+            <button onclick="registerWithPasskey()">Registrati con Passkey</button>
+        </div>
+
+        <div id="loginForm" class="hidden">
+            <h2>Login con Passkey</h2>
+            <div class="form-group">
+                <label for="loginUsername">Username:</label>
+                <input type="text" id="loginUsername" placeholder="Inserisci username">
+            </div>
+            <button onclick="loginWithPasskey()">Login con Passkey</button>
+        </div>
+
+        <div id="walletInfo" class="hidden">
+            <h2>Informazioni Wallet</h2>
+            <pre id="walletData"></pre>
+            <button onclick="logout()">Logout</button>
+            <button onclick="exportData()">Esporta Dati</button>
+        </div>
+
+        <div id="status" class="status hidden"></div>
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html> 

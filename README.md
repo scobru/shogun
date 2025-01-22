@@ -1,302 +1,260 @@
-<br />
-<br />
+# HUGO - Wallet Manager Decentralizzato
 
-<p align="center">
-<svg width="240" height="240" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#1a1a1a;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#1a1a1a;stop-opacity:1" />
-    </linearGradient>
-  </defs>
-  <rect width="240" height="240" fill="url(#bgGradient)"/>
-  <circle cx="120" cy="100" r="65" fill="#ffffff"/>
-  <circle cx="120" cy="100" r="50" fill="#4a5568"/>
-  <path d="M150 95 L165 95 L157.5 105 Z" fill="#ffffff" transform="rotate(-15, 157.5, 100)"/>
-  <text x="50" y="225" fill="#ffffff" font-family="Arial, sans-serif" font-size="48" font-weight="bold" letter-spacing="2">HUGO</text>
-</svg>
-</p>
+**HUGO** è un wallet manager decentralizzato che utilizza Gun.js per gestire wallet e chiavi private direttamente nel browser. Offre un sistema completo di autenticazione e gestione delle chiavi con supporto per indirizzi stealth.
 
-<br />
-<br />
+## ✨ Caratteristiche Principali
 
-**HUGO** è una versione decentralizzata di Hedgehog che gestisce user wallets e chiavi private direttamente nel browser, usando Gun.js come database decentralizzato. Espone una semplice API che permette di creare un sistema di autenticazione per consentire agli utenti di registrarsi e accedere al loro wallet su più browser e dispositivi.
+- 🔐 **Sicurezza Avanzata**
+  - Gestione sicura delle chiavi private
+  - Supporto per indirizzi stealth
+  - Crittografia end-to-end
 
-Con HUGO:
+- 🌐 **Decentralizzazione**
+  - Storage distribuito con Gun.js
+  - Sincronizzazione P2P
+  - Nessun server centrale
 
-* 😍 Gli utenti possono creare account nella tua DApp con username + password
-* 😍 Gli utenti possono usare il loro account Ethereum/Metamask esistente
-* 😱 Gli utenti non devono preoccuparsi delle chiavi private o delle frasi mnemoniche
-* 🔏 Puoi costruire sistemi che finanziano i wallet degli utenti e firmano transazioni, senza mai controllarli direttamente
-* 🌇 Puoi concentrarti sulla logica di business, invece che sulla gestione dei wallet
-* 🌐 I dati sono sincronizzati in modo decentralizzato tramite Gun.js
-* 🔒 Le chiavi private non vengono mai trasmesse o memorizzate al di fuori del browser dell'utente
+- 🔄 **Portabilità**
+  - Import/export completo dei dati
+  - Backup criptati
+  - Supporto multi-device
 
-## Installazione
+## 🚀 Installazione
 
 ```bash
-npm i gun
-npm i ethers
-# ... altre dipendenze necessarie ...
+# Installa le dipendenze principali
+npm install gun ethers
+
+# Opzionale: per sviluppo/test
+npm install --save-dev node-localstorage
 ```
 
-## Caratteristiche Principali
+## 📚 Guida Rapida
 
-- **Gestione Account Decentralizzata**: Utilizza Gun.js per memorizzare e sincronizzare i dati degli account in modo decentralizzato
-- **Multi-Wallet**: Supporto per la creazione e gestione di più wallet per utente
-- **Integrazione Ethereum**: Supporto per login e registrazione con account Ethereum/Metamask
-- **Provider Personalizzato**: Possibilità di utilizzare RPC e chiavi private personalizzate
-- **Sicurezza**: Le chiavi private non lasciano mai il browser dell'utente
-- **Persistenza**: I dati vengono sincronizzati automaticamente tra dispositivi
-- **API Semplice**: Interfaccia intuitiva per l'integrazione nelle DApp
-
-## Esempio di Utilizzo Base
+### Gestione Base Wallet
 
 ```typescript
-import { WalletManager } from 'hugo';
+import { WalletManager } from './src/WalletManager';
 
-// Inizializza WalletManager
-const walletManager = new WalletManager();
+// Inizializza
+const manager = new WalletManager();
 
-// Registrazione nuovo utente (metodo classico)
-await walletManager.createAccount('alice', 'password123');
+// Crea account
+await manager.createAccount('username', 'password');
 
-// Login utente esistente (metodo classico)
-const pubKey = await walletManager.login('alice', 'password123');
+// Login
+const pubKey = await manager.login('username', 'password');
 
-// Creazione nuovo wallet
-const gunKeyPair = walletManager.getCurrentUserKeyPair();
-const { walletObj, entropy } = await WalletManager.createWalletObj(gunKeyPair);
+// Salva dati localmente
+await manager.saveWalletLocally(wallet, 'username');
 
-// Salvataggio wallet
-await walletManager.saveWalletToGun(walletObj, 'alice');
-
-// Recupero wallet
-const wallets = await walletManager.retrieveWallets('alice');
-console.log('I miei wallet:', wallets);
+// Recupera dati
+const wallet = await manager.retrieveWalletLocally('username');
 ```
 
-## Utilizzo con Ethereum
-
-### Browser/Metamask
+### Indirizzi Stealth
 
 ```typescript
-import { WalletManager } from 'hugo';
+// Genera chiavi stealth
+const stealthChain = manager.getStealthChain();
+await new Promise((resolve) => {
+  stealthChain.generateStealthKeys((err, keys) => {
+    if (!err) resolve(keys);
+  });
+});
 
-const walletManager = new WalletManager();
-const ethereumManager = walletManager.getEthereumManager();
-
-// Registrazione con Metamask
-const username = await ethereumManager.createAccountWithEthereum();
-console.log('Account creato con indirizzo:', username);
-
-// Login con Metamask
-const pubKey = await ethereumManager.loginWithEthereum();
-console.log('Login effettuato con chiave pubblica:', pubKey);
+// Genera indirizzo stealth
+await new Promise((resolve) => {
+  stealthChain.generateStealthAddress(recipientPubKey, (err, result) => {
+    if (!err) resolve(result);
+  });
+});
 ```
+
+### Import/Export
+
+```typescript
+// Esporta tutti i dati
+const backup = await manager.exportAllData('username');
+
+// Importa dati
+await manager.importAllData(backup, 'username');
+
+// Esporta solo keypair
+const keypair = await manager.exportGunKeyPair();
+```
+
+## 🔧 Configurazione Avanzata
 
 ### Provider Personalizzato
 
 ```typescript
-import { WalletManager } from 'hugo';
-
-const walletManager = new WalletManager();
-const ethereumManager = walletManager.getEthereumManager();
-
-// Configura provider personalizzato
+const ethereumManager = manager.getEthereumManager();
 ethereumManager.setCustomProvider(
   "https://your-rpc-url.com",
-  "0xYourPrivateKey"
+  "your-private-key"
 );
-
-// Usa normalmente
-const username = await ethereumManager.createAccountWithEthereum();
-const pubKey = await ethereumManager.loginWithEthereum();
 ```
 
-## Utilizzo Indirizzi Stealth
+### Storage Persistente
 
 ```typescript
-import { WalletManager } from 'hugo';
+// Verifica dati locali
+const status = await manager.checkLocalData('username');
+console.log(status.hasWallet, status.hasStealthKeys);
 
-const walletManager = new WalletManager();
-const stealthChain = walletManager.getStealthChain();
-
-// Genera chiavi stealth per il ricevitore
-const gunKeyPair = walletManager.getCurrentUserKeyPair();
-const stealthKeys = await stealthChain.generateStealthKeys(gunKeyPair);
-await stealthChain.saveStealthKeys('alice', stealthKeys);
-
-// Prepara le chiavi pubbliche da condividere
-const receiverPublicKeys = {
-  viewingKey: receiverViewingKeyPair.epub,  // chiave pubblica di visualizzazione
-  spendingKey: new ethers.Wallet(stealthKeys.spendingKey).address  // indirizzo pubblico
-};
-
-// Genera indirizzo stealth usando le chiavi pubbliche
-const { stealthAddress, ephemeralPublicKey } = await stealthChain.generateStealthAddress(
-  receiverPublicKeys.viewingKey,   // usa la chiave pubblica di visualizzazione
-  receiverPublicKeys.spendingKey   // usa l'indirizzo pubblico
-);
+// Pulisci dati locali
+await manager.clearLocalData('username');
 ```
 
-## API Disponibili
+## 🔒 Best Practices di Sicurezza
+
+1. **Gestione Chiavi**
+   - Non salvare mai chiavi private in chiaro
+   - Usa sempre `exportAllData` per i backup
+   - Verifica sempre l'integrità dei dati importati
+
+2. **Autenticazione**
+   - Usa password forti
+   - Implementa 2FA dove possibile
+   - Non riutilizzare le password
+
+3. **Storage**
+   - Pulisci i dati sensibili quando non servono
+   - Usa `clearLocalData` al logout
+   - Verifica sempre i dati con `checkLocalData`
+
+## 🧪 Testing
+
+```bash
+# Installa dipendenze di sviluppo
+npm install --save-dev mocha chai node-localstorage
+
+# Esegui i test
+npm test
+```
+
+## 📋 API Reference
 
 ### WalletManager
 
 ```typescript
 class WalletManager {
-  // Gestione base degli account
-  createAccount(alias: string, passphrase: string): Promise<void>
-  login(alias: string, passphrase: string): Promise<string | null>
+  // Autenticazione
+  async createAccount(alias: string, passphrase: string): Promise<void>
+  async login(alias: string, passphrase: string): Promise<string>
   logout(): void
-  getPublicKey(): string | null
-  getCurrentUserKeyPair(): GunKeyPair
 
-  // Accesso ai manager specializzati
+  // Gestione Dati
+  async saveWalletLocally(wallet: Wallet, alias: string): Promise<void>
+  async retrieveWalletLocally(alias: string): Promise<Wallet | null>
+  async checkLocalData(alias: string): Promise<{hasWallet: boolean, hasStealthKeys: boolean}>
+  async clearLocalData(alias: string): Promise<void>
+
+  // Import/Export
+  async exportGunKeyPair(): Promise<string>
+  async importGunKeyPair(keyPairJson: string): Promise<string>
+  async exportAllData(alias: string): Promise<string>
+  async importAllData(jsonData: string, alias: string): Promise<void>
+
+  // Utility
   getEthereumManager(): EthereumManager
   getStealthChain(): StealthChain
-
-  // Gestione wallet
-  static createWalletObj(gunKeyPair: GunKeyPair): Promise<WalletResult>
-  saveWalletToGun(wallet: Wallet, alias: string): Promise<void>
-  retrieveWallets(alias: string): Promise<Wallet[]>
-  retrieveWalletByAddress(alias: string, publicKey: string): Promise<Wallet | null>
+  getPublicKey(): string
 }
 ```
 
-### EthereumManager
+## 🤝 Contributing
+
+Le pull request sono benvenute! Per modifiche importanti:
+
+1. 🍴 Forka il repository
+2. 🔧 Crea un branch (`git checkout -b feature/amazing`)
+3. 💾 Committa i cambiamenti (`git commit -m 'Add feature'`)
+4. 🚀 Pusha il branch (`git push origin feature/amazing`)
+5. 📝 Apri una Pull Request
+
+## 📄 License
+
+[MIT](LICENSE)
+
+## 📞 Support
+
+- 📧 Email: support@hugo-wallet.com
+- 💬 Discord: [Hugo Community](https://discord.gg/hugo)
+- 📚 Docs: [hugo-wallet.com/docs](https://hugo-wallet.com/docs)
+
+## 🗺️ Roadmap
+
+- [ ] **Integrazione Passkey/WebAuthn**
+  - Autenticazione biometrica
+  - Supporto FIDO2
+  - Integrazione con Gun.js per storage sicuro
+  - Migrazione da password a passkey
+- [ ] Supporto per più blockchain
+- [ ] Integrazione con DeFi protocols
+- [ ] Mobile app
+- [ ] Hardware wallet support
+- [ ] Layer 2 integration
+
+## 🔐 Passkey Integration (Pianificato)
+
+HUGO pianifica di supportare le Passkey come metodo di autenticazione principale. Ecco come funzionerà:
+
+### Flusso Previsto
 
 ```typescript
-class EthereumManager {
-  // Configurazione provider
-  setCustomProvider(rpcUrl: string, privateKey: string): void
+class WalletManager {
+  // Registrazione con Passkey
+  async createAccountWithPasskey(username: string): Promise<void> {
+    // 1. Crea credenziali WebAuthn
+    // 2. Associa con account Gun
+    // 3. Salva chiavi crittografate
+  }
 
-  // Operazioni con Ethereum
-  createAccountWithEthereum(): Promise<string>
-  loginWithEthereum(): Promise<string | null>
+  // Login con Passkey
+  async loginWithPasskey(username: string): Promise<string> {
+    // 1. Verifica credenziali WebAuthn
+    // 2. Recupera e decripta chiavi Gun
+    // 3. Autentica su Gun
+  }
 }
 ```
 
-### StealthChain
+### Vantaggi dell'Integrazione Passkey
+
+- 🔒 **Sicurezza Superiore**
+  - Eliminazione delle password
+  - Protezione contro il phishing
+  - Autenticazione biometrica
+
+- 🌟 **UX Migliorata**
+  - Login con un tocco
+  - Nessuna password da ricordare
+  - Cross-device seamless
+
+- 🔗 **Integrazione Gun.js**
+  - Chiavi Gun crittografate con Passkey
+  - Storage decentralizzato sicuro
+  - Backup automatico delle chiavi
+
+### Implementazione Tecnica Prevista
 
 ```typescript
-class StealthChain {
-  // Gestione chiavi stealth
-  generateStealthKeys(pair: GunKeyPair): Promise<{ spendingKey: string; viewingKey: string }>
-  saveStealthKeys(alias: string, stealthKeys: { spendingKey: string; viewingKey: string }): Promise<void>
-  retrieveStealthKeys(alias: string): Promise<{ spendingKey: string; viewingKey: string }>
+interface PasskeyAuthData {
+  publicKey: string;
+  encryptedGunKeys: string;
+  username: string;
+}
 
-  // Operazioni stealth
-  generateStealthAddress(receiverViewingKey: string, receiverSpendingKey: string): Promise<{ stealthAddress: string; ephemeralPublicKey: string }>
-  openStealthAddress(stealthAddress: string, senderEphemeralPublicKey: string, receiverViewingKeyPair: KeyPair, receiverSpendingKey: string): Promise<ethers.Wallet>
+class PasskeyManager {
+  // Registrazione nuovo dispositivo
+  async registerPasskey(username: string): Promise<PasskeyAuthData>;
+  
+  // Verifica e recupero chiavi
+  async verifyAndGetKeys(username: string): Promise<GunKeyPair>;
+  
+  // Backup chiavi su nuovo dispositivo
+  async backupToNewDevice(username: string): Promise<void>;
 }
 ```
-
-## Sicurezza
-
-HUGO è progettato per casi d'uso che coinvolgono transazioni di basso valore o nessun valore finanziario. Per applicazioni che gestiscono somme significative, si consiglia di utilizzare soluzioni più sicure come MetaMask.
-
-## Contribuire
-
-Le pull request sono benvenute. Per modifiche importanti, apri prima un issue per discutere cosa vorresti cambiare.
-
-## Licenza
-
-[MIT](https://choosealicense.com/licenses/mit/)
-
-# Changelog
-
-Tutte le modifiche notevoli a questo progetto verranno documentate in questo file.
-
-Il formato è basato su [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [2.1.0] - 2024-01-17
-
-### Aggiunto
-- Supporto per autenticazione tramite Ethereum/Metamask
-- Supporto completo per indirizzi stealth
-- Gestione multi-wallet
-- Sincronizzazione decentralizzata tramite Gun.js
-- Test completi per tutte le funzionalità principali
-- Documentazione dettagliata con esempi pratici
-
-### Modificato
-- Migliorata la gestione delle chiavi private
-- Ottimizzata la sincronizzazione dei dati
-- Aggiornate le dipendenze alle versioni più recenti
-
-### Sicurezza
-- Implementata la gestione sicura delle chiavi private
-- Aggiunta la separazione tra chiavi di visualizzazione e di spesa
-- Migliorata la gestione delle sessioni utente
-
-## Esempio di Utilizzo con Ethereum
-
-```typescript
-import { WalletManager } from 'hugo';
-
-// Inizializza WalletManager
-const walletManager = new WalletManager();
-
-// Registrazione nuovo utente con Ethereum
-const username = await walletManager.createAccountWithEthereum();
-console.log('Account creato con indirizzo:', username);
-
-// Login con Ethereum
-const pubKey = await walletManager.loginWithEthereum();
-console.log('Login effettuato con chiave pubblica:', pubKey);
-
-// Il resto delle operazioni rimane invariato
-const gunKeyPair = walletManager.getCurrentUserKeyPair();
-const { walletObj, entropy } = await WalletManager.createWalletObj(gunKeyPair);
-await walletManager.saveWalletToGun(walletObj, username);
-```
-
-## Struttura Nodi Gun
-
-HUGO utilizza Gun.js come database decentralizzato. Ecco la struttura dei nodi principali:
-
-### Nodi Pubblici
-
-- `wallets/${publicKey}`: Contiene i wallet pubblici dell'utente
-  ```json
-  {
-    "publicKey": "0x123...",
-    "entropy": "encrypted_data",
-    "timestamp": 1234567890
-  }
-  ```
-
-- `stealth/${publicKey}`: Contiene le chiavi pubbliche stealth dell'utente
-  ```json
-  {
-    "spendingKey": "0x123...",
-    "viewingKeyPair": {
-      "pub": "public_key",
-      "epub": "encrypted_public_key"
-    }
-  }
-  ```
-
-### Nodi Privati (Criptati)
-
-- `~${userPub}/stealthKeys/${publicKey}`: Contiene le chiavi private stealth dell'utente
-  ```json
-  {
-    "privateKey": "encrypted_private_key",
-    "publicKey": "public_key",
-    "pub": "public_key",
-    "priv": "encrypted_private_key",
-    "epub": "encrypted_public_key",
-    "epriv": "encrypted_private_key"
-  }
-  ```
-
-### Note sulla Sicurezza
-
-- I nodi privati sono accessibili solo all'utente autenticato
-- Le chiavi private sono sempre criptate prima di essere salvate
-- I nodi pubblici contengono solo dati che possono essere condivisi
-- Gun.js gestisce automaticamente la sincronizzazione tra i peer

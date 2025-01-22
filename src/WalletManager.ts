@@ -6,17 +6,16 @@
 import Gun from "gun";
 import "gun/sea";
 import "gun/lib/webrtc"; // Abilita WebRTC in GunDB
-import 'gun/lib/radisk';
-import 'gun/lib/axe';
+import "gun/lib/radisk";
+import "gun/lib/axe";
 
-
-import { ethers } from "ethers";
 
 import { Wallet } from "./interfaces/Wallet";
-import type { GunKeyPair } from "./interfaces/GunKeyPair";
-import type { WalletResult } from "./interfaces/WalletResult";
 import { EthereumManager } from "./EthereumManager";
 import { StealthChain } from "./StealthChain";
+import type { GunKeyPair } from "./interfaces/GunKeyPair";
+import { PasskeyManager } from "./PasskeyManager";
+
 
 // Extend Gun type definitions
 declare module "gun" {
@@ -46,10 +45,11 @@ async function sha256(input: string): Promise<string> {
  * Main class for managing wallet and related functionality
  */
 export class WalletManager {
-  protected gun: any;  // Temporaneamente usando any per far funzionare i test
+  protected gun: any; // Temporaneamente usando any per far funzionare i test
   private user: any;
   private ethereumManager: EthereumManager;
   private stealthChain: StealthChain;
+  private passkeyManager: PasskeyManager | null = null;
   private isAuthenticating = false;
 
   /**
@@ -67,13 +67,13 @@ export class WalletManager {
         trickle: true,
       },
       axe: true,
-      web: false,      
+      web: false,
     });
 
     this.user = this.gun.user();
     this.ethereumManager = new EthereumManager(this);
     this.stealthChain = new StealthChain(this.gun);
-    
+
     this.gun.on("rtc:peer", (peer: any) => {
       console.log("Nuovo peer connesso:", peer);
     });
@@ -81,6 +81,12 @@ export class WalletManager {
     this.gun.on("rtc:data", (msg: any) => {
       console.log("Dati ricevuti via WebRTC:", msg);
     });
+
+    try {
+      this.passkeyManager = new PasskeyManager();
+    } catch (error) {
+      console.warn("Passkey non supportate in questo browser:", error);
+    }
   }
 
   /**
@@ -108,7 +114,7 @@ export class WalletManager {
   }
 
   private async waitForAuth(): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, 1000));
+    return new Promise((resolve) => setTimeout(resolve, 1000));
   }
 
   /**
@@ -148,8 +154,13 @@ export class WalletManager {
           try {
             if (ack.err) {
               this.isAuthenticating = false;
-              if (ack.err.includes("already created") || ack.err.includes("being created")) {
-                console.log("Account già esistente o in fase di creazione, attendo...");
+              if (
+                ack.err.includes("already created") ||
+                ack.err.includes("being created")
+              ) {
+                console.log(
+                  "Account già esistente o in fase di creazione, attendo..."
+                );
                 await this.waitForAuth();
                 try {
                   await this.login(alias, passphrase);
@@ -161,7 +172,9 @@ export class WalletManager {
                 }
                 return;
               }
-              const error = new Error(`Errore durante la creazione dell'account: ${ack.err}`);
+              const error = new Error(
+                `Errore durante la creazione dell'account: ${ack.err}`
+              );
               if (callback) callback(error);
               reject(error);
               return;
@@ -403,60 +416,6 @@ export class WalletManager {
   }
 
   /**
-   * Saves recipient's stealth keys to localStorage
-   * @param {string} alias - Recipient's username
-   * @param {Object} stealthKeys - Object containing stealth keys
-   * @param {string} stealthKeys.spendingKey - Spending key
-   * @param {string} stealthKeys.viewingKey - Viewing key
-   * @returns {Promise<void>}
-   */
-  public async saveStealthKeysLocally(
-    alias: string,
-    stealthKeys: { spendingKey: string; viewingKey: string }
-  ): Promise<void> {
-    localStorage.setItem(`stealthKeys_${alias}`, JSON.stringify(stealthKeys));
-  }
-
-  /**
-   * Retrieves recipient's stealth keys from localStorage
-   * @param {string} alias - Recipient's username
-   * @returns {Promise<{spendingKey: string, viewingKey: string}>} Stealth keys
-   */
-  public async retrieveStealthKeysLocally(
-    alias: string
-  ): Promise<{ spendingKey: string; viewingKey: string }> {
-    const stealthKeys = localStorage.getItem(`stealthKeys_${alias}`);
-    if (!stealthKeys) {
-      throw new Error("Stealth keys not found in localStorage");
-    }
-    const parsed = JSON.parse(stealthKeys);
-    if (!parsed || !parsed.spendingKey || !parsed.viewingKey) {
-      throw new Error("Invalid stealth keys in localStorage");
-    }
-    return parsed;
-  }
-
-  /**
-   * Saves recipient's stealth keys
-   * @param {string} alias - Recipient's username
-   * @param {Object} stealthKeys - Object containing stealth keys
-   * @param {string} stealthKeys.spendingKey - Spending key
-   * @param {string} stealthKeys.viewingKey - Viewing key
-   * @returns {Promise<void>}
-   */
-  public async saveStealthKeys(
-    alias: string,
-    stealthKeys: { spendingKey: string; viewingKey: string }
-  ): Promise<void> {
-    this.gun
-      .get(`stealthKeys/${alias}`)
-      .put(stealthKeys)
-      .on((data: any) => {
-        console.log("✅ Chiavi stealth salvate con successo:", data);
-      });
-  }
-
-  /**
    * Retrieves recipient's stealth keys
    * @param {string} alias - Recipient's username
    * @returns {Promise<{spendingKey: string, viewingKey: string}>} Stealth keys
@@ -558,5 +517,249 @@ export class WalletManager {
     } catch (error) {
       throw new Error("Chiave privata non valida");
     }
+  }
+
+  /**
+   * Retrieves wallet from local storage
+   * @param {string} alias - Username associated with wallet
+   * @returns {Promise<Wallet | null>} Retrieved wallet or null if not found
+   */
+  public async retrieveWalletLocally(alias: string): Promise<Wallet | null> {
+    const walletData = localStorage.getItem(`wallet_${alias}`);
+    if (!walletData) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(walletData);
+      return new Wallet(parsed.publicKey, parsed.entropy);
+    } catch (error) {
+      console.error("Errore nel recupero del wallet locale:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Exports the current Gun key pair
+   * @returns {Promise<string>} Exported key pair as JSON string
+   * @throws {Error} If user is not authenticated
+   */
+  public async exportGunKeyPair(): Promise<string> {
+    if (!this.user.is?.sea) {
+      throw new Error("Utente non autenticato");
+    }
+    return JSON.stringify(this.user.is.sea);
+  }
+
+  /**
+   * Imports a Gun key pair and authenticates with it
+   * @param {string} keyPairJson - JSON string of the key pair to import
+   * @returns {Promise<string>} Public key of the imported pair
+   * @throws {Error} If the key pair is invalid
+   */
+  public async importGunKeyPair(keyPairJson: string): Promise<string> {
+    try {
+      const keyPair = JSON.parse(keyPairJson);
+      
+      if (!keyPair.pub || !keyPair.priv || !keyPair.epub || !keyPair.epriv) {
+        throw new Error("Coppia di chiavi non valida");
+      }
+
+      return new Promise((resolve, reject) => {
+        this.user.auth(keyPair, (ack: any) => {
+          if (ack.err) {
+            reject(new Error(`Errore nell'autenticazione: ${ack.err}`));
+            return;
+          }
+          if (!this.user.is?.pub) {
+            reject(new Error("Autenticazione fallita: chiave pubblica non trovata"));
+            return;
+          }
+          resolve(this.user.is.pub);
+        });
+      });
+    } catch (error) {
+      throw new Error(`Errore nell'importazione della coppia di chiavi: ${error instanceof Error ? error.message : 'errore sconosciuto'}`);
+    }
+  }
+
+  /**
+   * Checks if there are locally saved data for a user
+   * @param {string} alias - Username to check
+   * @returns {Promise<{hasWallet: boolean, hasStealthKeys: boolean, hasPasskey: boolean}>} Object indicating what data exists
+   */
+  public async checkLocalData(alias: string): Promise<{
+    hasWallet: boolean,
+    hasStealthKeys: boolean,
+    hasPasskey: boolean
+  }> {
+    const walletData = localStorage.getItem(`wallet_${alias}`);
+    const stealthData = localStorage.getItem(`stealthKeys_${alias}`);
+    const passkeyData = localStorage.getItem(`passkey_${alias}`);
+    
+    return {
+      hasWallet: walletData !== null,
+      hasStealthKeys: stealthData !== null,
+      hasPasskey: passkeyData !== null
+    };
+  }
+
+  /**
+   * Clears all local data for a user
+   * @param {string} alias - Username whose data should be cleared
+   * @returns {Promise<void>}
+   */
+  public async clearLocalData(alias: string): Promise<void> {
+    localStorage.removeItem(`wallet_${alias}`);
+    localStorage.removeItem(`stealthKeys_${alias}`);
+    localStorage.removeItem(`passkey_${alias}`);
+  }
+
+  /**
+   * Exports all user data (wallet, stealth keys, and Gun pair) as a single JSON
+   * @param {string} alias - Username whose data should be exported
+   * @returns {Promise<string>} JSON string containing all user data
+   */
+  public async exportAllData(alias: string): Promise<string> {
+    if (!this.user.is?.sea) {
+      throw new Error("Utente non autenticato");
+    }
+
+    const wallet = await this.retrieveWalletLocally(alias);
+    const stealthKeys = await this.stealthChain.retrieveStealthKeysLocally(alias).catch(() => null);
+    const gunPair = this.user.is.sea;
+
+    const exportData = {
+      wallet: wallet,
+      stealthKeys: stealthKeys,
+      gunPair: gunPair,
+      timestamp: Date.now(),
+      version: "1.0"
+    };
+
+    return JSON.stringify(exportData);
+  }
+
+  /**
+   * Imports all user data from a JSON export
+   * @param {string} jsonData - JSON string containing user data
+   * @param {string} alias - Username to associate with the imported data
+   * @returns {Promise<void>}
+   */
+  public async importAllData(jsonData: string, alias: string): Promise<void> {
+    try {
+      const importData = JSON.parse(jsonData);
+      
+      // Verifica versione e struttura
+      if (!importData.version || !importData.timestamp) {
+        throw new Error("Formato dati non valido");
+      }
+
+      // Importa Gun pair e autentica
+      if (importData.gunPair) {
+        await this.importGunKeyPair(JSON.stringify(importData.gunPair));
+      }
+
+      // Salva wallet se presente
+      if (importData.wallet) {
+        await this.saveWalletLocally(importData.wallet, alias);
+      }
+
+      // Salva stealth keys se presenti
+      if (importData.stealthKeys) {
+        await this.stealthChain.saveStealthKeysLocally(alias, importData.stealthKeys);
+      }
+    } catch (error) {
+      throw new Error(`Errore nell'importazione dei dati: ${error instanceof Error ? error.message : 'errore sconosciuto'}`);
+    }
+  }
+
+  /**
+   * Crea un account usando Passkey
+   * @param {string} alias - Username per l'account
+   * @returns {Promise<void>}
+   */
+  public async createAccountWithPasskey(alias: string): Promise<void> {
+    if (!this.passkeyManager) {
+      throw new Error("Passkey non supportate in questo browser");
+    }
+
+    try {
+      // 1. Registra la Passkey
+      const passkeyData = await this.passkeyManager.registerPasskey(alias);
+
+      // 2. Crea l'account Gun
+      await new Promise<void>((resolve, reject) => {
+        // Genera una password casuale sicura
+        const passphrase = crypto.randomUUID();
+        
+        this.user.create(alias, passphrase, async (ack: any) => {
+          if (ack.err) {
+            reject(new Error(`Errore nella creazione dell'account: ${ack.err}`));
+            return;
+          }
+
+          // Login con la password generata
+          try {
+            await this.login(alias, passphrase);
+            
+            // Salva le chiavi Gun criptate con la Passkey
+            const manager = this.passkeyManager;
+            if (manager && this.user._.sea) {
+              await manager.encryptAndSaveGunKeys(
+                alias,
+                this.user._.sea
+              );
+            }
+
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        });
+      });
+    } catch (error) {
+      throw new Error(`Errore nella creazione dell'account con Passkey: ${error}`);
+    }
+  }
+
+  /**
+   * Login usando Passkey
+   * @param {string} alias - Username dell'account
+   * @returns {Promise<string>} Public key
+   */
+  public async loginWithPasskey(alias: string): Promise<string> {
+    if (!this.passkeyManager) {
+      throw new Error("Passkey non supportate in questo browser");
+    }
+
+    try {
+      // 1. Verifica la Passkey e ottieni le chiavi Gun
+      const gunKeys = await this.passkeyManager.verifyAndGetKeys(alias);
+
+      // 2. Login con le chiavi Gun
+      return new Promise((resolve, reject) => {
+        this.user.auth(gunKeys, (ack: any) => {
+          if (ack.err) {
+            reject(new Error(`Errore nel login: ${ack.err}`));
+            return;
+          }
+          if (!this.user.is?.pub) {
+            reject(new Error("Login fallito: chiave pubblica non trovata"));
+            return;
+          }
+          resolve(this.user.is.pub);
+        });
+      });
+    } catch (error) {
+      throw new Error(`Errore nel login con Passkey: ${error}`);
+    }
+  }
+
+  /**
+   * Verifica se le Passkey sono supportate
+   * @returns {boolean} true se le Passkey sono supportate
+   */
+  public isPasskeySupported(): boolean {
+    return !!this.passkeyManager;
   }
 }
