@@ -810,6 +810,167 @@ stealthChain.<span class="function">retrieveStealthKeysFromRegistry</span>(publi
           }
         });
       });
+
+      // Gestione di tutte le sezioni con tabs
+      const tabSections = document.querySelectorAll('.code-section');
+      
+      tabSections.forEach(section => {
+        const tabs = section.querySelectorAll('.code-tab');
+        const codeContainer = section.querySelector('.code-snippet pre code');
+        
+        // Definizione degli snippets per i test
+        const testSnippets = {
+          'Wallet Tests': `<span class="comment">// Test wallet creation and management</span>
+<span class="keyword">describe</span>(<span class="string">"Wallet Management"</span>, <span class="keyword">function</span>() {
+  <span class="keyword">let</span> walletManager;
+  <span class="keyword">let</span> testAlias;
+
+  <span class="keyword">beforeEach</span>(<span class="keyword">async</span> () => {
+    walletManager = <span class="keyword">new</span> <span class="type">WalletManager</span>();
+    testAlias = generateRandomAlias();
+    <span class="keyword">await</span> walletManager.<span class="function">createAccount</span>(testAlias, <span class="string">"password123"</span>);
+  });
+
+  <span class="keyword">it</span>(<span class="string">"should save and retrieve wallet"</span>, <span class="keyword">async</span> () => {
+    <span class="keyword">const</span> testWallet = <span class="keyword">new</span> <span class="type">Wallet</span>(<span class="string">"0xTestPublicKey"</span>);
+    <span class="keyword">await</span> walletManager.<span class="function">saveWalletLocally</span>(testWallet, testAlias);
+    <span class="keyword">const</span> retrieved = <span class="keyword">await</span> walletManager.<span class="function">retrieveWalletLocally</span>(testAlias);
+    <span class="function">assert</span>.strictEqual(retrieved.publicKey, testWallet.publicKey);
+  });
+
+  <span class="keyword">it</span>(<span class="string">"should export and import data"</span>, <span class="keyword">async</span> () => {
+    <span class="keyword">const</span> exported = <span class="keyword">await</span> walletManager.<span class="function">exportAllData</span>(testAlias);
+    <span class="keyword">await</span> walletManager.<span class="function">clearLocalData</span>(testAlias);
+    <span class="keyword">await</span> walletManager.<span class="function">importAllData</span>(exported, testAlias);
+    <span class="keyword">const</span> status = <span class="keyword">await</span> walletManager.<span class="function">checkLocalData</span>(testAlias);
+    <span class="function">assert</span>(status.hasWallet);
+  });
+});`,
+          'Stealth Tests': `<span class="comment">// Test stealth address functionality</span>
+<span class="keyword">describe</span>(<span class="string">"StealthChain"</span>, <span class="keyword">function</span>() {
+  <span class="keyword">let</span> manager;
+  <span class="keyword">let</span> gun;
+  <span class="keyword">let</span> stealthChain;
+
+  <span class="keyword">beforeEach</span>(<span class="keyword">async</span> () => {
+    manager = <span class="keyword">new</span> <span class="type">WalletManager</span>();
+    gun = manager.<span class="function">getGun</span>();
+    stealthChain = <span class="keyword">new</span> <span class="type">StealthChain</span>(gun);
+  });
+
+  <span class="keyword">it</span>(<span class="string">"should generate and save stealth keys"</span>, <span class="keyword">async</span> () => {
+    <span class="keyword">const</span> generatedKeyPair = <span class="keyword">await</span> <span class="keyword">new</span> <span class="type">Promise</span>((resolve, reject) => {
+      stealthChain.<span class="function">generateStealthKeys</span>((err, result) => {
+        <span class="keyword">if</span> (err) reject(err);
+        resolve(result);
+      });
+    });
+
+    <span class="function">assert</span>(generatedKeyPair.pub, <span class="string">"Missing public key"</span>);
+    <span class="function">assert</span>(generatedKeyPair.priv, <span class="string">"Missing private key"</span>);
+    
+    <span class="keyword">await</span> <span class="keyword">new</span> <span class="type">Promise</span>((resolve, reject) => {
+      stealthChain.<span class="function">saveStealthKeys</span>(generatedKeyPair, (err) => {
+        <span class="keyword">if</span> (err) reject(err);
+        resolve();
+      });
+    });
+
+    <span class="keyword">const</span> retrievedKeys = <span class="keyword">await</span> <span class="keyword">new</span> <span class="type">Promise</span>((resolve, reject) => {
+      stealthChain.<span class="function">retrieveStealthKeysFromUser</span>((err, keys) => {
+        <span class="keyword">if</span> (err) reject(err);
+        resolve(keys);
+      });
+    });
+
+    <span class="function">assert</span>.strictEqual(retrievedKeys.pub, generatedKeyPair.pub);
+  });
+
+  <span class="keyword">it</span>(<span class="string">"should generate and open stealth address"</span>, <span class="keyword">async</span> () => {
+    <span class="keyword">const</span> recipientPubKey = <span class="string">'test-public-key'</span>;
+    
+    <span class="keyword">const</span> stealthData = <span class="keyword">await</span> <span class="keyword">new</span> <span class="type">Promise</span>((resolve, reject) => {
+      stealthChain.<span class="function">generateStealthAddress</span>(recipientPubKey, (err, result) => {
+        <span class="keyword">if</span> (err) reject(err);
+        resolve(result);
+      });
+    });
+
+    <span class="function">assert</span>(stealthData.stealthAddress, <span class="string">"Missing stealth address"</span>);
+    <span class="function">assert</span>(stealthData.ephemeralPublicKey, <span class="string">"Missing ephemeral key"</span>);
+  });
+});`
+        };
+
+        // Definizione degli snippets per gli esempi avanzati
+        const advancedSnippets = {
+          'Data Export/Import': `<span class="comment">// Complete data export/import example</span>
+<span class="keyword">async function</span> <span class="function">backupAndRestore</span>() {
+  <span class="keyword">const</span> manager = <span class="keyword">new</span> <span class="type">WalletManager</span>();
+  
+  <span class="comment">// Login and setup</span>
+  <span class="keyword">await</span> manager.<span class="function">login</span>(<span class="string">'username'</span>, <span class="string">'password'</span>);
+  
+  <span class="comment">// Create and save wallet</span>
+  <span class="keyword">const</span> gunKeyPair = manager.<span class="function">getCurrentUserKeyPair</span>();
+  <span class="keyword">const</span> { walletObj } = <span class="keyword">await</span> <span class="type">WalletManager</span>.<span class="function">createWalletObj</span>(gunKeyPair);
+  <span class="keyword">await</span> manager.<span class="function">saveWallet</span>(walletObj, manager.<span class="function">getPublicKey</span>());
+  
+  <span class="comment">// Export all data</span>
+  <span class="keyword">const</span> backup = <span class="keyword">await</span> manager.<span class="function">exportAllData</span>(<span class="string">'username'</span>);
+  
+  <span class="comment">// Clear local data</span>
+  <span class="keyword">await</span> manager.<span class="function">clearLocalData</span>(<span class="string">'username'</span>);
+  
+  <span class="comment">// Import data back</span>
+  <span class="keyword">await</span> manager.<span class="function">importAllData</span>(backup, <span class="string">'username'</span>);
+  
+  <span class="comment">// Verify data integrity</span>
+  <span class="keyword">const</span> status = <span class="keyword">await</span> manager.<span class="function">checkLocalData</span>(<span class="string">'username'</span>);
+  console.<span class="function">log</span>(<span class="string">'Data restored:'</span>, status);
+}`,
+          'Key Management': `<span class="comment">// Key management examples</span>
+<span class="keyword">async function</span> <span class="function">keyManagement</span>() {
+  <span class="keyword">const</span> manager = <span class="keyword">new</span> <span class="type">WalletManager</span>();
+
+  <span class="comment">// Export Gun key pair</span>
+  <span class="keyword">const</span> exportedKeyPair = <span class="keyword">await</span> manager.<span class="function">exportGunKeyPair</span>();
+  console.<span class="function">log</span>(<span class="string">'Exported key pair:'</span>, exportedKeyPair);
+
+  <span class="comment">// Import Gun key pair</span>
+  <span class="keyword">const</span> importedPubKey = <span class="keyword">await</span> manager.<span class="function">importGunKeyPair</span>(exportedKeyPair);
+  console.<span class="function">log</span>(<span class="string">'Imported public key:'</span>, importedPubKey);
+
+  <span class="comment">// Login with private key</span>
+  <span class="keyword">const</span> privateKey = <span class="string">'your-private-key'</span>;
+  <span class="keyword">const</span> pubKey = <span class="keyword">await</span> manager.<span class="function">loginWithPrivateKey</span>(privateKey);
+  console.<span class="function">log</span>(<span class="string">'Logged in with key:'</span>, pubKey);
+
+  <span class="comment">// Get current user key pair</span>
+  <span class="keyword">const</span> currentKeyPair = manager.<span class="function">getCurrentUserKeyPair</span>();
+  console.<span class="function">log</span>(<span class="string">'Current key pair:'</span>, currentKeyPair);
+}`
+        };
+
+        tabs.forEach(tab => {
+          tab.addEventListener('click', () => {
+            // Remove active class from all tabs in this section
+            tabs.forEach(t => t.classList.remove('active'));
+            
+            // Add active class to clicked tab
+            tab.classList.add('active');
+            
+            // Update code content based on section
+            const tabContent = section.querySelector('h2').textContent === 'Testing Examples' 
+              ? testSnippets[tab.textContent]
+              : advancedSnippets[tab.textContent];
+              
+            if (tabContent) {
+              codeContainer.innerHTML = tabContent;
+            }
+          });
+        });
+      });
     });
   </script>
 </head>
@@ -865,7 +1026,6 @@ stealthChain.<span class="function">retrieveStealthKeysFromRegistry</span>(publi
           <li>Secure private key management</li>
           <li>Stealth address support</li>
           <li>End-to-end encryption</li>
-          <li>Encrypted backups</li>
         </ul>
       </div>
       <div class="feature-card">
@@ -874,16 +1034,16 @@ stealthChain.<span class="function">retrieveStealthKeysFromRegistry</span>(publi
           <li>Distributed storage with Gun.js</li>
           <li>P2P synchronization</li>
           <li>No central server</li>
-          <li>Web3 integration</li>
+          <li>Ethereum integration</li>
         </ul>
       </div>
       <div class="feature-card">
         <h3>🔄 Portability</h3>
         <ul>
-          <li>Complete data import/export</li>
-          <li>Multi-device support</li>
-          <li>Local and remote management</li>
-          <li>Automatic backups</li>
+          <li>Manual data import/export</li>
+          <li>Local storage support</li>
+          <li>Gun.js distributed storage</li>
+          <li>Basic backup functionality</li>
         </ul>
       </div>
     </div>
@@ -934,13 +1094,12 @@ stealthChain.<span class="function">retrieveStealthKeysFromRegistry</span>(publi
             <strong>Privacy & Security</strong>
             <p>Stealth Addresses for Maximum Privacy</p>
             <p>End-to-End Encryption</p>
-            <p>Encrypted Backups</p>
+            <p>Basic Data Backup</p>
           </li>
           <li>
             <strong>Integration & Support</strong>
             <p>Gun.js Integration for True Decentralization</p>
-            <p>Multi-Chain Support</p>
-            <p>WebAuthn/Passkey Support</p>
+            <p>Ethereum Support</p>
           </li>
         </ul>
       </div>
@@ -1088,15 +1247,6 @@ console.<span class="function">log</span>(<span class="string">'Wallet status:'<
     </div>
   </section>
 
-  <!-- FOOTER -->
-  <footer>
-    <p>
-      © 2025 SHOGUN – MIT License |
-      <a href="mailto:support@shogun-wallet.com">Support</a> |
-      <a href="https://github.com/scobru/shogun">GitHub</a>
-    </p>
-  </footer>
-
   <!-- TESTING -->
   <section class="code-section">
     <h2>Testing Examples</h2>
@@ -1169,6 +1319,15 @@ console.<span class="function">log</span>(<span class="string">'Wallet status:'<
 }</code></pre>
     </div>
   </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <p>
+      © 2025 SHOGUN – MIT License |
+      <a href="mailto:support@shogun-wallet.com">Support</a> |
+      <a href="https://github.com/scobru/shogun">GitHub</a>
+    </p>
+  </footer>
 
 </body>
 </html>
