@@ -67,7 +67,8 @@ describe("WalletManager Data Management", function() {
 
   describe("Gun KeyPair Export/Import", function() {
     it("dovrebbe esportare e importare un keypair di Gun", async function() {
-      // Assicurati che l'utente sia autenticato
+      // Riautentica l'utente per sicurezza
+      await walletManager.login(testAlias, "password123");
       assert(walletManager.user.is, "L'utente dovrebbe essere autenticato");
       
       const exported = await walletManager.exportGunKeyPair();
@@ -90,7 +91,8 @@ describe("WalletManager Data Management", function() {
 
   describe("Complete Data Export/Import", function() {
     it("dovrebbe esportare e importare tutti i dati", async function() {
-      // Assicurati che l'utente sia autenticato
+      // Riautentica l'utente per sicurezza
+      await walletManager.login(testAlias, "password123");
       assert(walletManager.user.is, "L'utente dovrebbe essere autenticato");
       
       // Setup: salva alcuni dati
