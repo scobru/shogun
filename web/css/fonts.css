@@ -1,0 +1,36 @@
+@font-face {
+  font-family: 'Avenir Next LT Pro';
+  font-style: normal;
+  font-weight: 100;
+  src: url('../fonts/AvenirNextLTPro-UltLt.ttf') format('truetype'), url('../fonts/AvenirNextLTPro-UltLt.otf') format('opentype');
+}
+@font-face {
+  font-family: 'Avenir Next LT Pro';
+  font-style: normal;
+  font-weight: 400;
+  src: url('../fonts/AvenirNextLTPro-Regular.ttf') format('truetype'), url('../fonts/AvenirNextLTPro-Regular.otf') format('opentype');
+}
+@font-face {
+  font-family: 'Avenir Next LT Pro';
+  font-style: normal;
+  font-weight: 500;
+  src: url('../fonts/AvenirNextLTPro-Medium.ttf') format('truetype'), url('../fonts/AvenirNextLTPro-Medium.otf') format('opentype');
+}
+@font-face {
+  font-family: 'Avenir Next LT Pro';
+  font-style: normal;
+  font-weight: 600;
+  src: url('../fonts/AvenirNextLTPro-Demi-Bold.ttf') format('truetype'), url('../fonts/AvenirNextLTPro-Demi-Bold.otf') format('opentype');
+}
+@font-face {
+  font-family: 'Avenir Next LT Pro';
+  font-style: normal;
+  font-weight: 700;
+  src: url('../fonts/AvenirNextLTPro-Bold.ttf') format('truetype'), url('../fonts/AvenirNextLTPro-Bold.otf') format('opentype');
+}
+@font-face {
+  font-family: 'Avenir Next LT Pro';
+  font-style: normal;
+  font-weight: 900;
+  src: url('../fonts/AvenirNextLTPro-Heavy.ttf') format('truetype'), url('../fonts/AvenirNextLTPro-Heavy.otf') format('opentype');
+}

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+  <!-- Basic Page Needs
+  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+  <meta charset="utf-8">
+  <title>SHOGUN - Il Wallet Manager Web3 Definitivo</title>
+  <meta name="description" content="SHOGUN è un wallet manager Web3 avanzato con supporto per transazioni stealth, storage distribuito e gestione chiavi sicura">
+  <meta name="author" content="">
+
+  <!-- Mobile Specific Metas
+  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- FONT
+  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+  <link rel="stylesheet" href="css/fonts.css">
+
+  <!-- CSS
+  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+  <link rel="stylesheet" href="css/normalize.css">
+  <link rel="stylesheet" href="css/skeleton.css">
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- JS
+  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@0.2.1/dist/confetti.browser.min.js"></script>
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=UA-120325397-3"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'UA-120325397-3');
+  </script>
+
+  <!-- Favicon
+  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+  <link rel="icon" type="image/png" href="images/favicon.png">
+
+</head>
+<body>
+  <!-- <div class="gradient"></div> -->
+  <div class="fade"></div>
+  <div class="heroVideo">
+    <div class="videoContainer">
+      <video poster="images/heroVideo.jpg" playsinline="" loop="" muted="" autoplay="">
+        <source src="videos/heroVideo.mp4" type="video/mp4">
+        <img src="images/heroVideo.jpg"/>
+      </video>
+    </div>
+  </div>
+  <div class="main">
+    <div id="parallax">
+      <div class="blob"><div class="blob-2"></div></div>
+      <div class="blob"><div class="blob-3"></div></div>
+    </div>
+    <div class="container">
+      <div id="header" class="header">
+        <div class="content">
+          <h1 style="font-size: 2.8em; color: #2d3436;">SHOGUN</h1>
+          <div class="links">
+            <a href="/docs" target="_blank">Docs</a>
+            <a class="mobile-hide" href="https://github.com/yourusername/shogun" target="_blank">Github</a>
+          </div>
+        </div>
+      </div>
+      <div id="stickyHeader" class="header">
+        <div class="content">
+          <h1 style="font-size: 2.8em; color: #2d3436;">SHOGUN</h1>
+          <div class="links">
+            <a href="/docs" target="_blank">Docs</a>
+            <a class="mobile-hide" href="https://github.com/yourusername/shogun" target="_blank">Github</a>
+          </div>
+        </div>
+      </div>
+      <div class="landing">
+        <div class="text">
+          <h1 class="first">Il Tuo Wallet</h1>
+          <h1 class="second">Il Tuo Controllo</h1>
+          <p>
+            SHOGUN è un wallet manager Web3 avanzato che combina sicurezza, privacy e facilità d'uso.
+            <br/>
+            <br/>
+            Gestisci i tuoi asset con funzionalità uniche come transazioni stealth, storage distribuito e gestione chiavi sicura.
+          </p>
+          <a href="https://github.com/yourusername/shogun" target="_blank" class='button'>Scopri su Github <img src="images/iconGithub.svg"/></a>
+        </div>
+      </div>
+      <div class="pitch">
+        <div class="row">
+          <div class="ten columns offset-by-one">
+            <h4>Caratteristiche</h4>
+            <h2>Potenza e Sicurezza in un Unico Strumento</h2>
+            <p>SHOGUN è stato progettato per offrire il massimo controllo sui tuoi asset digitali, combinando funzionalità avanzate con un'interfaccia intuitiva.</p>
+          </div>
+        </div>
+        <div class="row">
+          <div class="four columns section">
+            <img src="images/iconSigningData@2x.png"/>
+            <h1>Transazioni Stealth</h1>
+            <p>Proteggi la tua privacy con transazioni stealth che generano indirizzi unici per ogni operazione.</p>
+          </div>
+          <div class="four columns section">
+            <img src="images/iconGamepad@2x.png"/>
+            <h1>Storage Distribuito</h1>
+            <p>I tuoi dati sono al sicuro grazie all'integrazione con GunDB per uno storage completamente distribuito.</p>
+          </div>
+          <div class="four columns section">
+            <img src="images/iconHeadphones@2x.png"/>
+            <h1>Gestione Multi-Wallet</h1>
+            <p>Gestisci più wallet Ethereum con un'unica interfaccia sicura e intuitiva.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="container">
+      <div class="demo">
+        <div class="row">
+          <div class="ten columns offset-by-one">
+            <h4>Come Funziona</h4>
+            <h2>API Potente e Flessibile</h2>
+            <p>
+              SHOGUN offre un'API completa per integrare tutte le sue funzionalità nel tuo progetto.
+              <br/>
+              <br/>
+            </p>
+            <pre><code>
+// Inizializza SHOGUN
+const walletManager = new WalletManager();
+
+// Crea un account
+await walletManager.createAccount("username", "password");
+
+// Accedi al wallet
+const privateKey = await walletManager.login("username", "password");
+
+// Usa StealthChain per transazioni private
+const stealthChain = walletManager.getStealthChain();
+const stealthAddress = await stealthChain.generateStealthAddress(recipientPublicKey);
+
+// Gestisci storage distribuito
+await walletManager.saveWallet(wallet, publicKey, StorageType.BOTH);
+            </code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <div class="background"></div>
+      <div class="container">
+        <div class="row">
+          <div class="eight columns offset-by-two">
+            <h1>SHOGUN</h1>
+            <h2>Il Futuro dei Wallet Web3</h2>
+            <div class="button-wrapper">
+              <a href="https://github.com/yourusername/shogun" target="_blank" class='button'>Inizia Ora <img src="images/iconGithubPurple.svg"/></a>
+            </div>
+          </div>
+        </div>
+        <div class="row bottom">
+          <div class="twelve columns">
+            <p>
+              &copy; 2024 SHOGUN. All Rights Reserved.
+              <br/>
+              Made with ⚔️ for Web3
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/header.js"></script>
+  <script src="js/parallax.js"></script>
+  <script src="js/scroll.js"></script>
+
+</body>
+</html>

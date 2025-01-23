@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="22px" height="22px" viewBox="0 0 22 22" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 55 (78076) - https://sketchapp.com -->
+    <title>Brands/facebook</title>
+    <desc>Created with Sketch.</desc>
+    <defs>
+        <path d="M22.5,2.6578125 L22.5,21.3375 C22.5,21.9796875 21.9796875,22.4953125 21.3421875,22.4953125 L15.9890625,22.4953125 L15.9890625,14.3671875 L18.7171875,14.3671875 L19.125,11.1984375 L15.984375,11.1984375 L15.984375,9.1734375 C15.984375,8.2546875 16.2375,7.63125 17.5546875,7.63125 L19.2328125,7.63125 L19.2328125,4.7953125 C18.9421875,4.7578125 17.9484375,4.66875 16.7859375,4.66875 C14.3671875,4.66875 12.7078125,6.1453125 12.7078125,8.859375 L12.7078125,11.1984375 L9.9703125,11.1984375 L9.9703125,14.3671875 L12.7078125,14.3671875 L12.7078125,22.5 L2.6578125,22.5 C2.0203125,22.5 1.5,21.9796875 1.5,21.3421875 L1.5,2.6578125 C1.5,2.0203125 2.0203125,1.5 2.6578125,1.5 L21.3375,1.5 C21.9796875,1.5 22.5,2.0203125 22.5,2.6578125 Z" id="path-1"></path>
+    </defs>
+    <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="assets" transform="translate(-1031.000000, -3938.000000)">
+            <g id="icon/social/facebook" transform="translate(1030.000000, 3937.000000)">
+                <mask id="mask-2" fill="white">
+                    <use xlink:href="#path-1"></use>
+                </mask>
+                <use id="Mask" fill="#FFFFFF" fill-rule="evenodd" xlink:href="#path-1"></use>
+            </g>
+        </g>
+    </g>
+</svg>
