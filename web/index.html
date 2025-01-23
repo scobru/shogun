@@ -42,142 +42,364 @@
 
 </head>
 <body>
-  <!-- <div class="gradient"></div> -->
-  <div class="fade"></div>
-  <div class="heroVideo">
-    <div class="videoContainer">
-      <video poster="images/heroVideo.jpg" playsinline="" loop="" muted="" autoplay="">
-        <source src="videos/heroVideo.mp4" type="video/mp4">
-        <img src="images/heroVideo.jpg"/>
-      </video>
-    </div>
-  </div>
-  <div class="main">
-    <div id="parallax">
-      <div class="blob"><div class="blob-2"></div></div>
-      <div class="blob"><div class="blob-3"></div></div>
-    </div>
+  <nav class="navbar">
     <div class="container">
-      <div id="header" class="header">
-        <div class="content">
-          <h1 style="font-size: 2.8em; color: #2d3436;">SHOGUN</h1>
-          <div class="links">
-            <a href="/docs" target="_blank">Docs</a>
-            <a class="mobile-hide" href="https://github.com/yourusername/shogun" target="_blank">Github</a>
-          </div>
-        </div>
+      <div class="logo">
+        <h1>SHOGUN</h1>
       </div>
-      <div id="stickyHeader" class="header">
-        <div class="content">
-          <h1 style="font-size: 2.8em; color: #2d3436;">SHOGUN</h1>
-          <div class="links">
-            <a href="/docs" target="_blank">Docs</a>
-            <a class="mobile-hide" href="https://github.com/yourusername/shogun" target="_blank">Github</a>
-          </div>
-        </div>
+      <div class="nav-links">
+        <a href="/docs" class="nav-link">Docs</a>
+        <a href="https://github.com/yourusername/shogun" class="nav-link">Github</a>
       </div>
-      <div class="landing">
-        <div class="text">
-          <h1 class="first">Il Tuo Wallet</h1>
-          <h1 class="second">Il Tuo Controllo</h1>
+    </div>
+  </nav>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <div class="hero-content">
+          <h2>Il Wallet Manager<br>Web3 Definitivo</h2>
           <p>
-            SHOGUN è un wallet manager Web3 avanzato che combina sicurezza, privacy e facilità d'uso.
-            <br/>
-            <br/>
-            Gestisci i tuoi asset con funzionalità uniche come transazioni stealth, storage distribuito e gestione chiavi sicura.
+            Gestisci i tuoi asset digitali con sicurezza e privacy.<br>
+            Transazioni stealth, storage distribuito e molto altro.
           </p>
-          <a href="https://github.com/yourusername/shogun" target="_blank" class='button'>Scopri su Github <img src="images/iconGithub.svg"/></a>
-        </div>
-      </div>
-      <div class="pitch">
-        <div class="row">
-          <div class="ten columns offset-by-one">
-            <h4>Caratteristiche</h4>
-            <h2>Potenza e Sicurezza in un Unico Strumento</h2>
-            <p>SHOGUN è stato progettato per offrire il massimo controllo sui tuoi asset digitali, combinando funzionalità avanzate con un'interfaccia intuitiva.</p>
-          </div>
-        </div>
-        <div class="row">
-          <div class="four columns section">
-            <img src="images/iconSigningData@2x.png"/>
-            <h1>Transazioni Stealth</h1>
-            <p>Proteggi la tua privacy con transazioni stealth che generano indirizzi unici per ogni operazione.</p>
-          </div>
-          <div class="four columns section">
-            <img src="images/iconGamepad@2x.png"/>
-            <h1>Storage Distribuito</h1>
-            <p>I tuoi dati sono al sicuro grazie all'integrazione con GunDB per uno storage completamente distribuito.</p>
-          </div>
-          <div class="four columns section">
-            <img src="images/iconHeadphones@2x.png"/>
-            <h1>Gestione Multi-Wallet</h1>
-            <p>Gestisci più wallet Ethereum con un'unica interfaccia sicura e intuitiva.</p>
+          <div class="hero-buttons">
+            <a href="https://github.com/yourusername/shogun" class="button primary">
+              <img src="images/github.svg" alt="GitHub">
+              Inizia Ora
+            </a>
+            <a href="/docs" class="button secondary">
+              Documentazione
+            </a>
           </div>
         </div>
       </div>
-    </div>
-    
-    <div class="container">
-      <div class="demo">
-        <div class="row">
-          <div class="ten columns offset-by-one">
-            <h4>Come Funziona</h4>
-            <h2>API Potente e Flessibile</h2>
-            <p>
-              SHOGUN offre un'API completa per integrare tutte le sue funzionalità nel tuo progetto.
-              <br/>
-              <br/>
-            </p>
-            <pre><code>
+    </section>
+
+    <section class="features">
+      <div class="container">
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon">
+              <img src="images/iconSigningData@2x.png" alt="Stealth">
+            </div>
+            <h3>Transazioni Stealth</h3>
+            <p>Proteggi la tua privacy con indirizzi unici per ogni transazione</p>
+          </div>
+          
+          <div class="feature-card">
+            <div class="feature-icon">
+              <img src="images/iconGamepad@2x.png" alt="Storage">
+            </div>
+            <h3>Storage Distribuito</h3>
+            <p>I tuoi dati al sicuro con GunDB per uno storage decentralizzato</p>
+          </div>
+          
+          <div class="feature-card">
+            <div class="feature-icon">
+              <img src="images/iconHeadphones@2x.png" alt="Wallet">
+            </div>
+            <h3>Multi-Wallet</h3>
+            <p>Gestisci più wallet Ethereum con un'unica interfaccia sicura</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="code-demo">
+      <div class="container">
+        <h2>API Semplice e Potente</h2>
+        <div class="code-window">
+          <div class="code-header">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green"></span>
+          </div>
+          <pre><code>
 // Inizializza SHOGUN
 const walletManager = new WalletManager();
 
-// Crea un account
+// Crea un nuovo wallet
 await walletManager.createAccount("username", "password");
 
-// Accedi al wallet
-const privateKey = await walletManager.login("username", "password");
-
-// Usa StealthChain per transazioni private
+// Genera un indirizzo stealth
 const stealthChain = walletManager.getStealthChain();
 const stealthAddress = await stealthChain.generateStealthAddress(recipientPublicKey);
 
-// Gestisci storage distribuito
-await walletManager.saveWallet(wallet, publicKey, StorageType.BOTH);
-            </code></pre>
-          </div>
+// Salva in modo sicuro
+await walletManager.saveWallet(wallet, publicKey);</code></pre>
         </div>
       </div>
-    </div>
-    
-    <div class="footer">
-      <div class="background"></div>
-      <div class="container">
-        <div class="row">
-          <div class="eight columns offset-by-two">
-            <h1>SHOGUN</h1>
-            <h2>Il Futuro dei Wallet Web3</h2>
-            <div class="button-wrapper">
-              <a href="https://github.com/yourusername/shogun" target="_blank" class='button'>Inizia Ora <img src="images/iconGithubPurple.svg"/></a>
-            </div>
-          </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-logo">
+          <h2>SHOGUN</h2>
+          <p>Made with ⚔️ for Web3</p>
         </div>
-        <div class="row bottom">
-          <div class="twelve columns">
-            <p>
-              &copy; 2024 SHOGUN. All Rights Reserved.
-              <br/>
-              Made with ⚔️ for Web3
-            </p>
-          </div>
+        <div class="footer-links">
+          <a href="/docs">Docs</a>
+          <a href="https://github.com/yourusername/shogun">Github</a>
         </div>
       </div>
+      <div class="footer-bottom">
+        <p>&copy; 2024 SHOGUN. All Rights Reserved.</p>
+      </div>
     </div>
-  </div>
+  </footer>
+
+  <style>
+    :root {
+      --primary: #6c5ce7;
+      --secondary: #a8a5e6;
+      --dark: #2d3436;
+      --light: #f5f6fa;
+      --text: #2d3436;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .navbar {
+      padding: 1.5rem 0;
+      background: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      position: fixed;
+      width: 100%;
+      top: 0;
+      z-index: 1000;
+    }
+
+    .navbar .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin: 0;
+      background: linear-gradient(45deg, var(--primary), var(--secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+    }
+
+    .nav-link {
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.3s ease;
+    }
+
+    .nav-link:hover {
+      color: var(--primary);
+    }
+
+    .hero {
+      padding: 120px 0 80px;
+      background: linear-gradient(135deg, #f6f8fa 0%, #e9ecef 100%);
+    }
+
+    .hero-content {
+      max-width: 800px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .hero h2 {
+      font-size: 3.5rem;
+      font-weight: 800;
+      margin-bottom: 1.5rem;
+      line-height: 1.2;
+      background: linear-gradient(45deg, var(--primary), var(--secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero p {
+      font-size: 1.2rem;
+      color: #666;
+      margin-bottom: 2rem;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.8rem 1.5rem;
+      border-radius: var(--radius);
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.3s ease;
+    }
+
+    .button.primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .button.secondary {
+      background: var(--light);
+      color: var(--text);
+    }
+
+    .button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .features {
+      padding: 80px 0;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2rem;
+      margin-top: 3rem;
+    }
+
+    .feature-card {
+      background: white;
+      padding: 2rem;
+      border-radius: var(--radius);
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      transition: all 0.3s ease;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+    }
+
+    .feature-icon {
+      width: 64px;
+      height: 64px;
+      margin-bottom: 1.5rem;
+    }
+
+    .feature-card h3 {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      color: var(--primary);
+    }
+
+    .code-demo {
+      padding: 80px 0;
+      background: var(--light);
+    }
+
+    .code-window {
+      background: var(--dark);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    }
+
+    .code-header {
+      background: #1a1a1a;
+      padding: 0.8rem;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .dot.red { background: #ff5f56; }
+    .dot.yellow { background: #ffbd2e; }
+    .dot.green { background: #27c93f; }
+
+    .code-window pre {
+      margin: 0;
+      padding: 1.5rem;
+    }
+
+    .code-window code {
+      color: #fff;
+      font-size: 14px;
+      font-family: 'Fira Code', monospace;
+    }
+
+    footer {
+      background: var(--dark);
+      color: white;
+      padding: 60px 0 30px;
+    }
+
+    .footer-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+
+    .footer-logo h2 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 2rem;
+    }
+
+    .footer-links a {
+      color: white;
+      text-decoration: none;
+      transition: color 0.3s ease;
+    }
+
+    .footer-links a:hover {
+      color: var(--secondary);
+    }
+
+    .footer-bottom {
+      text-align: center;
+      padding-top: 2rem;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+
+    @media (max-width: 768px) {
+      .hero h2 {
+        font-size: 2.5rem;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .footer-content {
+        flex-direction: column;
+        text-align: center;
+        gap: 2rem;
+      }
+    }
+  </style>
 
   <script src="js/header.js"></script>
-  <script src="js/parallax.js"></script>
   <script src="js/scroll.js"></script>
-
 </body>
 </html>
