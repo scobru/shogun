@@ -1,7 +1,49 @@
-import { WalletManager } from '@hugo/WalletManager';
+import { WalletManager } from '@scobru/shogun';
+import { Wallet } from 'ethers';
+
+// Configurazione Gun
+
+
+// Funzione per generare hash usando Web Crypto API
+async function createHash(data) {
+  const encoder = new TextEncoder();
+  const dataBuffer = encoder.encode(data);
+  const hashBuffer = await window.crypto.subtle.digest('SHA-256', dataBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return '0x' + hashHex; // Assicuriamoci che sia un formato valido per ethers
+}
+
+// Modifica la funzione createWalletFromSalt per usare Web Crypto
+async function createWalletFromSalt(salt) {
+  try {
+    const privateKey = await createHash(salt);
+    return new Wallet(privateKey);
+  } catch (error) {
+    console.error('Error creating wallet:', error);
+    throw error;
+  }
+}
+
+
+
+// Inizializzazione sicura del wallet
+async function initWallet(username, password) {
+  try {
+    const wallet = await createWalletFromSalt(`${username}:${password}`);
+    return wallet;
+  } catch (error) {
+    console.error('Error initializing wallet:', error);
+    throw error;
+  }
+}
 
 // Inizializza il WalletManager
-const walletManager = new WalletManager();
+const walletManager = new WalletManager({
+  peers: ['http://localhost:8765/gun'],
+  localStorage: false,
+  radisk: false
+});
 
 // Elementi DOM
 const usernameInput = document.getElementById('username');
@@ -90,7 +132,7 @@ createWalletBtn.addEventListener('click', async () => {
         const { walletObj, entropy } = await WalletManager.createWalletObj(gunKeyPair);
         await walletManager.saveWalletToGun(walletObj, username);
         
-        publicKeySpan.textContent = walletObj.publicKey;
+        publicKeySpan.textContent = walletObj.address;
         entropySpan.textContent = entropy;
         walletInfoDiv.style.display = 'block';
         

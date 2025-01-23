@@ -1,7 +1,13 @@
 import { Wallet } from './Wallet';
 
+export interface WalletData {
+  address: string;
+  privateKey: string;
+  entropy: string;
+}
+
 export interface WalletResult {
-  walletObj: Wallet;
+  walletObj: WalletData;
   entropy: string;
 }
 

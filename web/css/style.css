@@ -569,6 +569,7 @@ a:hover {
 }
 
 .testimonial .content img.headshot {
+  background-color: #FFFFFF;
   box-sizing: border-box;
   height: 100px;
   width: 100px;

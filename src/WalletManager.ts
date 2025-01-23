@@ -8,13 +8,20 @@ import "gun/sea";
 import "gun/lib/webrtc"; // Enables WebRTC in GunDB
 import "gun/lib/radisk";
 import "gun/lib/axe";
-import { createHash } from "crypto";
+import { Wallet } from "ethers";
 
-import { Wallet } from "./interfaces/Wallet";
 import { EthereumManager } from "./EthereumManager";
 import { StealthChain } from "./StealthChain";
 import type { GunKeyPair } from "./interfaces/GunKeyPair";
-import { WalletResult } from "./interfaces";
+import { WalletResult, WalletData } from "./interfaces/WalletResult";
+
+// Importiamo crypto condizionalmente
+let cryptoModule: any;
+try {
+  cryptoModule = require('crypto');
+} catch {
+  cryptoModule = null;
+}
 
 // Extend Gun type definitions
 declare module "gun" {
@@ -31,20 +38,52 @@ enum StorageType {
   BOTH,
 }
 
+// Aggiungiamo un mock di localStorage per Node.js
+const getLocalStorage = () => {
+  if (typeof localStorage === 'undefined') {
+    const store: { [key: string]: string } = {};
+    return {
+      getItem: (key: string) => store[key] || null,
+      setItem: (key: string, value: string) => { store[key] = value.toString(); },
+      removeItem: (key: string) => { delete store[key]; },
+      clear: () => { Object.keys(store).forEach(key => delete store[key]); }
+    };
+  }
+  return localStorage;
+};
+
 /**
  * Helper class for managing local storage operations
  */
 class LocalStorageManager {
   static async saveWallet(wallet: Wallet, alias: string): Promise<void> {
-    localStorage.setItem(`wallet_${alias}`, JSON.stringify(wallet));
+    const storage = getLocalStorage();
+    const walletData = {
+      address: wallet.address,
+      privateKey: wallet.privateKey,
+      entropy: (wallet as any).entropy || null
+    };
+    storage.setItem(`wallet_${alias}`, JSON.stringify(walletData));
   }
 
   static async retrieveWallet(alias: string): Promise<Wallet | null> {
-    const walletData = localStorage.getItem(`wallet_${alias}`);
+    const storage = getLocalStorage();
+    const walletData = storage.getItem(`wallet_${alias}`);
     if (!walletData) return null;
     try {
       const parsed = JSON.parse(walletData);
-      return new Wallet(parsed.publicKey, parsed.entropy);
+      // Creiamo un nuovo wallet con la chiave privata
+      const wallet = new Wallet(parsed.privateKey);
+      // Aggiungiamo l'entropy se presente
+      if (parsed.entropy) {
+        Object.defineProperty(wallet, 'entropy', {
+          value: parsed.entropy,
+          writable: true,
+          enumerable: true,
+          configurable: true
+        });
+      }
+      return wallet;
     } catch (error) {
       console.error("Error retrieving local wallet:", error);
       return null;
@@ -56,17 +95,19 @@ class LocalStorageManager {
     hasStealthKeys: boolean;
     hasPasskey: boolean;
   }> {
+    const storage = getLocalStorage();
     return {
-      hasWallet: localStorage.getItem(`wallet_${alias}`) !== null,
-      hasStealthKeys: localStorage.getItem(`stealthKeys_${alias}`) !== null,
-      hasPasskey: localStorage.getItem(`passkey_${alias}`) !== null,
+      hasWallet: storage.getItem(`wallet_${alias}`) !== null,
+      hasStealthKeys: storage.getItem(`stealthKeys_${alias}`) !== null,
+      hasPasskey: storage.getItem(`passkey_${alias}`) !== null,
     };
   }
 
   static async clearData(alias: string): Promise<void> {
-    localStorage.removeItem(`wallet_${alias}`);
-    localStorage.removeItem(`stealthKeys_${alias}`);
-    localStorage.removeItem(`passkey_${alias}`);
+    const storage = getLocalStorage();
+    storage.removeItem(`wallet_${alias}`);
+    storage.removeItem(`stealthKeys_${alias}`);
+    storage.removeItem(`passkey_${alias}`);
   }
 }
 
@@ -368,38 +409,34 @@ export class WalletManager {
    * @param {string} publicKey - Wallet's public key
    * @returns {Promise<void>}
    */
-  public async saveWalletToGun(
-    wallet: Wallet,
-    publicKey: string
-  ): Promise<void> {
+  public async saveWalletToGun(wallet: Wallet, publicKey: string): Promise<void> {
     console.log(`💾 Saving wallet for ${publicKey}:`, wallet);
 
     return new Promise((resolve, reject) => {
       let hasResolved = false;
 
       const walletData = {
-        publicKey: wallet.publicKey,
-        entropy: wallet.entropy,
+        address: wallet.address,
+        privateKey: wallet.privateKey,
+        entropy: (wallet as any).entropy,
         timestamp: Date.now(),
       };
 
       console.log("📦 Wallet data to save:", walletData);
 
-      // Save data directly
       const node = this.gun.get("wallets").get(publicKey);
 
-      // Save each field separately
-      node.get("publicKey").put(walletData.publicKey);
+      node.get("address").put(walletData.address);
+      node.get("privateKey").put(walletData.privateKey);
       node.get("entropy").put(walletData.entropy);
       node.get("timestamp").put(walletData.timestamp);
 
-      // Listen to confirm save
       node.on((data: any) => {
         console.log("📥 Data received after save:", data);
         if (
           data &&
-          data.publicKey === wallet.publicKey &&
-          data.entropy === wallet.entropy &&
+          data.address === wallet.address &&
+          data.privateKey === wallet.privateKey &&
           !hasResolved
         ) {
           console.log("✅ Wallet saved successfully");
@@ -624,16 +661,19 @@ export class WalletManager {
       throw new Error("User not authenticated");
     }
 
-    const wallet = await this.retrieveWalletLocally(alias);
+    const wallet = await LocalStorageManager.retrieveWallet(alias);
     const stealthKeys = await this.stealthChain
       .retrieveStealthKeysLocally(alias)
       .catch(() => null);
-    const gunPair = this.user._.sea;
 
     const exportData = {
-      wallet: wallet,
+      wallet: wallet ? {
+        address: wallet.address,
+        privateKey: wallet.privateKey,
+        entropy: (wallet as any).entropy || null
+      } : null,
       stealthKeys: stealthKeys,
-      gunPair: gunPair,
+      gunPair: this.user._.sea,
       timestamp: Date.now(),
       version: "1.0",
     };
@@ -663,7 +703,16 @@ export class WalletManager {
 
       // Save wallet if present
       if (importData.wallet) {
-        await this.saveWalletLocally(importData.wallet, alias);
+        const wallet = new Wallet(importData.wallet.privateKey);
+        if (importData.wallet.entropy) {
+          Object.defineProperty(wallet, 'entropy', {
+            value: importData.wallet.entropy,
+            writable: true,
+            enumerable: true,
+            configurable: true
+          });
+        }
+        await this.saveWalletLocally(wallet, alias);
       }
 
       // Save stealth keys if present
@@ -691,11 +740,53 @@ export class WalletManager {
 
       const salt = `${gunKeyPair.pub}_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
       const wallet = await WalletManager.createWalletFromSalt(gunKeyPair, salt);
-      wallet.entropy = salt;
 
-      return { walletObj: wallet, entropy: salt };
+      if (!wallet || !wallet.address) {
+        throw new Error("Failed to create valid wallet");
+      }
+
+      const walletData: WalletData = {
+        address: wallet.address,
+        privateKey: wallet.privateKey,
+        entropy: salt
+      };
+
+      return { 
+        walletObj: walletData,
+        entropy: salt 
+      };
     } catch (error: any) {
       throw new Error(`Error creating wallet: ${error.message}`);
+    }
+  }
+
+  /**
+   * Creates a hash using Web Crypto API in browser or Node.js crypto in Node
+   * @param {string} data - Data to hash
+   * @returns {Promise<string>} Hex string of the hash
+   */
+  private static async createHash(data: string): Promise<string> {
+    try {
+      // Se siamo in Node.js
+      if (typeof window === 'undefined' && cryptoModule) {
+        return cryptoModule.createHash('sha256')
+          .update(Buffer.from(data, 'utf8'))
+          .digest('hex');
+      }
+      
+      // Se siamo nel browser
+      if (typeof window !== 'undefined' && window.crypto) {
+        const encoder = new TextEncoder();
+        const dataBuffer = encoder.encode(data);
+        const hashBuffer = await window.crypto.subtle.digest('SHA-256', dataBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+
+      throw new Error('No crypto implementation available');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during hash creation';
+      throw new Error(`Hash creation failed: ${errorMessage}`);
     }
   }
 
@@ -704,18 +795,33 @@ export class WalletManager {
    */
   public static async createWalletFromSalt(gunKeyPair: GunKeyPair, salt: string): Promise<Wallet> {
     try {
+      if (!salt || typeof salt !== 'string') {
+        throw new Error("Invalid salt provided");
+      }
+
       const derivedKey = await SEA.work(salt, gunKeyPair);
       if (!derivedKey) throw new Error("Unable to generate derived key");
 
-      const hash = createHash("sha256")
-        .update(Buffer.from(derivedKey as string, "utf8"))
-        .digest("hex");
+      const hash = await WalletManager.createHash(derivedKey as string);
+      if (!hash || hash.length !== 64) {
+        throw new Error("Invalid hash generated");
+      }
 
       const wallet = new Wallet("0x" + hash);
-      wallet.entropy = salt;
+      if (!wallet || !wallet.address || !wallet.privateKey) {
+        throw new Error("Failed to create valid wallet");
+      }
+
+      // Verifica base del wallet
+      if (!wallet.address.startsWith('0x') || wallet.address.length !== 42) {
+        throw new Error("Invalid wallet address format");
+      }
+
+      (wallet as any).entropy = salt;
       return wallet;
-    } catch (error: any) {
-      throw new Error(`Error recreating wallet: ${error.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during wallet creation';
+      throw new Error(`Error recreating wallet: ${errorMessage}`);
     }
   }
 
