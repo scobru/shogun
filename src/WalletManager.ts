@@ -471,41 +471,6 @@ export class WalletManager {
   }
 
   /**
-   * Retrieves recipient's stealth keys
-   * @param {string} alias - Recipient's username
-   * @returns {Promise<{spendingKey: string, viewingKey: string}>} Stealth keys
-   */
-  public async retrieveStealthKeys(
-    alias: string
-  ): Promise<{ spendingKey: string; viewingKey: string }> {
-    if (!alias || typeof alias !== "string") {
-      throw new Error("Stealth keys not found: invalid alias");
-    }
-
-    return new Promise((resolve, reject) => {
-      this.gun.get(`stealthKeys/${alias}`).once((data: any) => {
-        if (!data) {
-          reject(new Error("Stealth keys not found"));
-          return;
-        }
-        if (!data.spendingKey || !data.viewingKey) {
-          reject(new Error("Stealth keys not found or incomplete"));
-          return;
-        }
-        resolve({
-          spendingKey: data.spendingKey,
-          viewingKey: data.viewingKey,
-        });
-      });
-
-      // Add timeout to handle case where Gun doesn't respond
-      setTimeout(() => {
-        reject(new Error("Stealth keys not found: timeout"));
-      }, 5000);
-    });
-  }
-
-  /**
    * Retrieves all user wallets from Gun
    * @param {string} publicKey - User's public key
    * @returns {Promise<Wallet[]>} Array of wallets

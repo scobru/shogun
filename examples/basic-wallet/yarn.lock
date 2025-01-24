@@ -1009,10 +1009,10 @@
     tslib "^2.6.2"
     webcrypto-core "^1.8.0"
 
-"@scobru/shogun@^0.0.5":
-  version "0.0.5"
-  resolved "https://registry.yarnpkg.com/@scobru/shogun/-/shogun-0.0.5.tgz#3ed2735513e84c4ea1ce8bad08afa16bac491ec2"
-  integrity sha512-OXYZXHqpjbikuU0nYgd8hktEbjIbBl4TE71oiBZNkur0NsEr/yVIYArOBnFqjCeHzegLY3bJHWEUKO4fErQ6Qg==
+"@scobru/shogun@^0.0.6":
+  version "0.0.6"
+  resolved "https://registry.yarnpkg.com/@scobru/shogun/-/shogun-0.0.6.tgz#9a6edc51befb3d88311dacbb5aa99d90ed97cc4a"
+  integrity sha512-XhFgznf+HxZ69C0Zl9tqLxVrX6BrTkVbX2Y2jffbs7coq06Cl+lET1WeZzssuCvc0aHASIzQrXQz079vEvT/sg==
   dependencies:
     ethers "^6.13.5"
     gun "^0.2020.1239"

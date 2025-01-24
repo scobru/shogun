@@ -280,25 +280,25 @@ createWalletBtn.addEventListener('click', async () => {
 
 exportWalletBtn.addEventListener('click', async () => {
     try {
-        const username = usernameInput.value.trim();
-        if (!username) {
-            showStatus('Username richiesto per l\'export', true);
+        const publicKey = walletManager.getPublicKey();
+        if (!publicKey) {
+            showStatus('Devi effettuare il login prima di esportare', true);
             return;
         }
         
-        const backup = await walletManager.exportAllData(username);
+        const backup = await walletManager.exportAllData(publicKey);
         const blob = new Blob([backup], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${username}-wallet-backup.json`;
+        a.download = `${publicKey}-wallet-backup.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        showStatus('Backup esportato con successo!');
+        showStatus('Backup wallet esportato con successo!');
     } catch (error) {
         showStatus(`Errore nell'export del wallet: ${error.message}`, true);
     }
@@ -306,6 +306,12 @@ exportWalletBtn.addEventListener('click', async () => {
 
 importWalletBtn.addEventListener('click', async () => {
     try {
+        const publicKey = walletManager.getPublicKey();
+        if (!publicKey) {
+            showStatus('Devi effettuare il login prima di importare', true);
+            return;
+        }
+
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.accept = '.json';
@@ -316,17 +322,11 @@ importWalletBtn.addEventListener('click', async () => {
             
             reader.onload = async (event) => {
                 try {
-                    const username = usernameInput.value.trim();
-                    if (!username) {
-                        showStatus('Username richiesto per l\'import', true);
-                        return;
-                    }
-                    
                     const jsonData = event.target.result;
-                    await walletManager.importAllData(jsonData, username);
+                    await walletManager.importAllData(jsonData, publicKey);
                     
                     showStatus('Wallet importato con successo!');
-                    await loadAvailableWallets(); // Aggiorna la lista dei wallet
+                    await loadAvailableWallets();
                 } catch (error) {
                     showStatus(`Errore nell'import del wallet: ${error.message}`, true);
                 }
@@ -341,5 +341,5 @@ importWalletBtn.addEventListener('click', async () => {
     }
 });
 
-// Esponi la funzione loadWallet globalmente per l'uso nei button onclick
+// Esponi la funzione loadWallet globalmente per i bottoni dinamici
 window.loadWallet = loadWallet; 
