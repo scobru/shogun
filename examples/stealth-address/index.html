@@ -105,6 +105,36 @@
             padding-bottom: 8px;
             margin-bottom: 20px;
         }
+        .copy-btn {
+            background: #4A5568;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-left: 8px;
+            transition: all 0.2s ease;
+        }
+        
+        .copy-btn:hover {
+            background: #2D3748;
+        }
+        
+        .copy-btn.success {
+            background: #48BB78;
+        }
+        
+        .key-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .key-value {
+            word-break: break-all;
+            flex: 1;
+        }
     </style>
 </head>
 <body>
@@ -126,6 +156,16 @@
                 <button id="login">Login</button>
                 <button id="logout" disabled>Logout</button>
             </div>
+
+            <div id="accountInfo" class="info-box" style="display: none;">
+                <div class="info-row">
+                    <strong>Chiave Pubblica Account:</strong><br>
+                    <div class="key-container">
+                        <div class="key-value" id="accountPublicKey"></div>
+                        <button class="copy-btn" data-copy="accountPublicKey">Copia</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div id="status" class="status"></div>
@@ -140,8 +180,28 @@
 
             <div id="keysInfo" class="info-box">
                 <h3>Informazioni Chiavi</h3>
-                <div id="spendingKey" class="info-row"></div>
-                <div id="viewingKey" class="info-row"></div>
+                <div id="spendingKey" class="info-row">
+                    <strong>Chiavi Private:</strong><br>
+                    <div class="key-container">
+                        <div class="key-value" id="privKeyValue"></div>
+                        <button class="copy-btn" data-copy="privKeyValue">Copia</button>
+                    </div>
+                    <div class="key-container">
+                        <div class="key-value" id="eprivKeyValue"></div>
+                        <button class="copy-btn" data-copy="eprivKeyValue">Copia</button>
+                    </div>
+                </div>
+                <div id="viewingKey" class="info-row">
+                    <strong>Chiavi Pubbliche (da condividere):</strong><br>
+                    <div class="key-container">
+                        <div class="key-value" id="pubKeyValue"></div>
+                        <button class="copy-btn" data-copy="pubKeyValue">Copia</button>
+                    </div>
+                    <div class="key-container">
+                        <div class="key-value" id="epubKeyValue"></div>
+                        <button class="copy-btn" data-copy="epubKeyValue">Copia</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -158,11 +218,17 @@
                 <h3>Indirizzo Stealth Generato</h3>
                 <div class="info-row">
                     <strong>Indirizzo Stealth:</strong><br>
-                    <span id="stealthAddress"></span>
+                    <div class="key-container">
+                        <div class="key-value" id="stealthAddress"></div>
+                        <button class="copy-btn" data-copy="stealthAddress">Copia</button>
+                    </div>
                 </div>
                 <div class="info-row">
                     <strong>Chiave Pubblica Effimera:</strong><br>
-                    <span id="ephemeralPublicKey"></span>
+                    <div class="key-container">
+                        <div class="key-value" id="ephemeralPublicKey"></div>
+                        <button class="copy-btn" data-copy="ephemeralPublicKey">Copia</button>
+                    </div>
                 </div>
             </div>
         </div>

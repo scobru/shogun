@@ -4,7 +4,6 @@
   "description": "Basic wallet example using Shogun",
   "main": "main.js",
   "scripts": {
-    "start": "node server.js",
     "dev": "vite"
   },
   "dependencies": {

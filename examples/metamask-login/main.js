@@ -1,4 +1,4 @@
-import { WalletManager } from '@hugo/WalletManager';
+import { WalletManager } from '@scobru/shogun';
 
 // Elementi DOM
 const metamaskStatus = document.getElementById('metamaskStatus');
