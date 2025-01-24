@@ -56,7 +56,8 @@ async function loadAvailableWallets() {
                 }
             });
             
-            setTimeout(() => resolve(walletsData), 1000);
+            // Aumentiamo il timeout per dare più tempo al caricamento
+            setTimeout(() => resolve(walletsData), 2000);
         });
         
         if (!wallets || wallets.length === 0) {
@@ -71,6 +72,8 @@ async function loadAvailableWallets() {
         
         // Itera attraverso i wallet
         wallets.forEach(wallet => {
+            if (!wallet.address) return; // Skip se non c'è indirizzo
+            
             walletHtml += `
                 <div class="wallet-item">
                     <div class="wallet-info">
@@ -81,7 +84,7 @@ async function loadAvailableWallets() {
                         <div class="wallet-label">Data:</div>
                         <div class="wallet-timestamp">${new Date(wallet.timestamp).toLocaleString()}</div>
                     </div>
-                    <button onclick="window.loadWallet('${wallet.address}')">Carica</button>
+                    <button onclick="window.loadWallet('${wallet.address}')" class="load-btn">Carica</button>
                 </div>
             `;
         });
@@ -222,7 +225,7 @@ createWalletBtn.addEventListener('click', async () => {
                     <span id="entropy">${entropy}</span>
                 </div>
             </div>
-            <div class="save-buttons">
+            <div class="save-buttons" id="saveButtonsContainer">
                 <button id="saveWallet" class="btn btn-primary">Salva su Gun</button>
                 <button id="skipSave" class="btn btn-secondary">Non Salvare</button>
             </div>
@@ -233,7 +236,15 @@ createWalletBtn.addEventListener('click', async () => {
         // Aggiungi event listener per il salvataggio
         document.getElementById('saveWallet').addEventListener('click', async () => {
             try {
-                await new Promise((resolve) => {
+                const saveButton = document.getElementById('saveWallet');
+                const skipButton = document.getElementById('skipSave');
+                
+                // Disabilita i bottoni durante il salvataggio
+                saveButton.disabled = true;
+                skipButton.disabled = true;
+                saveButton.textContent = 'Salvataggio in corso...';
+                
+                await new Promise((resolve, reject) => {
                     walletManager.getGun().get('wallets').get(publicKey).get(walletObj.address).put({
                         address: walletObj.address,
                         privateKey: walletObj.privateKey,
@@ -241,16 +252,17 @@ createWalletBtn.addEventListener('click', async () => {
                         timestamp: Date.now()
                     }, (ack) => {
                         if (ack.err) {
-                            throw new Error(ack.err);
+                            reject(new Error(ack.err));
+                            return;
                         }
                         resolve();
                     });
                 });
                 
-                // Rimuovi i bottoni di salvataggio
-                const saveButtons = walletInfoDiv.querySelector('.save-buttons');
-                if (saveButtons) {
-                    saveButtons.remove();
+                // Rimuovi il container dei bottoni di salvataggio
+                const saveButtonsContainer = document.getElementById('saveButtonsContainer');
+                if (saveButtonsContainer) {
+                    saveButtonsContainer.remove();
                 }
                 
                 showStatus('Wallet salvato con successo su Gun!');
@@ -259,15 +271,22 @@ createWalletBtn.addEventListener('click', async () => {
                 await loadAvailableWallets();
             } catch (error) {
                 showStatus(`Errore nel salvataggio del wallet: ${error.message}`, true);
+                // Riabilita i bottoni in caso di errore
+                const saveButton = document.getElementById('saveWallet');
+                const skipButton = document.getElementById('skipSave');
+                if (saveButton) {
+                    saveButton.disabled = false;
+                    saveButton.textContent = 'Salva su Gun';
+                }
+                if (skipButton) skipButton.disabled = false;
             }
         });
         
         // Aggiungi event listener per saltare il salvataggio
         document.getElementById('skipSave').addEventListener('click', () => {
-            // Rimuovi i bottoni di salvataggio
-            const saveButtons = walletInfoDiv.querySelector('.save-buttons');
-            if (saveButtons) {
-                saveButtons.remove();
+            const saveButtonsContainer = document.getElementById('saveButtonsContainer');
+            if (saveButtonsContainer) {
+                saveButtonsContainer.remove();
             }
             showStatus('Wallet creato ma non salvato su Gun');
         });
