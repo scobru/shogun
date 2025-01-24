@@ -3,100 +3,176 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hugo - Esempio Base Wallet</title>
+    <title>Shogun Basic Wallet Demo</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
-            background-color: #f5f5f5;
+            background: #f5f5f5;
         }
         .container {
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 20px;
         }
         label {
             display: block;
             margin-bottom: 5px;
-            font-weight: bold;
+            color: #333;
         }
         input {
             width: 100%;
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            box-sizing: border-box;
+            margin-bottom: 10px;
         }
         button {
-            background-color: #4CAF50;
+            background: #6B46C1;
             color: white;
-            padding: 10px 15px;
             border: none;
+            padding: 10px 20px;
             border-radius: 4px;
             cursor: pointer;
             margin-right: 10px;
             margin-bottom: 10px;
+            transition: background 0.3s ease;
+        }
+        button:hover {
+            background: #553C9A;
         }
         button:disabled {
-            background-color: #cccccc;
+            background: #ccc;
             cursor: not-allowed;
         }
         .status {
-            margin-top: 20px;
-            padding: 10px;
+            padding: 15px;
             border-radius: 4px;
+            margin: 20px 0;
+            display: none;
         }
         .success {
-            background-color: #dff0d8;
-            color: #3c763d;
-            border: 1px solid #d6e9c6;
+            background: #C6F6D5;
+            color: #2F855A;
         }
         .error {
-            background-color: #f2dede;
-            color: #a94442;
-            border: 1px solid #ebccd1;
+            background: #FED7D7;
+            color: #C53030;
         }
-        #walletInfo {
-            margin-top: 20px;
-            padding: 10px;
-            background-color: #f8f9fa;
+        .wallet-info {
+            background: #EBF4FF;
+            padding: 20px;
             border-radius: 4px;
+            margin-top: 20px;
+            display: none;
+        }
+        .wallet-info h3 {
+            margin-top: 0;
+            color: #2B6CB0;
+        }
+        .info-row {
+            margin: 10px 0;
+        }
+        .info-row span {
+            word-break: break-all;
+            font-family: monospace;
+        }
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .wallet-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .wallet-item {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .wallet-address {
+            font-family: monospace;
+            word-break: break-all;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        .section {
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #2D3748;
+            border-bottom: 2px solid #6B46C1;
+            padding-bottom: 0.5rem;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Hugo - Esempio Base Wallet</h1>
+        <h1>Shogun Basic Wallet Demo</h1>
         
-        <div class="form-group">
-            <label for="username">Username:</label>
-            <input type="text" id="username" placeholder="Inserisci username">
+        <div class="section">
+            <h2>Autenticazione</h2>
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" placeholder="Inserisci username">
+                
+                <label for="password">Password:</label>
+                <input type="password" id="password" placeholder="Inserisci password">
+            </div>
+
+            <div class="button-group">
+                <button id="createAccount">Crea Account</button>
+                <button id="login">Login</button>
+                <button id="logout" disabled>Logout</button>
+            </div>
         </div>
-        
-        <div class="form-group">
-            <label for="password">Password:</label>
-            <input type="password" id="password" placeholder="Inserisci password">
+
+        <div id="status" class="status"></div>
+
+        <div class="section">
+            <h2>Gestione Wallet</h2>
+            <div class="button-group">
+                <button id="createWallet" disabled>Crea Nuovo Wallet</button>
+                <button id="exportWallet" disabled>Esporta Wallet</button>
+                <button id="importWallet" disabled>Importa Wallet</button>
+            </div>
+
+            <div id="walletInfo" class="wallet-info">
+                <h3>Wallet Attivo</h3>
+                <div class="info-row">
+                    <strong>Indirizzo:</strong><br>
+                    <span id="address">-</span>
+                </div>
+                <div class="info-row">
+                    <strong>Entropy:</strong><br>
+                    <span id="entropy">-</span>
+                </div>
+            </div>
         </div>
-        
-        <button id="createAccount">Crea Account</button>
-        <button id="login">Login</button>
-        <button id="logout" disabled>Logout</button>
-        <button id="createWallet" disabled>Crea Wallet</button>
-        
-        <div id="status" class="status" style="display: none;"></div>
-        
-        <div id="walletInfo" style="display: none;">
-            <h3>Informazioni Wallet</h3>
-            <p><strong>Public Key:</strong> <span id="publicKey"></span></p>
-            <p><strong>Entropy:</strong> <span id="entropy"></span></p>
+
+        <div class="section">
+            <h2>Wallet Disponibili</h2>
+            <div id="walletList">
+                <!-- La lista dei wallet verrà inserita qui dinamicamente -->
+            </div>
         </div>
     </div>
-    <script type="module" src="main.js"></script>
+
+    <script type="module" src="/main.js"></script>
 </body>
 </html> 

@@ -258,87 +258,156 @@
           <!-- Nuova sezione tecnica -->
           <div class="row technical-section">
             <div class="ten columns offset-by-one">
-              <h4>Technical Features</h4>
-              <h2>Advanced Capabilities</h2>
+              <div class="section-header">
+                <span class="badge">Tech Stack</span>
+                <h2>Funzionalità Avanzate</h2>
+                <p class="section-description">Esplora le potenti capacità di Shogun per la gestione sicura dei wallet</p>
+              </div>
 
               <div class="feature-grid">
                 <div class="feature-card">
-                  <h3>🔐 Secure Key Management</h3>
-                  <pre><code>
+                  <div class="card-header">
+                    <span class="icon">🔐</span>
+                    <h3>Gestione Sicura delle Chiavi</h3>
+                  </div>
+                  <p class="card-description">Genera e gestisci wallet in modo sicuro usando entropy e crittografia avanzata</p>
+                  <div class="code-block">
+                    <div class="code-header">
+                      <span class="lang-badge">TypeScript</span>
+                      <button class="copy-btn">Copy</button>
+                    </div>
+                    <pre><code>
 // Create wallet with entropy
 const { walletObj, entropy } = 
   await WalletManager.createWalletObj(gunKeyPair);
 
 console.log(walletObj.address);
-console.log(walletObj.privateKey);
-                  </code></pre>
+console.log(walletObj.privateKey);</code></pre>
+                  </div>
                 </div>
 
                 <div class="feature-card">
-                  <h3>💾 Cross-Platform Storage</h3>
-                  <pre><code>
+                  <div class="card-header">
+                    <span class="icon">💾</span>
+                    <h3>Storage Multi-Piattaforma</h3>
+                  </div>
+                  <p class="card-description">Salva e sincronizza i wallet su diverse piattaforme in modo sicuro</p>
+                  <div class="code-block">
+                    <div class="code-header">
+                      <span class="lang-badge">TypeScript</span>
+                      <button class="copy-btn">Copy</button>
+                    </div>
+                    <pre><code>
 // Save wallet (multiple options)
 await manager.saveWallet(
   walletObj, 
   pubKey, 
   StorageType.BOTH  // Gun + localStorage
-);
-                  </code></pre>
+);</code></pre>
+                  </div>
                 </div>
 
                 <div class="feature-card">
-                  <h3>🔄 Import/Export</h3>
-                  <pre><code>
+                  <div class="card-header">
+                    <span class="icon">🔄</span>
+                    <h3>Import/Export</h3>
+                  </div>
+                  <p class="card-description">Porta i tuoi wallet ovunque con funzionalità complete di import/export</p>
+                  <div class="code-block">
+                    <div class="code-header">
+                      <span class="lang-badge">TypeScript</span>
+                      <button class="copy-btn">Copy</button>
+                    </div>
+                    <pre><code>
 // Export all data
 const backup = await manager.exportAllData('username');
 
 // Import data
-await manager.importAllData(backup, 'username');
-                  </code></pre>
+await manager.importAllData(backup, 'username');</code></pre>
+                  </div>
                 </div>
 
                 <div class="feature-card">
-                  <h3>🌐 Decentralized Storage</h3>
-                  <pre><code>
+                  <div class="card-header">
+                    <span class="icon">🌐</span>
+                    <h3>Storage Decentralizzato</h3>
+                  </div>
+                  <p class="card-description">Utilizza Gun.js per uno storage completamente decentralizzato e P2P</p>
+                  <div class="code-block">
+                    <div class="code-header">
+                      <span class="lang-badge">TypeScript</span>
+                      <button class="copy-btn">Copy</button>
+                    </div>
+                    <pre><code>
 // Initialize with Gun.js
 const manager = new WalletManager({
   peers: ['http://localhost:8765/gun'],
   localStorage: false,
   radisk: false
-});
-                  </code></pre>
+});</code></pre>
+                  </div>
                 </div>
               </div>
 
-              <div class="feature-list">
-                <h3>Key Features</h3>
-                <ul>
-                  <li>✨ Web Crypto API for browser-based cryptography</li>
-                  <li>🔒 Secure entropy-based wallet generation</li>
-                  <li>📱 Cross-device synchronization</li>
-                  <li>🔑 Stealth address support</li>
-                  <li>💼 Multiple storage options</li>
-                  <li>🔄 Complete data portability</li>
-                </ul>
+              <div class="features-overview">
+                <div class="overview-header">
+                  <h3>Caratteristiche Principali</h3>
+                  <p>Un toolkit completo per la gestione sicura dei wallet</p>
+                </div>
+                <div class="features-grid">
+                  <div class="feature-item">
+                    <span class="feature-icon">✨</span>
+                    <div class="feature-text">
+                      <h4>Web Crypto API</h4>
+                      <p>Crittografia nativa nel browser</p>
+                    </div>
+                  </div>
+                  <div class="feature-item">
+                    <span class="feature-icon">🔒</span>
+                    <div class="feature-text">
+                      <h4>Entropy Sicura</h4>
+                      <p>Generazione wallet basata su entropy</p>
+                    </div>
+                  </div>
+                  <div class="feature-item">
+                    <span class="feature-icon">📱</span>
+                    <div class="feature-text">
+                      <h4>Multi-Device</h4>
+                      <p>Sincronizzazione tra dispositivi</p>
+                    </div>
+                  </div>
+                  <div class="feature-item">
+                    <span class="feature-icon">🔑</span>
+                    <div class="feature-text">
+                      <h4>Stealth Address</h4>
+                      <p>Supporto per indirizzi stealth</p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div class="compatibility">
-                <h3>Platform Support</h3>
+              <div class="platform-support">
+                <div class="support-header">
+                  <h3>Compatibilità</h3>
+                  <p>Sviluppato per funzionare ovunque</p>
+                </div>
                 <div class="platform-grid">
-                  <div class="platform">
-                    <h4>🌐 Browser</h4>
+                  <div class="platform-card">
+                    <div class="platform-icon">🌐</div>
+                    <h4>Browser</h4>
                     <ul>
-                      <li>Web Crypto API</li>
-                      <li>localStorage</li>
-                      <li>Gun.js P2P</li>
+                      <li><span class="check">✓</span> Web Crypto API</li>
+                      <li><span class="check">✓</span> localStorage</li>
+                      <li><span class="check">✓</span> Gun.js P2P</li>
                     </ul>
                   </div>
-                  <div class="platform">
-                    <h4>💻 Node.js</h4>
+                  <div class="platform-card">
+                    <div class="platform-icon">💻</div>
+                    <h4>Node.js</h4>
                     <ul>
-                      <li>crypto module</li>
-                      <li>node-localstorage</li>
-                      <li>Gun.js P2P</li>
+                      <li><span class="check">✓</span> crypto module</li>
+                      <li><span class="check">✓</span> node-localstorage</li>
+                      <li><span class="check">✓</span> Gun.js P2P</li>
                     </ul>
                   </div>
                 </div>
@@ -424,102 +493,238 @@ const manager = new WalletManager({
 
   <style>
     .technical-section {
-      padding: 4rem 0;
-      background: #f8f9fa;
-      border-radius: 12px;
-      margin: 4rem 0;
+      padding: 6rem 0;
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      border-radius: 16px;
+      margin: 6rem 0;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+
+    .badge {
+      background: #6B46C1;
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .section-description {
+      color: #666;
+      font-size: 1.2rem;
+      max-width: 600px;
+      margin: 1rem auto;
     }
 
     .feature-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       gap: 2rem;
       margin: 3rem 0;
     }
 
     .feature-card {
       background: white;
-      padding: 1.5rem;
-      border-radius: 8px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+      transition: transform 0.3s ease;
     }
 
-    .feature-card h3 {
-      font-size: 1.2rem;
+    .feature-card:hover {
+      transform: translateY(-5px);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
       margin-bottom: 1rem;
-      color: #6B46C1;
+    }
+
+    .icon {
+      font-size: 1.5rem;
+      margin-right: 1rem;
+    }
+
+    .card-description {
+      color: #666;
+      margin-bottom: 1.5rem;
+      line-height: 1.6;
+    }
+
+    .code-block {
+      background: #1a1a1a;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .code-header {
+      background: #2d2d2d;
+      padding: 0.75rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .lang-badge {
+      background: #6B46C1;
+      color: white;
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+    }
+
+    .copy-btn {
+      background: transparent;
+      border: 1px solid #666;
+      color: #fff;
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: all 0.2s ease;
+    }
+
+    .copy-btn:hover {
+      background: #6B46C1;
+      border-color: #6B46C1;
     }
 
     .feature-card pre {
-      background: #f1f1f1;
-      padding: 1rem;
-      border-radius: 4px;
-      overflow-x: auto;
+      margin: 0;
+      padding: 1.5rem;
     }
 
     .feature-card code {
       font-family: 'Fira Code', monospace;
       font-size: 0.9rem;
+      color: #fff;
     }
 
-    .feature-list {
-      margin: 3rem 0;
-      text-align: left;
+    .features-overview {
+      background: white;
+      padding: 3rem;
+      border-radius: 12px;
+      margin: 4rem 0;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
     }
 
-    .feature-list ul {
-      list-style: none;
-      padding: 0;
+    .overview-header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .features-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 1rem;
+      gap: 2rem;
     }
 
-    .feature-list li {
-      padding: 0.5rem 0;
-      color: #4A5568;
+    .feature-item {
+      display: flex;
+      align-items: center;
+      padding: 1rem;
+      background: #f8f9fa;
+      border-radius: 8px;
+      transition: transform 0.2s ease;
     }
 
-    .compatibility {
-      margin-top: 3rem;
+    .feature-item:hover {
+      transform: translateX(5px);
+    }
+
+    .feature-icon {
+      font-size: 1.5rem;
+      margin-right: 1rem;
+    }
+
+    .feature-text h4 {
+      margin: 0;
+      color: #2d3748;
+    }
+
+    .feature-text p {
+      margin: 0.25rem 0 0;
+      color: #666;
+      font-size: 0.9rem;
+    }
+
+    .platform-support {
+      margin-top: 4rem;
+    }
+
+    .support-header {
+      text-align: center;
+      margin-bottom: 3rem;
     }
 
     .platform-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
       gap: 2rem;
-      margin-top: 2rem;
     }
 
-    .platform {
+    .platform-card {
       background: white;
-      padding: 1.5rem;
-      border-radius: 8px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      padding: 2rem;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
     }
 
-    .platform h4 {
-      color: #6B46C1;
+    .platform-icon {
+      font-size: 2.5rem;
       margin-bottom: 1rem;
     }
 
-    .platform ul {
-      list-style: none;
-      padding: 0;
+    .platform-card h4 {
+      color: #2d3748;
+      margin-bottom: 1.5rem;
     }
 
-    .platform li {
+    .platform-card ul {
+      list-style: none;
+      padding: 0;
+      text-align: left;
+    }
+
+    .platform-card li {
       padding: 0.5rem 0;
       color: #4A5568;
+      display: flex;
+      align-items: center;
+    }
+
+    .check {
+      color: #6B46C1;
+      margin-right: 0.5rem;
+      font-weight: bold;
     }
 
     @media (max-width: 768px) {
+      .technical-section {
+        padding: 3rem 1rem;
+      }
+      
       .feature-grid {
         grid-template-columns: 1fr;
       }
-
+      
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+      
       .platform-grid {
         grid-template-columns: 1fr;
+      }
+      
+      .feature-card {
+        padding: 1.5rem;
       }
     }
   </style>

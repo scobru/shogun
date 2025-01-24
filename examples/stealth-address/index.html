@@ -3,167 +3,196 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hugo - Esempio Indirizzi Stealth</title>
+    <title>Shogun Stealth Address Demo</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
-            background-color: #f5f5f5;
+            background: #f5f5f5;
         }
         .container {
-            background-color: white;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin-bottom: 30px;
             padding: 20px;
+            background: #f8f9fa;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 20px;
         }
         label {
             display: block;
             margin-bottom: 5px;
-            font-weight: bold;
+            color: #333;
+            font-weight: 500;
         }
         input {
             width: 100%;
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            box-sizing: border-box;
+            margin-bottom: 10px;
         }
         button {
-            background-color: #4CAF50;
+            background: #6B46C1;
             color: white;
-            padding: 10px 15px;
             border: none;
+            padding: 10px 20px;
             border-radius: 4px;
             cursor: pointer;
             margin-right: 10px;
             margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background: #553C9A;
+            transform: translateY(-1px);
         }
         button:disabled {
-            background-color: #cccccc;
+            background: #ccc;
             cursor: not-allowed;
+            transform: none;
         }
         .status {
-            margin-top: 20px;
-            padding: 10px;
+            padding: 15px;
             border-radius: 4px;
+            margin: 20px 0;
+            display: none;
         }
         .success {
-            background-color: #dff0d8;
-            color: #3c763d;
-            border: 1px solid #d6e9c6;
+            background: #C6F6D5;
+            color: #2F855A;
         }
         .error {
-            background-color: #f2dede;
-            color: #a94442;
-            border: 1px solid #ebccd1;
-        }
-        .section {
-            margin-top: 30px;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
-        }
-        .key-info {
-            word-break: break-all;
-            font-family: monospace;
-            background-color: #f1f1f1;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 5px 0;
+            background: #FED7D7;
+            color: #C53030;
         }
         .info-box {
+            background: #EBF4FF;
+            padding: 20px;
+            border-radius: 8px;
             margin-top: 20px;
-            padding: 10px;
-            border-radius: 4px;
-            background-color: #f8f9fa;
+            display: none;
         }
-        .code-box {
-            margin-bottom: 10px;
+        .info-box h3 {
+            margin-top: 0;
+            color: #2B6CB0;
+        }
+        .info-row {
+            margin: 10px 0;
+            word-break: break-all;
+            font-family: monospace;
+            background: white;
             padding: 10px;
             border-radius: 4px;
-            background-color: #f1f1f1;
+        }
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .section-title {
+            color: #2D3748;
+            border-bottom: 2px solid #6B46C1;
+            padding-bottom: 8px;
+            margin-bottom: 20px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Hugo - Esempio Indirizzi Stealth</h1>
+        <h1>Shogun Stealth Address Demo</h1>
         
-        <!-- Sezione Account -->
         <div class="section">
-            <h2>Account</h2>
+            <h2 class="section-title">Autenticazione</h2>
             <div class="form-group">
                 <label for="username">Username:</label>
                 <input type="text" id="username" placeholder="Inserisci username">
-            </div>
-            <div class="form-group">
+                
                 <label for="password">Password:</label>
                 <input type="password" id="password" placeholder="Inserisci password">
             </div>
-            <button id="createAccount">Crea Account</button>
-            <button id="login">Login</button>
-            <button id="logout" disabled>Logout</button>
-        </div>
 
-        <!-- Sezione Chiavi Stealth -->
-        <div class="section">
-            <h2>Chiavi Stealth</h2>
-            <button id="generateKeys" disabled>Genera Chiavi Stealth</button>
-            <div id="keysInfo" style="display: none;">
-                <h3>Chiavi Generate:</h3>
-                <p><strong>Chiave di Spesa:</strong></p>
-                <div id="spendingKey" class="key-info"></div>
-                <p><strong>Chiave di Visualizzazione:</strong></p>
-                <div id="viewingKey" class="key-info"></div>
+            <div class="button-group">
+                <button id="createAccount">Crea Account</button>
+                <button id="login">Login</button>
+                <button id="logout" disabled>Logout</button>
             </div>
         </div>
 
-        <!-- Sezione Indirizzo Stealth -->
+        <div id="status" class="status"></div>
+
         <div class="section">
-            <h2>Genera Indirizzo Stealth</h2>
+            <h2 class="section-title">Gestione Chiavi Stealth</h2>
+            <div class="button-group">
+                <button id="generateKeys" disabled>Genera Chiavi Stealth</button>
+                <button id="exportKeys" disabled>Esporta Chiavi</button>
+                <button id="importKeys" disabled>Importa Chiavi</button>
+            </div>
+
+            <div id="keysInfo" class="info-box">
+                <h3>Informazioni Chiavi</h3>
+                <div id="spendingKey" class="info-row"></div>
+                <div id="viewingKey" class="info-row"></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">Generazione Indirizzo Stealth</h2>
             <div class="form-group">
                 <label for="recipientUsername">Username Destinatario:</label>
-                <input type="text" id="recipientUsername" placeholder="Username del destinatario">
+                <input type="text" id="recipientUsername" placeholder="Inserisci username destinatario">
             </div>
+
             <button id="generateStealthAddress" disabled>Genera Indirizzo Stealth</button>
-            <div id="stealthAddressInfo" style="display: none;">
-                <h3>Indirizzo Stealth Generato:</h3>
-                <p><strong>Indirizzo:</strong></p>
-                <div id="stealthAddress" class="key-info"></div>
-                <p><strong>Chiave Pubblica Effimera:</strong></p>
-                <div id="ephemeralPublicKey" class="key-info"></div>
-                <p><strong>Wallet Cifrato:</strong></p>
-                <div id="encryptedWallet" class="key-info"></div>
+
+            <div id="stealthAddressInfo" class="info-box">
+                <h3>Indirizzo Stealth Generato</h3>
+                <div class="info-row">
+                    <strong>Indirizzo Stealth:</strong><br>
+                    <span id="stealthAddress"></span>
+                </div>
+                <div class="info-row">
+                    <strong>Chiave Pubblica Effimera:</strong><br>
+                    <span id="ephemeralPublicKey"></span>
+                </div>
             </div>
         </div>
 
-        <!-- Sezione Recupero Indirizzo -->
         <div class="section">
-            <h2>Recupera Indirizzo Stealth</h2>
+            <h2 class="section-title">Recupero Indirizzo Stealth</h2>
             <div class="form-group">
                 <label for="stealthAddressInput">Indirizzo Stealth:</label>
-                <input type="text" id="stealthAddressInput" placeholder="Inserisci l'indirizzo stealth">
-            </div>
-            <div class="form-group">
+                <input type="text" id="stealthAddressInput" placeholder="Inserisci indirizzo stealth">
+                
                 <label for="ephemeralKeyInput">Chiave Pubblica Effimera:</label>
-                <input type="text" id="ephemeralKeyInput" placeholder="Inserisci la chiave pubblica effimera">
+                <input type="text" id="ephemeralKeyInput" placeholder="Inserisci chiave pubblica effimera">
             </div>
-            <button id="recoverStealthAddress">Recupera Indirizzo</button>
-            <div id="recoveredAddressInfo" class="info-box" style="display: none;">
-                <h3>Indirizzo Recuperato:</h3>
-                <div id="recoveredAddress" class="code-box"></div>
-                <h3>Chiave Privata:</h3>
-                <div id="recoveredPrivateKey" class="code-box"></div>
+
+            <button id="recoverStealthAddress" disabled>Recupera Indirizzo</button>
+
+            <div id="recoveredAddressInfo" class="info-box">
+                <h3>Indirizzo Recuperato</h3>
+                <div class="info-row">
+                    <strong>Indirizzo:</strong><br>
+                    <span id="recoveredAddress"></span>
+                </div>
+                <div class="info-row">
+                    <strong>Chiave Privata:</strong><br>
+                    <span id="recoveredPrivateKey"></span>
+                </div>
             </div>
         </div>
-
-        <div id="status" class="status" style="display: none;"></div>
     </div>
-    <script type="module" src="main.js"></script>
+
+    <script type="module" src="/main.js"></script>
 </body>
 </html> 

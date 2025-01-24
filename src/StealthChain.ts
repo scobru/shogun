@@ -1,4 +1,4 @@
-import { ethers } from "ethers";
+ import { ethers } from "ethers";
 import Gun from "gun";
 import "gun/sea";
 
@@ -365,28 +365,28 @@ export class StealthChain {
 
   /**
    * Saves recipient's stealth keys to localStorage
-   * @param {string} alias - Recipient's username
+   * @param {string} publicKey - User's Gun public key
    * @param {Object} stealthKeys - Object containing stealth keys
    * @param {string} stealthKeys.spendingKey - Spending key
    * @param {string} stealthKeys.viewingKey - Viewing key
    * @returns {Promise<void>}
    */
   public async saveStealthKeysLocally(
-    alias: string,
+    publicKey: string,
     stealthKeys: { spendingKey: string; viewingKey: string }
   ): Promise<void> {
-    localStorage.setItem(`stealthKeys_${alias}`, JSON.stringify(stealthKeys));
+    localStorage.setItem(`stealthKeys_${publicKey}`, JSON.stringify(stealthKeys));
   }
 
   /**
    * Retrieves recipient's stealth keys from localStorage
-   * @param {string} alias - Recipient's username
+   * @param {string} publicKey - User's Gun public key
    * @returns {Promise<{spendingKey: string, viewingKey: string}>} Stealth keys
    */
   public async retrieveStealthKeysLocally(
-    alias: string
+    publicKey: string
   ): Promise<{ spendingKey: string; viewingKey: string }> {
-    const stealthKeys = localStorage.getItem(`stealthKeys_${alias}`);
+    const stealthKeys = localStorage.getItem(`stealthKeys_${publicKey}`);
     if (!stealthKeys) {
       throw new Error("Stealth keys not found in localStorage");
     }

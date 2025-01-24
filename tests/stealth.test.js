@@ -11,14 +11,6 @@ const { StealthChain } = require("../src/StealthChain");
 const { WalletManager } = require("../src/WalletManager");
 
 /**
- * Create a random alias to avoid username conflicts
- */
-function generateRandomAlias() {
-  const suffix = Math.random().toString(36).substring(2);
-  return `testuser_${suffix}`;
-}
-
-/**
  * Execute a pause (for example to give Gun time to sync)
  */
 function sleep(ms) {
@@ -44,6 +36,7 @@ describe("StealthChain (using WalletManager's Gun instance)", function () {
   let gun;            // Gun instance extracted from manager
   let user;           // Gun user for manual creation/login
   let stealthChain;   // StealthChain instance based on gun
+  let testPublicKey;  // Public key of the test user
 
   beforeEach(async function () {
     this.timeout(30000);
@@ -61,10 +54,10 @@ describe("StealthChain (using WalletManager's Gun instance)", function () {
     // 3. Create Gun user manually (without using manager.createAccount)
     user = gun.user();
 
-    const alias = generateRandomAlias();
+    const testAlias = `testuser_${Math.random().toString(36).substring(2)}`;
     const passphrase = "passwordTest";
 
-    console.log("Creating user with alias:", alias);
+    console.log("Creating user with alias:", testAlias);
 
     // Try to create user with multiple attempts
     let attempts = 0;
@@ -73,11 +66,11 @@ describe("StealthChain (using WalletManager's Gun instance)", function () {
     while (attempts < maxAttempts) {
       try {
         await new Promise((resolve, reject) => {
-          user.create(alias, passphrase, async (ack) => {
+          user.create(testAlias, passphrase, async (ack) => {
             if (ack.err) {
               if (ack.err.includes("already created")) {
                 console.log("Account already exists, trying login...");
-                user.auth(alias, passphrase, (authAck) => {
+                user.auth(testAlias, passphrase, (authAck) => {
                   if (authAck.err) reject(new Error(`Login failed: ${authAck.err}`));
                   else resolve();
                 });
@@ -86,7 +79,7 @@ describe("StealthChain (using WalletManager's Gun instance)", function () {
               }
             } else {
               console.log("Account created, performing login...");
-              user.auth(alias, passphrase, (authAck) => {
+              user.auth(testAlias, passphrase, (authAck) => {
                 if (authAck.err) reject(new Error(`Login failed: ${authAck.err}`));
                 else resolve();
               });
@@ -112,7 +105,8 @@ describe("StealthChain (using WalletManager's Gun instance)", function () {
       return isLogged;
     }, 15, 1000);
 
-    console.log("🔑 User created/logged in successfully:", user.is.pub);
+    testPublicKey = user.is.pub;
+    console.log("🔑 User created/logged in successfully:", testPublicKey);
 
     // 4. Instantiate StealthChain using manager's Gun
     stealthChain = new StealthChain(gun);
@@ -244,11 +238,10 @@ describe("StealthChain (using WalletManager's Gun instance)", function () {
     await sleep(2000);
 
     // 2. Generate stealth address for the same public key (self-recipient)
-    const myPublicKey = user.is.pub;
-    console.log("Generating stealth address for:", myPublicKey);
+    console.log("Generating stealth address for:", testPublicKey);
     
     const stealthData = await new Promise((resolve, reject) => {
-      stealthChain.generateStealthAddress(myPublicKey, (err, data) => {
+      stealthChain.generateStealthAddress(testPublicKey, (err, data) => {
         if (err) {
           console.error("Error generating stealth address:", err);
           return reject(err);
@@ -262,7 +255,7 @@ describe("StealthChain (using WalletManager's Gun instance)", function () {
     assert(stealthData.ephemeralPublicKey, "Missing generated ephemeralPublicKey");
     assert.strictEqual(
       stealthData.recipientPublicKey,
-      myPublicKey,
+      testPublicKey,
       "Recipient public key doesn't match"
     );
 

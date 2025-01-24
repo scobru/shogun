@@ -9,23 +9,21 @@ if (typeof localStorage === 'undefined' || localStorage === null) {
   global.localStorage = new LocalStorage('./scratch');
 }
 
-function generateRandomAlias() {
-  return `testuser_${Math.random().toString(36).substring(2)}`;
-}
-
 describe("WalletManager Data Management", function() {
   this.timeout(30000);
   let walletManager;
   let testAlias;
+  let testPublicKey;
   let testWallet;
 
   beforeEach(async function() {
     walletManager = new WalletManager();
-    testAlias = generateRandomAlias();
+    testAlias = `testuser_${Math.random().toString(36).substring(2)}`;
     // Create and authenticate a test user
     await walletManager.createAccount(testAlias, "password123");
     await walletManager.login(testAlias, "password123");
     assert(walletManager.user.is, "User must be authenticated after login");
+    testPublicKey = walletManager.getPublicKey();
     
     // Create a test wallet using ethers
     testWallet = Wallet.createRandom();
@@ -44,8 +42,8 @@ describe("WalletManager Data Management", function() {
 
   describe("Local Storage", function() {
     it("should save and retrieve a wallet locally", async function() {
-      await walletManager.saveWalletLocally(testWallet, testAlias);
-      const retrieved = await walletManager.retrieveWalletLocally(testAlias);
+      await walletManager.saveWalletLocally(testWallet, testPublicKey);
+      const retrieved = await walletManager.retrieveWalletLocally(testPublicKey);
       
       assert(retrieved, "Wallet should be retrieved");
       assert.strictEqual(retrieved.address, testWallet.address);
@@ -54,22 +52,22 @@ describe("WalletManager Data Management", function() {
     });
 
     it("should correctly verify local data", async function() {
-      await walletManager.saveWalletLocally(testWallet, testAlias);
-      await walletManager.getStealthChain().saveStealthKeysLocally(testAlias, {
+      await walletManager.saveWalletLocally(testWallet, testPublicKey);
+      await walletManager.getStealthChain().saveStealthKeysLocally(testPublicKey, {
         spendingKey: "test",
         viewingKey: "test"
       });
 
-      const status = await walletManager.checkLocalData(testAlias);
+      const status = await walletManager.checkLocalData(testPublicKey);
       assert(status.hasWallet, "Should have a wallet");
       assert(status.hasStealthKeys, "Should have stealth keys");
     });
 
     it("should properly clean local data", async function() {
-      await walletManager.saveWalletLocally(testWallet, testAlias);
-      await walletManager.clearLocalData(testAlias);
+      await walletManager.saveWalletLocally(testWallet, testPublicKey);
+      await walletManager.clearLocalData(testPublicKey);
       
-      const status = await walletManager.checkLocalData(testAlias);
+      const status = await walletManager.checkLocalData(testPublicKey);
       assert(!status.hasWallet, "Should not have a wallet");
       assert(!status.hasStealthKeys, "Should not have stealth keys");
     });
@@ -103,24 +101,24 @@ describe("WalletManager Data Management", function() {
       await walletManager.login(testAlias, "password123");
       assert(walletManager.user.is, "User should be authenticated");
       
-      await walletManager.saveWalletLocally(testWallet, testAlias);
-      await walletManager.getStealthChain().saveStealthKeysLocally(testAlias, {
+      await walletManager.saveWalletLocally(testWallet, testPublicKey);
+      await walletManager.getStealthChain().saveStealthKeysLocally(testPublicKey, {
         spendingKey: "test",
         viewingKey: "test"
       });
 
-      const exported = await walletManager.exportAllData(testAlias);
-      await walletManager.clearLocalData(testAlias);
-      await walletManager.importAllData(exported, testAlias);
+      const exported = await walletManager.exportAllData(testPublicKey);
+      await walletManager.clearLocalData(testPublicKey);
+      await walletManager.importAllData(exported, testPublicKey);
       
-      const status = await walletManager.checkLocalData(testAlias);
+      const status = await walletManager.checkLocalData(testPublicKey);
       assert(status.hasWallet, "Should have a wallet after import");
       assert(status.hasStealthKeys, "Should have stealth keys after import");
     });
 
     it("should handle invalid export data", async function() {
       try {
-        await walletManager.importAllData('{"invalid":"data"}', testAlias);
+        await walletManager.importAllData('{"invalid":"data"}', testPublicKey);
         assert.fail("Should throw an error");
       } catch (error) {
         assert(error.message.includes("Error importing data"), "Error message should mention importing data");

@@ -51,13 +51,13 @@ describe("EthereumManager Test Suite", function () {
 
   describe("Account Creation", function () {
     it("should create an account using Ethereum wallet", async function () {
-      const username = await ethereumManager.createAccountWithEthereum();
+      const address = await ethereumManager.createAccountWithEthereum();
       
-      assert(username, "Should return a username");
+      assert(address, "Should return an address");
       assert.strictEqual(
-        username,
+        address,
         testWallet.address.toLowerCase(),
-        "Username should be the lowercase Ethereum address"
+        "Address should be the lowercase Ethereum address"
       );
 
       const pubKey = walletManager.getPublicKey();
@@ -80,7 +80,7 @@ describe("EthereumManager Test Suite", function () {
   describe("Login", function () {
     it("should login with an existing account", async function () {
       // First create the account
-      const username = await ethereumManager.createAccountWithEthereum();
+      const address = await ethereumManager.createAccountWithEthereum();
       
       // Logout
       walletManager.logout();
@@ -114,12 +114,13 @@ describe("EthereumManager Test Suite", function () {
 
   describe("Gun Integration", function () {
     it("should persist account data to Gun", async function () {
-      const username = await ethereumManager.createAccountWithEthereum();
+      const address = await ethereumManager.createAccountWithEthereum();
+      const pubKey = walletManager.getPublicKey();
       
       // Wait for data to be saved to Gun
       const savedData = await waitForGunData(
         walletManager.gun,
-        `~@${username}`
+        `~${pubKey}`
       );
       
       assert(savedData, "Data should be saved to Gun");
@@ -127,11 +128,11 @@ describe("EthereumManager Test Suite", function () {
 
     it("should sync data between sessions", async function () {
       // First session: create account
-      const username = await ethereumManager.createAccountWithEthereum();
+      await ethereumManager.createAccountWithEthereum();
       const firstPubKey = walletManager.getPublicKey();
       
       // Wait for data to be saved
-      await waitForGunData(walletManager.gun, `~@${username}`);
+      await waitForGunData(walletManager.gun, `~${firstPubKey}`);
       
       // Simulate new session
       walletManager.logout();
@@ -164,15 +165,14 @@ describe("EthereumManager Test Suite", function () {
 
     it("should generate secure passwords from signature", async function () {
       // First create account to get generated password
-      await ethereumManager.createAccountWithEthereum();
-      
-      // Verify password is a 64-character hash (32 bytes)
-      const username = testWallet.address.toLowerCase();
+      const address = await ethereumManager.createAccountWithEthereum();
+      const pubKey = walletManager.getPublicKey();
       
       // Try to login with same signature
-      const pubKey = await ethereumManager.loginWithEthereum();
+      const loginPubKey = await ethereumManager.loginWithEthereum();
       
-      assert(pubKey, "Should accept password generated from signature");
+      assert(loginPubKey, "Should accept password generated from signature");
+      assert.strictEqual(loginPubKey, pubKey, "Public keys should match");
     });
   });
 });
