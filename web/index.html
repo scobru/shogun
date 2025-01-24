@@ -254,6 +254,97 @@
                 in CodeSandbox <img src="images/iconCodeSandbox.svg" /></a>
             </div>
           </div>
+
+          <!-- Nuova sezione tecnica -->
+          <div class="row technical-section">
+            <div class="ten columns offset-by-one">
+              <h4>Technical Features</h4>
+              <h2>Advanced Capabilities</h2>
+
+              <div class="feature-grid">
+                <div class="feature-card">
+                  <h3>🔐 Secure Key Management</h3>
+                  <pre><code>
+// Create wallet with entropy
+const { walletObj, entropy } = 
+  await WalletManager.createWalletObj(gunKeyPair);
+
+console.log(walletObj.address);
+console.log(walletObj.privateKey);
+                  </code></pre>
+                </div>
+
+                <div class="feature-card">
+                  <h3>💾 Cross-Platform Storage</h3>
+                  <pre><code>
+// Save wallet (multiple options)
+await manager.saveWallet(
+  walletObj, 
+  pubKey, 
+  StorageType.BOTH  // Gun + localStorage
+);
+                  </code></pre>
+                </div>
+
+                <div class="feature-card">
+                  <h3>🔄 Import/Export</h3>
+                  <pre><code>
+// Export all data
+const backup = await manager.exportAllData('username');
+
+// Import data
+await manager.importAllData(backup, 'username');
+                  </code></pre>
+                </div>
+
+                <div class="feature-card">
+                  <h3>🌐 Decentralized Storage</h3>
+                  <pre><code>
+// Initialize with Gun.js
+const manager = new WalletManager({
+  peers: ['http://localhost:8765/gun'],
+  localStorage: false,
+  radisk: false
+});
+                  </code></pre>
+                </div>
+              </div>
+
+              <div class="feature-list">
+                <h3>Key Features</h3>
+                <ul>
+                  <li>✨ Web Crypto API for browser-based cryptography</li>
+                  <li>🔒 Secure entropy-based wallet generation</li>
+                  <li>📱 Cross-device synchronization</li>
+                  <li>🔑 Stealth address support</li>
+                  <li>💼 Multiple storage options</li>
+                  <li>🔄 Complete data portability</li>
+                </ul>
+              </div>
+
+              <div class="compatibility">
+                <h3>Platform Support</h3>
+                <div class="platform-grid">
+                  <div class="platform">
+                    <h4>🌐 Browser</h4>
+                    <ul>
+                      <li>Web Crypto API</li>
+                      <li>localStorage</li>
+                      <li>Gun.js P2P</li>
+                    </ul>
+                  </div>
+                  <div class="platform">
+                    <h4>💻 Node.js</h4>
+                    <ul>
+                      <li>crypto module</li>
+                      <li>node-localstorage</li>
+                      <li>Gun.js P2P</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="footer">
@@ -330,6 +421,108 @@
   <script src="js/confetti.js"></script>
   <script src="js/parallax.js"></script>
   <script src="js/scroll.js"></script>
+
+  <style>
+    .technical-section {
+      padding: 4rem 0;
+      background: #f8f9fa;
+      border-radius: 12px;
+      margin: 4rem 0;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2rem;
+      margin: 3rem 0;
+    }
+
+    .feature-card {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .feature-card h3 {
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+      color: #6B46C1;
+    }
+
+    .feature-card pre {
+      background: #f1f1f1;
+      padding: 1rem;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+
+    .feature-card code {
+      font-family: 'Fira Code', monospace;
+      font-size: 0.9rem;
+    }
+
+    .feature-list {
+      margin: 3rem 0;
+      text-align: left;
+    }
+
+    .feature-list ul {
+      list-style: none;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+    }
+
+    .feature-list li {
+      padding: 0.5rem 0;
+      color: #4A5568;
+    }
+
+    .compatibility {
+      margin-top: 3rem;
+    }
+
+    .platform-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 2rem;
+      margin-top: 2rem;
+    }
+
+    .platform {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .platform h4 {
+      color: #6B46C1;
+      margin-bottom: 1rem;
+    }
+
+    .platform ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .platform li {
+      padding: 0.5rem 0;
+      color: #4A5568;
+    }
+
+    @media (max-width: 768px) {
+      .feature-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .platform-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 
 </body>
 
