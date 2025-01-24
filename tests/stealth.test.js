@@ -176,17 +176,11 @@ describe("StealthChain (using WalletManager's Gun instance)", function () {
     // Wait for Gun to sync data
     await sleep(2000);
 
+    const publicKey = gun.user()._.sea.pub
+
     // Retrieve keys with error handling
-    const retrievedKeys = await new Promise((resolve, reject) => {
-      stealthChain.retrieveStealthKeysFromUser((err, keys) => {
-        if (err) {
-          console.error("Error retrieving keys:", err);
-          return reject(err);
-        }
-        console.log("Keys retrieved:", keys);
-        resolve(keys);
-      });
-    });
+    const retrievedKeys = await stealthChain.retrieveStealthKeysFromUser(publicKey);
+
 
     // Verify retrieved keys
     assert(retrievedKeys, "No keys retrieved");

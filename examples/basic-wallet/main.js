@@ -17,6 +17,10 @@ const walletInfoDiv = document.getElementById("walletInfo");
 const addressSpan = document.getElementById("address");
 const entropySpan = document.getElementById("entropy");
 const walletListDiv = document.getElementById("walletList");
+const authBadge = document.querySelector('.auth-badge');
+const authTitle = document.querySelector('.auth-info h2');
+const authDescription = document.querySelector('.auth-info p');
+const accountInfoBox = document.getElementById('accountInfo');
 
 // Funzioni di utilità
 function showStatus(message, isError = false) {
@@ -34,13 +38,47 @@ function updateButtonStates(isLoggedIn) {
   importWalletBtn.disabled = !isLoggedIn;
 }
 
+// Funzione per copiare il testo negli appunti
+async function copyToClipboard(text) {
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch (err) {
+        console.error('Errore nella copia negli appunti:', err);
+        return false;
+    }
+}
+
+// Funzione per gestire il feedback visivo del pulsante di copia
+function showCopyFeedback(button) {
+    button.textContent = 'Copiato!';
+    button.classList.add('success');
+    setTimeout(() => {
+        button.textContent = 'Copia';
+        button.classList.remove('success');
+    }, 2000);
+}
+
+// Aggiungi event listener per tutti i pulsanti di copia
+document.addEventListener('click', async (e) => {
+    if (e.target.classList.contains('copy-btn')) {
+        const sourceId = e.target.dataset.copy;
+        const sourceElement = document.getElementById(sourceId);
+        if (sourceElement && sourceElement.textContent) {
+            const success = await copyToClipboard(sourceElement.textContent);
+            if (success) {
+                showCopyFeedback(e.target);
+            }
+        }
+    }
+});
+
 // Funzione per caricare e visualizzare i wallet disponibili
 async function loadAvailableWallets() {
   try {
     const publicKey = walletManager.getPublicKey();
     if (!publicKey) return;
 
-    // Recupera tutti i wallet dall'utente corrente
     const wallets = await new Promise((resolve) => {
       let walletsData = [];
       walletManager
@@ -59,7 +97,6 @@ async function loadAvailableWallets() {
           }
         });
 
-      // Aumentiamo il timeout per dare più tempo al caricamento
       setTimeout(() => resolve(walletsData), 2000);
     });
 
@@ -68,37 +105,31 @@ async function loadAvailableWallets() {
       return;
     }
 
-    // Ordina i wallet per timestamp, più recenti prima
     wallets.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
-    let walletHtml = '<h3>Wallet Disponibili</h3><div class="wallet-grid">';
-
-    // Itera attraverso i wallet
+    let walletHtml = '';
     wallets.forEach((wallet) => {
-      if (!wallet.address) return; // Skip se non c'è indirizzo
+      if (!wallet.address) return;
 
       walletHtml += `
                 <div class="wallet-item">
-                    <div class="wallet-info">
-                        <div class="wallet-label">Indirizzo:</div>
-                        <div class="wallet-address">${wallet.address}</div>
-                        <div class="wallet-label">Chiave Privata:</div>
-                        <div class="wallet-private-key">${
-                          wallet.privateKey
-                        }</div>
-                        <div class="wallet-label">Data:</div>
-                        <div class="wallet-timestamp">${new Date(
-                          wallet.timestamp
-                        ).toLocaleString()}</div>
+                    <div class="wallet-label">Indirizzo:</div>
+                    <div class="key-container">
+                        <div class="key-value">${wallet.address}</div>
+                        <button class="copy-btn" data-copy="wallet-${wallet.address}-address">Copia</button>
                     </div>
-                    <button onclick="window.loadWallet('${
-                      wallet.address
-                    }')" class="load-btn">Carica</button>
+                    <div class="wallet-label">Chiave Privata:</div>
+                    <div class="key-container">
+                        <div class="key-value">${wallet.privateKey}</div>
+                        <button class="copy-btn" data-copy="wallet-${wallet.address}-private">Copia</button>
+                    </div>
+                    <div class="wallet-label">Data:</div>
+                    <div class="wallet-timestamp">${new Date(wallet.timestamp).toLocaleString()}</div>
+                    <button onclick="window.loadWallet('${wallet.address}')" class="load-btn">Carica</button>
                 </div>
             `;
     });
 
-    walletHtml += "</div>";
     walletListDiv.innerHTML = walletHtml;
     walletListDiv.style.display = "block";
   } catch (error) {
@@ -116,7 +147,6 @@ async function loadWallet(address) {
       return;
     }
 
-    // Recupera il wallet specifico
     const wallet = await new Promise((resolve) => {
       walletManager
         .getGun()
@@ -128,26 +158,15 @@ async function loadWallet(address) {
         });
     });
 
+    await walletManager.saveWalletLocally({
+      wallet,
+      publicKey
+    })
+
     if (wallet && wallet.address) {
-      // Aggiorna il div delle informazioni del wallet
-      const walletInfoHtml = `
-                <h3>Wallet Attivo</h3>
-                <div class="wallet-details">
-                    <div class="detail-row">
-                        <span class="label">Indirizzo:</span>
-                        <span id="address">${wallet.address}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="label">Chiave Privata:</span>
-                        <span id="privateKey">${wallet.privateKey}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="label">Entropy:</span>
-                        <span id="entropy">${wallet.entropy}</span>
-                    </div>
-                </div>
-            `;
-      walletInfoDiv.innerHTML = walletInfoHtml;
+      document.getElementById('address').textContent = wallet.address;
+      document.getElementById('privateKey').textContent = wallet.privateKey;
+      document.getElementById('entropy').textContent = wallet.entropy || '';
       walletInfoDiv.style.display = "block";
       showStatus("Wallet caricato con successo!");
     } else {
@@ -158,23 +177,65 @@ async function loadWallet(address) {
   }
 }
 
+function updateAuthUI(isLoggedIn, publicKey = '') {
+    if (isLoggedIn) {
+        authBadge.textContent = 'AUTHENTICATED';
+        authBadge.style.background = '#059669';
+        authTitle.textContent = 'Signed In';
+        authDescription.textContent = 'You are authenticated and can manage your wallets.';
+        if (publicKey) {
+            document.getElementById('accountPublicKey').textContent = publicKey;
+            accountInfoBox.style.display = 'block';
+        }
+    } else {
+        authBadge.textContent = 'UNAUTHENTICATED';
+        authBadge.style.background = '#dc2626';
+        authTitle.textContent = 'Not Signed In';
+        authDescription.textContent = 'You are currently not authenticated. Create an account or login to get started.';
+        accountInfoBox.style.display = 'none';
+    }
+}
+
+// Funzione per contare i wallet esistenti
+async function countExistingWallets(publicKey) {
+    return new Promise((resolve) => {
+        let count = 0;
+        walletManager
+            .getGun()
+            .get("wallets")
+            .get(publicKey)
+            .map()
+            .once((data, key) => {
+                if (key !== "_" && data && data.address) {
+                    count++;
+                }
+            });
+
+        // Diamo tempo a Gun di recuperare tutti i wallet
+        setTimeout(() => resolve(count), 1000);
+    });
+}
+
 // Event Listeners
 createAccountBtn.addEventListener("click", async () => {
   const username = usernameInput.value.trim();
   const password = passwordInput.value;
 
   if (!username || !password) {
-    showStatus("Username e password sono richiesti", true);
+    showStatus("Username and password are required", true);
     return;
   }
 
   try {
     await walletManager.createAccount(username, password);
-    showStatus("Account creato con successo! Sei ora loggato.");
+    const publicKey = walletManager.getPublicKey();
+    showStatus("Account created successfully! You are now logged in.");
     updateButtonStates(true);
+    updateAuthUI(true, publicKey);
     await loadAvailableWallets();
   } catch (error) {
-    showStatus(`Errore nella creazione dell'account: ${error.message}`, true);
+    showStatus(`Error creating account: ${error.message}`, true);
+    updateAuthUI(false);
   }
 });
 
@@ -183,245 +244,259 @@ loginBtn.addEventListener("click", async () => {
   const password = passwordInput.value;
 
   if (!username || !password) {
-    showStatus("Username e password sono richiesti", true);
+    showStatus("Username and password are required", true);
     return;
   }
 
   try {
     const publicKey = await walletManager.login(username, password);
     if (publicKey) {
-      showStatus("Login effettuato con successo!");
+      showStatus("Login successful!");
       updateButtonStates(true);
+      updateAuthUI(true, publicKey);
       await loadAvailableWallets();
     } else {
-      showStatus("Login fallito: chiave pubblica non trovata", true);
+      showStatus("Login failed: public key not found", true);
+      updateAuthUI(false);
     }
   } catch (error) {
-    showStatus(`Errore nel login: ${error.message}`, true);
+    showStatus(`Login error: ${error.message}`, true);
+    updateAuthUI(false);
   }
 });
 
 logoutBtn.addEventListener("click", () => {
   walletManager.logout();
-  showStatus("Logout effettuato con successo");
   updateButtonStates(false);
+  updateAuthUI(false);
   walletInfoDiv.style.display = "none";
-  walletListDiv.style.display = "none";
+  walletListDiv.innerHTML = "";
+  showStatus("Logout successful!");
 });
 
 createWalletBtn.addEventListener("click", async () => {
-  try {
-    const gunKeyPair = walletManager.getCurrentUserKeyPair();
-    const publicKey = walletManager.getPublicKey();
+    try {
+        const gunKeyPair = walletManager.getCurrentUserKeyPair();
+        const publicKey = walletManager.getPublicKey();
 
-    if (!gunKeyPair || !publicKey) {
-      showStatus("Errore: Devi effettuare il login prima", true);
-      return;
-    }
+        if (!gunKeyPair || !publicKey) {
+            showStatus("Error: You must be logged in first", true);
+            return;
+        }
 
-    // Creiamo un nuovo wallet con entropy
-    const { walletObj, entropy } = await WalletManager.createWalletObj(
-      gunKeyPair
-    );
+        // Conta i wallet esistenti
+        const walletCount = await countExistingWallets(publicKey);
+        
+        // Crea il salt deterministico usando il conteggio dei wallet
+        const deterministicSalt = `${gunKeyPair.pub}_${walletCount}_${Date.now()}`;
+        
+        // Crea il wallet usando il salt deterministico
+        const wallet = await WalletManager.createWalletFromSalt(gunKeyPair, deterministicSalt);
 
-    // Mostra il wallet e chiedi conferma per il salvataggio
-    const walletInfoHtml = `
-            <h3>Wallet Attivo</h3>
+        if (!wallet || !wallet.address) {
+            throw new Error("Failed to create valid wallet");
+        }
+
+        const walletData = {
+            address: wallet.address,
+            privateKey: wallet.privateKey,
+            entropy: deterministicSalt
+        };
+
+        // Show wallet and ask for confirmation
+        const walletInfoHtml = `
+            <h3>Active Wallet</h3>
             <div class="wallet-details">
                 <div class="detail-row">
-                    <span class="label">Indirizzo:</span>
-                    <span id="address">${walletObj.address}</span>
+                    <span class="label">Address:</span>
+                    <span id="address">${walletData.address}</span>
                 </div>
                 <div class="detail-row">
-                    <span class="label">Chiave Privata:</span>
-                    <span id="privateKey">${walletObj.privateKey}</span>
+                    <span class="label">Private Key:</span>
+                    <span id="privateKey">${walletData.privateKey}</span>
                 </div>
                 <div class="detail-row">
                     <span class="label">Entropy:</span>
-                    <span id="entropy">${entropy}</span>
+                    <span id="entropy">${deterministicSalt}</span>
                 </div>
             </div>
             <div class="save-buttons" id="saveButtonsContainer">
-                <button id="saveWallet" class="btn btn-primary">Salva su Gun</button>
-                <button id="skipSave" class="btn btn-secondary">Non Salvare</button>
+                <button id="saveWallet" class="btn btn-primary">Save Wallet</button>
+                <button id="skipSave" class="btn btn-secondary">Skip Save</button>
             </div>
         `;
-    walletInfoDiv.innerHTML = walletInfoHtml;
-    walletInfoDiv.style.display = "block";
+        walletInfoDiv.innerHTML = walletInfoHtml;
+        walletInfoDiv.style.display = "block";
 
-    // Aggiungi event listener per il salvataggio
-    document
-      .getElementById("saveWallet")
-      .addEventListener("click", async () => {
-        try {
-          const saveButton = document.getElementById("saveWallet");
-          const skipButton = document.getElementById("skipSave");
+        document.getElementById("saveWallet").addEventListener("click", async () => {
+            try {
+                const saveButton = document.getElementById("saveWallet");
+                const skipButton = document.getElementById("skipSave");
 
-          // Disabilita i bottoni durante il salvataggio
-          saveButton.disabled = true;
-          skipButton.disabled = true;
-          saveButton.textContent = "Salvataggio in corso...";
+                saveButton.disabled = true;
+                skipButton.disabled = true;
+                saveButton.textContent = "Saving...";
 
-          await walletManager
-            .getGun()
-            .get("wallets")
-            .get(publicKey)
-            .get(walletObj.address)
-            .put(
-              {
-                address: walletObj.address,
-                privateKey: walletObj.privateKey,
-                entropy: entropy,
-                timestamp: Date.now(),
-              },
-              (ack) => {
-                console.log("ack", ack);
-              }
-            );
+                const walletData = {
+                    address: wallet.address,
+                    privateKey: wallet.privateKey,
+                    entropy: deterministicSalt,
+                    timestamp: Date.now()
+                };
 
-          // Salva anche su localStorage
-          await walletManager.saveWalletLocally(walletObj, publicKey);
+                await new Promise((resolve, reject) => {
+                    walletManager
+                        .getGun()
+                        .get("wallets")
+                        .get(publicKey)
+                        .get(wallet.address)
+                        .put(walletData, (ack) => {
+                            if (ack.err) reject(new Error(ack.err));
+                            else resolve();
+                        });
+                });
 
-          showStatus("Wallet salvato con successo!");
-          await loadAvailableWallets();
+                await walletManager.saveWalletLocally({
+                    address: wallet.address,
+                    privateKey: wallet.privateKey,
+                    entropy: deterministicSalt
+                }, publicKey);
 
-          // Rimuovi i bottoni di salvataggio
-          document.getElementById("saveButtonsContainer").remove();
-        } catch (error) {
-          showStatus(
-            `Errore nel salvataggio del wallet: ${error.message}`,
-            true
-          );
-          // Riabilita i bottoni in caso di errore
-          const saveButton = document.getElementById("saveWallet");
-          const skipButton = document.getElementById("skipSave");
-          if (saveButton) {
-            saveButton.disabled = false;
-            saveButton.textContent = "Salva su Gun";
-          }
-          if (skipButton) skipButton.disabled = false;
-        }
-      });
+                showStatus("Wallet saved successfully!");
+                await loadAvailableWallets();
 
-    // Aggiungi event listener per saltare il salvataggio
-    document.getElementById("skipSave").addEventListener("click", () => {
-      const saveButtonsContainer = document.getElementById(
-        "saveButtonsContainer"
-      );
-      if (saveButtonsContainer) {
-        saveButtonsContainer.remove();
-      }
-      showStatus("Wallet creato ma non salvato su Gun");
-    });
+                document.getElementById("saveButtonsContainer").remove();
+            } catch (error) {
+                showStatus(`Error saving wallet: ${error.message}`, true);
+                const saveButton = document.getElementById("saveWallet");
+                const skipButton = document.getElementById("skipSave");
+                if (saveButton) {
+                    saveButton.disabled = false;
+                    saveButton.textContent = "Save Wallet";
+                }
+                if (skipButton) skipButton.disabled = false;
+            }
+        });
 
-    showStatus("Wallet creato! Scegli se salvarlo su Gun");
-  } catch (error) {
-    showStatus(`Errore nella creazione del wallet: ${error.message}`, true);
-  }
+        document.getElementById("skipSave").addEventListener("click", () => {
+            document.getElementById("saveButtonsContainer").remove();
+            showStatus("Wallet not saved");
+        });
+    } catch (error) {
+        showStatus(`Error creating wallet: ${error.message}`, true);
+    }
 });
 
 exportWalletBtn.addEventListener("click", async () => {
   try {
     const publicKey = walletManager.getPublicKey();
     if (!publicKey) {
-      showStatus("Devi effettuare il login prima di esportare", true);
+      showStatus("Devi effettuare il login prima di esportare un wallet", true);
       return;
     }
 
-    const backup = await walletManager.exportAllData(publicKey);
-    const blob = new Blob([backup], { type: "application/json" });
+    // Esporta tutti i dati
+    const exportData = await walletManager.exportAllData(publicKey);
+    
+    // Crea un blob con i dati
+    const blob = new Blob([exportData], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
+    
+    // Crea un link per il download
+    const a = document.createElement('a');
     a.href = url;
-    a.download = `${publicKey}-wallet-backup.json`;
+    a.download = `wallet-backup-${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    
+    // Pulisci
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, 0);
 
-    showStatus("Backup wallet esportato con successo!");
+    showStatus("Wallet esportato con successo!");
+    
   } catch (error) {
     showStatus(`Errore nell'export del wallet: ${error.message}`, true);
   }
 });
 
 importWalletBtn.addEventListener("click", async () => {
-  try {
-    const publicKey = walletManager.getPublicKey();
-    if (!publicKey) {
-      showStatus("Devi effettuare il login prima di importare", true);
-      return;
-    }
-
-    const fileInput = document.createElement("input");
-    fileInput.type = "file";
-    fileInput.accept = ".json";
-
-    fileInput.onchange = async (e) => {
-      const file = e.target.files[0];
-      const reader = new FileReader();
-
-      reader.onload = async (event) => {
-        try {
-          const jsonData = event.target.result;
-          const importData = JSON.parse(jsonData);
-
-          // Verifica che il file contenga i dati del wallet
-          if (
-            !importData.wallet ||
-            !importData.wallet.address ||
-            !importData.wallet.privateKey
-          ) {
-            throw new Error("File di backup non valido");
-          }
-
-          // Salva su Gun
-          await new Promise((resolve, reject) => {
-            walletManager
-              .getGun()
-              .get("wallets")
-              .get(publicKey)
-              .get(importData.wallet.address)
-              .put(
-                {
-                  address: importData.wallet.address,
-                  privateKey: importData.wallet.privateKey,
-                  entropy: importData.wallet.entropy || null,
-                  timestamp: Date.now(),
-                },
-                (ack) => {
-                  if (ack.err) reject(new Error(ack.err));
-                  else resolve(true);
+    try {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.json';
+        
+        fileInput.onchange = async (e) => {
+            try {
+                const file = e.target.files[0];
+                if (!file) {
+                    showStatus("Nessun file selezionato", true);
+                    return;
                 }
-              );
-          });
 
-          // Salva in localStorage
-          await walletManager.saveWalletLocally(
-            {
-              address: importData.wallet.address,
-              privateKey: importData.wallet.privateKey,
-              entropy: importData.wallet.entropy || null,
-            },
-            publicKey
-          );
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const jsonData = event.target.result;
+                        
+                        // Parsing del JSON
+                        const backupData = JSON.parse(jsonData);
+                        
+                        // Verifica se il file contiene le chiavi Gun
+                        if (!backupData.gunPair || !backupData.gunPair.pub || !backupData.gunPair.priv) {
+                            showStatus("File di backup non valido: chiavi Gun mancanti", true);
+                            return;
+                        }
 
-          showStatus("Wallet importato con successo!");
-          await loadAvailableWallets();
-        } catch (error) {
-          console.error("Errore durante l'importazione:", error);
-          showStatus(`Errore nell'import del wallet: ${error.message}`, true);
-        }
-      };
+                        try {
+                            // Prima importa le chiavi Gun e autentica
+                            const publicKey = await walletManager.importGunKeyPair(JSON.stringify(backupData.gunPair));
+                            
+                            // Aggiorna l'UI per riflettere il login
+                            updateButtonStates(true);
+                            updateAuthUI(true, publicKey);
+                            
+                            // Se ci sono anche dati del wallet, importali e mostrali
+                            if (backupData.wallet && backupData.wallet.address && backupData.wallet.privateKey) {
+                                await walletManager.importAllData(jsonData, publicKey);
+                                
+                                // Aggiorna il wallet attivo
+                                document.getElementById('address').textContent = backupData.wallet.address;
+                                document.getElementById('privateKey').textContent = backupData.wallet.privateKey;
+                                document.getElementById('entropy').textContent = backupData.wallet.entropy || '';
+                                walletInfoDiv.style.display = "block";
+                            }
+                            
+                            showStatus("Wallet importato con successo!");
+                            await loadAvailableWallets();
+                            
+                        } catch (authError) {
+                            showStatus(`Errore nell'autenticazione con le chiavi importate: ${authError.message}`, true);
+                        }
+                        
+                    } catch (parseError) {
+                        showStatus(`Errore nel parsing del file: ${parseError.message}`, true);
+                    }
+                };
 
-      reader.readAsText(file);
-    };
+                reader.onerror = () => {
+                    showStatus("Errore nella lettura del file", true);
+                };
 
-    fileInput.click();
-  } catch (error) {
-    showStatus(`Errore nell'import del wallet: ${error.message}`, true);
-  }
+                reader.readAsText(file);
+                
+            } catch (fileError) {
+                showStatus(`Errore nella gestione del file: ${fileError.message}`, true);
+            }
+        };
+
+        fileInput.click();
+        
+    } catch (error) {
+        showStatus(`Errore nell'import del wallet: ${error.message}`, true);
+    }
 });
 
 // Esponi la funzione loadWallet globalmente per i bottoni dinamici

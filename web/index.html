@@ -46,15 +46,15 @@
 <body>
   <!-- <div class="gradient"></div> -->
   <div class="fade"></div>
-  <!-- <div class="heroVideo">
+  <div class="heroVideo">
     <div class="videoContainer">
-      <video poster="/static/hero-a5ecfb8728d031c80ce34b2fc11db507.jpg" playsinline="" loop="" muted="" autoplay=""
+      <video poster="/static/hero-a5ecfb8728d031c80ce34b2fc11db507.jpg" playsinline loop muted preload="none" autoplay="false"
         poster="images/heroVideo.jpg">
         <source src="videos/heroVideo.mp4" type="video/mp4">
         <img src="images/heroVideo.jpg" />
       </video>
     </div>
-  </div> -->
+  </div>
   <div class="main">
     <div id="parallax">
       <div class="blob">
@@ -130,7 +130,9 @@
             </p>
           </div>
         </div>
+        
       </div>
+     
     </div>
 
     <div class="testimonial">
@@ -248,15 +250,16 @@
                   stored anywhere besides the user's browser.</b></p>
             </div>
             <div class="twelve columns codesandbox">
-              <iframe src="https://pp9zzv2n00.codesandbox.io/" frameborder="0" scrolling="no">
+              <iframe src="https://nhzwjp-5173.csb.app" frameborder="0" scrolling="no">
               </iframe>
-              <a href="https://codesandbox.io/s/pp9zzv2n00?fontsize=14" target="_blank" class="button codesandbox">Open
+              <a href="https://codesandbox.io/p/devbox/shogun-basic-example-nhzwjp?embed=1" target="_blank" class="button codesandbox">Open
                 in CodeSandbox <img src="images/iconCodeSandbox.svg" /></a>
             </div>
           </div>
+          
 
           <!-- Nuova sezione tecnica -->
-          <div class="row technical-section">
+          <!-- <div class="row technical-section">
             <div class="ten columns offset-by-one">
               <div class="section-header">
                 <span class="badge">Tech Stack</span>
@@ -413,7 +416,7 @@ const manager = new WalletManager({
                 </div>
               </div>
             </div>
-          </div>
+          </div> -->
         </div>
       </div>
       <div class="footer">
@@ -558,41 +561,50 @@ const manager = new WalletManager({
     }
 
     .code-block {
-      background: #1a1a1a;
+      background: #1E1E1E;
       border-radius: 8px;
-      overflow: hidden;
+      margin: 1rem 0;
     }
 
+    .code-block pre {
+      margin: 0;
+      padding: 1.5rem;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Fira Code', Consolas, Monaco, 'Andale Mono', monospace;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #E0E0E0;
+    }
+
+    .code-block .keyword { color: #569CD6; }
+    .code-block .string { color: #CE9178; }
+    .code-block .comment { color: #6A9955; }
+    .code-block .function { color: #DCDCAA; }
+    .code-block .number { color: #B5CEA8; }
+    
     .code-header {
-      background: #2d2d2d;
-      padding: 0.75rem 1rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      background: #252526;
+      border-bottom: 1px solid #333;
     }
 
     .lang-badge {
-      background: #6B46C1;
-      color: white;
-      padding: 0.25rem 0.75rem;
-      border-radius: 4px;
-      font-size: 0.8rem;
+      background: #4B4B4B;
+      color: #E0E0E0;
     }
 
     .copy-btn {
-      background: transparent;
-      border: 1px solid #666;
-      color: #fff;
-      padding: 0.25rem 0.75rem;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 0.8rem;
-      transition: all 0.2s ease;
+      background: #0E639C;
+      border: none;
+      color: white;
+      opacity: 0.9;
     }
 
     .copy-btn:hover {
-      background: #6B46C1;
-      border-color: #6B46C1;
+      opacity: 1;
+      background: #1177BB;
     }
 
     .feature-card pre {
@@ -727,7 +739,34 @@ const manager = new WalletManager({
         padding: 1.5rem;
       }
     }
+
+    .heroVideo video {
+      object-fit: cover;
+      width: 100%;
+      height: 100%;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: -1;
+    }
   </style>
+
+  <script>
+    // Previeni refresh automatico
+    window.onbeforeunload = function() {
+      return "I dati potrebbero andare persi. Sei sicuro di voler ricaricare?";
+    };
+
+    // Gestisci il video
+    document.addEventListener('DOMContentLoaded', function() {
+      const video = document.querySelector('.heroVideo video');
+      if (video) {
+
+        video.pause();
+        video.load();
+      }
+    });
+  </script>
 
 </body>
 

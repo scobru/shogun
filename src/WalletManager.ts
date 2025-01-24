@@ -5,11 +5,7 @@
 
 import Gun from "gun";
 import "gun/sea";
-import "gun/lib/webrtc"; // Enables WebRTC in GunDB
-import "gun/lib/radisk";
-import "gun/lib/axe";
 import { Wallet } from "ethers";
-
 import { EthereumManager } from "./EthereumManager";
 import { StealthChain } from "./StealthChain";
 import type { GunKeyPair } from "./interfaces/GunKeyPair";
@@ -139,25 +135,12 @@ export class WalletManager {
         "https://ruling-mastodon-improved.ngrok-free.app/gun",
         "https://gun-relay.scobrudot.dev/gun",
       ],
-      axe: true,
-      localStorage: true,
-      radisk: true,
+      localStorage: false,
+      radisk:false
     });
     this.user = this.gun.user();
     this.ethereumManager = new EthereumManager(this);
     this.stealthChain = new StealthChain(this.gun);
-
-    this.setupGunListeners();
-  }
-
-  private setupGunListeners(): void {
-    this.gun.on("rtc:peer", (peer: any) =>
-      console.log("New peer connected:", peer)
-    );
-    this.gun.on("rtc:data", (msg: any) =>
-      console.log("Data received via WebRTC:", msg)
-    );
-    console.log("AXE relay enabled!");
   }
 
   /**
@@ -635,9 +618,7 @@ export class WalletManager {
     }
 
     const wallet = await LocalStorageManager.retrieveWallet(publicKey);
-    const stealthKeys = await this.stealthChain
-      .retrieveStealthKeysLocally(publicKey)
-      .catch(() => null);
+    const stealthKeys = await this.stealthChain.retrieveStealthKeysLocally(publicKey);
 
     const exportData = {
       wallet: wallet
@@ -869,5 +850,26 @@ export class WalletManager {
 
     const gunWallets = await this.retrieveWallets(publicKey);
     return gunWallets[0] || null;
+  }
+
+  /**
+   * Deletes a specific wallet from Gun and localStorage
+   * @param {string} publicKey - User's Gun public key
+   * @param {string} walletAddress - Address of the wallet to delete
+   * @returns {Promise<void>}
+   */
+  public async deleteWallet(publicKey: string, walletAddress: string): Promise<void> {
+    // Rimuovi da Gun senza controlli
+    this.gun
+      .get("wallets")
+      .get(publicKey)
+      .get(walletAddress)
+      .put(null);
+
+    // Rimuovi da localStorage senza verifiche
+    const storage = getLocalStorage();
+    storage.removeItem(`wallet_${publicKey}`);
+    
+    return Promise.resolve();
   }
 }

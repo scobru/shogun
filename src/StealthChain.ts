@@ -1,4 +1,4 @@
- import { ethers } from "ethers";
+import { ethers } from "ethers";
 import Gun from "gun";
 import "gun/sea";
 
@@ -292,32 +292,51 @@ export class StealthChain {
   }
 
   /**
-   * Retrieves stealth keys from logged in user session
+   * Retrieves stealth keys for a specific user
    */
-  public retrieveStealthKeysFromUser(cb: Callback<StealthKeyPair>): void {
-    const user = this.gun.user();
-    if (!user?.is) {
-      return cb(new Error("User not authenticated or missing user"));
+  public async retrieveStealthKeysFromUser(publicKey: string): Promise<StealthKeyPair | null> {
+    if (!publicKey) {
+      throw new Error("Invalid public key: missing parameter");
     }
 
-    const node = user.get("stealthKeys");
-    
-    // Retrieve all fields separately
-    node.once((data: any) => {
-      console.log("Retrieved data:", data);
-      
-      if (!data?.pub || !data?.priv || !data?.epub || !data?.epriv) {
-        return cb(new Error("Stealth keys not found or incomplete"));
-      }
+    const formattedPubKey = this.formatPublicKey(publicKey);
+    console.log("Retrieving stealth keys for:", formattedPubKey);
 
-      const stealthKeyPair: StealthKeyPair = {
-        pub: data.pub,
-        priv: data.priv,
-        epub: data.epub,
-        epriv: data.epriv
-      };
+    return new Promise((resolve, reject) => {
+      let hasResolved = false;
+      const timeout = setTimeout(() => {
+        if (!hasResolved) {
+          console.error("Timeout retrieving stealth keys");
+          hasResolved = true;
+          resolve(null);
+        }
+      }, 10000);
 
-      cb(undefined, stealthKeyPair);
+      this.gun.user(formattedPubKey).get("stealthKeys").once((data: any) => {
+        clearTimeout(timeout);
+        if (hasResolved) return;
+        hasResolved = true;
+
+        console.log("Retrieved stealth keys data:", data);
+        
+        if (!data) {
+          console.log("No stealth keys found");
+          return resolve(null);
+        }
+
+        const keys = data.stealthKeyPair || data;
+        if (!keys?.pub || !keys?.priv || !keys?.epub || !keys?.epriv) {
+          console.error("Invalid stealth keys format:", keys);
+          return resolve(null);
+        }
+
+        resolve({
+          pub: keys.pub,
+          priv: keys.priv,
+          epub: keys.epub,
+          epriv: keys.epriv
+        });
+      });
     });
   }
 

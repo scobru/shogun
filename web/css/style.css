@@ -761,17 +761,20 @@ a:hover {
 .codesandbox iframe {
   width: 100%;
   min-height: 500px;
+  overflow: scroll;
 }
 
 @media only screen and (max-width: 1384px) {
   .codesandbox iframe {
     min-height: 740px;
+    overflow: scroll;
   }
 }
 
 @media only screen and (max-width: 600px) {
   .codesandbox iframe {
     min-height: 820px;
+    overflow: scroll;
   }
 }
 
