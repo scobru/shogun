@@ -1,178 +1,321 @@
 <!DOCTYPE html>
 <html lang="it">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shogun Basic Wallet Demo</title>
     <style>
+        :root {
+            --primary: #6B46C1;
+            --primary-hover: #553C9A;
+            --dark: #2D3748;
+            --text: #4A5568;
+            --light: #FFFFFF;
+            --spacing-sm: 0.5rem;
+            --spacing-md: 1rem;
+            --spacing-lg: 2rem;
+        }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            max-width: 800px;
+            max-width: 1000px;
             margin: 0 auto;
             padding: 20px;
             background: #f5f5f5;
+            color: var(--text);
+            line-height: 1.6;
         }
+
         .container {
             background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: var(--spacing-lg);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-        .form-group {
-            margin-bottom: 20px;
+
+        /* Wallet Management */
+        .wallet-management {
+            padding: var(--spacing-lg);
+            background: #fff;
+            border-radius: 12px;
+            margin-top: var(--spacing-lg);
         }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            color: #333;
+
+        .wallet-management h2 {
+            color: var(--dark);
+            margin-bottom: var(--spacing-md);
+            font-size: 1.5rem;
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 0.5rem;
         }
-        input {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            margin-bottom: 10px;
+
+        /* Action Buttons */
+        .wallet-actions-group {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: var(--spacing-lg);
+            flex-wrap: wrap;
         }
-        button {
-            background: #6B46C1;
+
+        .action-button {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            background: var(--primary);
             color: white;
             border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
+            font-weight: 600;
             cursor: pointer;
-            margin-right: 10px;
-            margin-bottom: 10px;
-            transition: background 0.3s ease;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
         }
-        button:hover {
-            background: #553C9A;
+
+        .action-button:hover {
+            background: var(--primary-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-        button:disabled {
-            background: #ccc;
+
+        .action-button:disabled {
+            opacity: 0.6;
             cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
+
+        /* Form Styles */
+        .form-group {
+            margin-bottom: var(--spacing-md);
+        }
+
+        label {
+            display: block;
+            margin-bottom: var(--spacing-sm);
+            color: var(--dark);
+            font-weight: 500;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            margin-bottom: var(--spacing-sm);
+            transition: border-color 0.2s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(107, 70, 193, 0.1);
+        }
+
+        /* Status Messages */
         .status {
-            padding: 15px;
-            border-radius: 4px;
-            margin: 20px 0;
+            padding: var(--spacing-md);
+            border-radius: 8px;
+            margin: var(--spacing-md) 0;
             display: none;
         }
+
         .success {
             background: #C6F6D5;
             color: #2F855A;
         }
+
         .error {
             background: #FED7D7;
             color: #C53030;
         }
-        .wallet-info {
-            background: #EBF4FF;
-            padding: 20px;
-            border-radius: 4px;
-            margin-top: 20px;
+
+        /* Wallet Info */
+        .wallet-active {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: var(--spacing-md);
+            margin: var(--spacing-md) 0;
             display: none;
         }
-        .wallet-info h3 {
-            margin-top: 0;
-            color: #2B6CB0;
+
+        .wallet-field {
+            margin-bottom: var(--spacing-md);
         }
-        .info-row {
-            margin: 10px 0;
-        }
-        .info-row span {
-            word-break: break-all;
-            font-family: monospace;
-        }
-        .button-group {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin: 20px 0;
-        }
-        .wallet-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-        .wallet-item {
-            background: #f8f9fa;
-            padding: 1rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .wallet-address {
-            font-family: monospace;
-            word-break: break-all;
-            margin-bottom: 0.5rem;
+
+        .wallet-label {
+            display: block;
+            color: var(--dark);
+            font-weight: 600;
+            margin-bottom: var(--spacing-sm);
             font-size: 0.9rem;
         }
-        .section {
-            margin-bottom: 2rem;
-            padding: 1.5rem;
+
+        .wallet-value {
+            background: white;
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            word-break: break-all;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        /* Storage Status */
+        .storage-status {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-top: var(--spacing-sm);
+            padding: 0.75rem;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-dot.saving {
+            background: #FFC107;
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-dot.saved {
+            background: #4CAF50;
+        }
+
+        .status-dot.error {
+            background: #f44336;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        /* Wallet List */
+        .wallet-list {
+            display: grid;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-md);
+        }
+
+        .wallet-item {
             background: #f8f9fa;
             border-radius: 8px;
+            padding: var(--spacing-md);
+            transition: all 0.2s ease;
         }
-        .section h2 {
-            margin-top: 0;
-            color: #2D3748;
-            border-bottom: 2px solid #6B46C1;
-            padding-bottom: 0.5rem;
+
+        .wallet-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: var(--spacing-lg);
+            color: var(--text);
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>Shogun Basic Wallet Demo</h1>
-        
-        <div class="section">
+
+        <!-- Autenticazione -->
+        <div class="wallet-management">
             <h2>Autenticazione</h2>
             <div class="form-group">
                 <label for="username">Username:</label>
                 <input type="text" id="username" placeholder="Inserisci username">
-                
+
                 <label for="password">Password:</label>
                 <input type="password" id="password" placeholder="Inserisci password">
             </div>
 
-            <div class="button-group">
-                <button id="createAccount">Crea Account</button>
-                <button id="login">Login</button>
-                <button id="logout" disabled>Logout</button>
+            <div class="wallet-actions-group">
+                <button class="action-button" id="createAccount">Crea Account</button>
+                <button class="action-button" id="login">Login</button>
+                <button class="action-button" id="logout" disabled>Logout</button>
             </div>
         </div>
 
         <div id="status" class="status"></div>
 
-        <div class="section">
+        <!-- Gestione Wallet -->
+        <div class="wallet-management">
             <h2>Gestione Wallet</h2>
-            <div class="button-group">
-                <button id="createWallet" disabled>Crea Nuovo Wallet</button>
-                <button id="exportWallet" disabled>Esporta Wallet</button>
-                <button id="importWallet" disabled>Importa Wallet</button>
+            <div class="wallet-actions-group">
+                <button class="action-button" id="createWallet" disabled>Crea Nuovo Wallet</button>
+                <button class="action-button" id="exportWallet" disabled>Esporta Wallet</button>
+                <button class="action-button" id="importWallet" disabled>Importa Wallet</button>
             </div>
 
-            <div id="walletInfo" class="wallet-info">
+            <!-- Wallet Attivo -->
+            <div id="walletInfo" class="wallet-active">
                 <h3>Wallet Attivo</h3>
-                <div class="info-row">
-                    <strong>Indirizzo:</strong><br>
-                    <span id="address">-</span>
+                <div class="wallet-field">
+                    <span class="wallet-label">Indirizzo:</span>
+                    <div class="wallet-value" id="address">-</div>
                 </div>
-                <div class="info-row">
-                    <strong>Entropy:</strong><br>
-                    <span id="entropy">-</span>
+                <div class="wallet-field">
+                    <span class="wallet-label">Chiave Privata:</span>
+                    <div class="wallet-value" id="privateKey">-</div>
+                </div>
+                <div class="wallet-field">
+                    <span class="wallet-label">Entropy:</span>
+                    <div class="wallet-value" id="entropy">-</div>
+                </div>
+
+                <!-- Storage Status -->
+                <div class="storage-status">
+                    <div class="status-indicator">
+                        <span class="status-dot" id="gunStatus"></span>
+                        Gun DB
+                    </div>
+                    <div class="status-indicator">
+                        <span class="status-dot" id="localStatus"></span>
+                        LocalStorage
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="section">
+        <!-- Wallet Disponibili -->
+        <div class="wallet-management">
             <h2>Wallet Disponibili</h2>
-            <div id="walletList">
-                <!-- La lista dei wallet verrà inserita qui dinamicamente -->
+            <div id="walletList" class="wallet-list">
+                <div class="empty-state">
+                    <p>Nessun wallet trovato</p>
+                </div>
             </div>
         </div>
     </div>
 
     <script type="module" src="/main.js"></script>
 </body>
-</html> 
+
+</html>

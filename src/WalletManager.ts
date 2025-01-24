@@ -140,8 +140,8 @@ export class WalletManager {
         "https://gun-relay.scobrudot.dev/gun",
       ],
       axe: true,
-      localStorage:false,
-      radisk:false
+      localStorage: true,
+      radisk: true,
     });
     this.user = this.gun.user();
     this.ethereumManager = new EthereumManager(this);
@@ -548,7 +548,9 @@ export class WalletManager {
    * @param {string} publicKey - User's Gun public key
    * @returns {Promise<Wallet | null>} Retrieved wallet or null if not found
    */
-  public async retrieveWalletLocally(publicKey: string): Promise<Wallet | null> {
+  public async retrieveWalletLocally(
+    publicKey: string
+  ): Promise<Wallet | null> {
     return LocalStorageManager.retrieveWallet(publicKey);
   }
 
@@ -660,7 +662,10 @@ export class WalletManager {
    * @param {string} publicKey - User's Gun public key
    * @returns {Promise<void>}
    */
-  public async importAllData(jsonData: string, publicKey: string): Promise<void> {
+  public async importAllData(
+    jsonData: string,
+    publicKey: string
+  ): Promise<void> {
     try {
       const importData = JSON.parse(jsonData);
 
@@ -835,7 +840,10 @@ export class WalletManager {
   /**
    * Save wallet locally using only Gun
    */
-  public async saveWalletLocally(wallet: Wallet, publicKey: string): Promise<void> {
+  public async saveWalletLocally(
+    wallet: Wallet,
+    publicKey: string
+  ): Promise<void> {
     await LocalStorageManager.saveWallet(wallet, publicKey);
   }
 
