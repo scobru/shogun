@@ -568,17 +568,7 @@ export class WalletManager {
    * @returns {Promise<Wallet | null>} Retrieved wallet or null if not found
    */
   public async retrieveWalletLocally(alias: string): Promise<Wallet | null> {
-    const walletData = localStorage.getItem(`wallet_${alias}`);
-    if (!walletData) {
-      return null;
-    }
-    try {
-      const parsed = JSON.parse(walletData);
-      return new Wallet(parsed.publicKey, parsed.entropy);
-    } catch (error) {
-      console.error("Error retrieving local wallet:", error);
-      return null;
-    }
+    return LocalStorageManager.retrieveWallet(alias);
   }
 
   /**

@@ -29,7 +29,12 @@ describe("WalletManager Data Management", function() {
     
     // Create a test wallet using ethers
     testWallet = Wallet.createRandom();
-    testWallet.entropy = "testEntropy";
+    Object.defineProperty(testWallet, 'entropy', {
+      value: "testEntropy",
+      writable: true,
+      enumerable: true,
+      configurable: true
+    });
   });
 
   afterEach(function() {
@@ -44,6 +49,7 @@ describe("WalletManager Data Management", function() {
       
       assert(retrieved, "Wallet should be retrieved");
       assert.strictEqual(retrieved.address, testWallet.address);
+      assert.strictEqual(retrieved.privateKey, testWallet.privateKey);
       assert.strictEqual(retrieved.entropy, testWallet.entropy);
     });
 
