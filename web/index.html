@@ -67,19 +67,19 @@
     <div class="container">
       <div id="header" class="header">
         <div class="content">
-          <img src="images/hedgehogLogoHorizontal.svg" />
+          <img src="images/shogunLogoHorizontal.svg" />
           <div class="links">
-            <a href="https://audiusproject.github.io/hedgehog-docs" target="_blank">Docs</a>
-            <a class="mobile-hide" href="https://github.com/AudiusProject/hedgehog" target="_blank">Github</a>
+            <a href="https://github.com/scobru/shogun/blob/main/API.md" target="_blank">Docs</a>
+            <a class="mobile-hide" href="https://github.com/scobru/shogun" target="_blank">Github</a>
           </div>
         </div>
       </div>
       <div id="stickyHeader" class="header">
         <div class="content">
-          <!-- <img src="images/hedgehogLogoHorizontal.svg" /> -->
+          <!-- <img src="images/shogunLogoHorizontal.svg" /> -->
           <div class="links">
-            <a href="https://audiusproject.github.io/hedgehog-docs" target="_blank">Docs</a>
-            <a class="mobile-hide" href="https://github.com/AudiusProject/hedgehog" target="_blank">Github</a>
+            <a href="https://github.com/scobru/shogun/blob/main/API.md" target="_blank">Docs</a>
+            <a class="mobile-hide" href="https://github.com/scobru/shogun" target="_blank">Github</a>
           </div>
         </div>
       </div>
@@ -95,7 +95,7 @@
             without centralizing control of keys. Built with TypeScript and powered by Gun.js for decentralized data storage.
             Features include stealth addresses, encrypted key management, and seamless Web3 integration.
           </p>
-          <a href="https://github.com/AudiusProject/hedgehog" target="_blank" class='button'>View on Github <img
+          <a href="https://github.com/scobru/shogun" target="_blank" class='button'>View on Github <img
               src="images/iconGithub.svg" /></a>
         </div>
       </div>
@@ -257,166 +257,6 @@
             </div>
           </div>
           
-
-          <!-- Nuova sezione tecnica -->
-          <!-- <div class="row technical-section">
-            <div class="ten columns offset-by-one">
-              <div class="section-header">
-                <span class="badge">Tech Stack</span>
-                <h2>Funzionalità Avanzate</h2>
-                <p class="section-description">Esplora le potenti capacità di Shogun per la gestione sicura dei wallet</p>
-              </div>
-
-              <div class="feature-grid">
-                <div class="feature-card">
-                  <div class="card-header">
-                    <span class="icon">🔐</span>
-                    <h3>Gestione Sicura delle Chiavi</h3>
-                  </div>
-                  <p class="card-description">Genera e gestisci wallet in modo sicuro usando entropy e crittografia avanzata</p>
-                  <div class="code-block">
-                    <div class="code-header">
-                      <span class="lang-badge">TypeScript</span>
-                      <button class="copy-btn">Copy</button>
-                    </div>
-                    <pre><code>
-// Create wallet with entropy
-const { walletObj, entropy } = 
-  await WalletManager.createWalletObj(gunKeyPair);
-
-console.log(walletObj.address);
-console.log(walletObj.privateKey);</code></pre>
-                  </div>
-                </div>
-
-                <div class="feature-card">
-                  <div class="card-header">
-                    <span class="icon">💾</span>
-                    <h3>Storage Multi-Piattaforma</h3>
-                  </div>
-                  <p class="card-description">Salva e sincronizza i wallet su diverse piattaforme in modo sicuro</p>
-                  <div class="code-block">
-                    <div class="code-header">
-                      <span class="lang-badge">TypeScript</span>
-                      <button class="copy-btn">Copy</button>
-                    </div>
-                    <pre><code>
-// Save wallet (multiple options)
-await manager.saveWallet(
-  walletObj, 
-  pubKey, 
-  StorageType.BOTH  // Gun + localStorage
-);</code></pre>
-                  </div>
-                </div>
-
-                <div class="feature-card">
-                  <div class="card-header">
-                    <span class="icon">🔄</span>
-                    <h3>Import/Export</h3>
-                  </div>
-                  <p class="card-description">Porta i tuoi wallet ovunque con funzionalità complete di import/export</p>
-                  <div class="code-block">
-                    <div class="code-header">
-                      <span class="lang-badge">TypeScript</span>
-                      <button class="copy-btn">Copy</button>
-                    </div>
-                    <pre><code>
-// Export all data
-const backup = await manager.exportAllData('username');
-
-// Import data
-await manager.importAllData(backup, 'username');</code></pre>
-                  </div>
-                </div>
-
-                <div class="feature-card">
-                  <div class="card-header">
-                    <span class="icon">🌐</span>
-                    <h3>Storage Decentralizzato</h3>
-                  </div>
-                  <p class="card-description">Utilizza Gun.js per uno storage completamente decentralizzato e P2P</p>
-                  <div class="code-block">
-                    <div class="code-header">
-                      <span class="lang-badge">TypeScript</span>
-                      <button class="copy-btn">Copy</button>
-                    </div>
-                    <pre><code>
-// Initialize with Gun.js
-const manager = new WalletManager({
-  peers: ['http://localhost:8765/gun'],
-  localStorage: false,
-  radisk: false
-});</code></pre>
-                  </div>
-                </div>
-              </div>
-
-              <div class="features-overview">
-                <div class="overview-header">
-                  <h3>Caratteristiche Principali</h3>
-                  <p>Un toolkit completo per la gestione sicura dei wallet</p>
-                </div>
-                <div class="features-grid">
-                  <div class="feature-item">
-                    <span class="feature-icon">✨</span>
-                    <div class="feature-text">
-                      <h4>Web Crypto API</h4>
-                      <p>Crittografia nativa nel browser</p>
-                    </div>
-                  </div>
-                  <div class="feature-item">
-                    <span class="feature-icon">🔒</span>
-                    <div class="feature-text">
-                      <h4>Entropy Sicura</h4>
-                      <p>Generazione wallet basata su entropy</p>
-                    </div>
-                  </div>
-                  <div class="feature-item">
-                    <span class="feature-icon">📱</span>
-                    <div class="feature-text">
-                      <h4>Multi-Device</h4>
-                      <p>Sincronizzazione tra dispositivi</p>
-                    </div>
-                  </div>
-                  <div class="feature-item">
-                    <span class="feature-icon">🔑</span>
-                    <div class="feature-text">
-                      <h4>Stealth Address</h4>
-                      <p>Supporto per indirizzi stealth</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="platform-support">
-                <div class="support-header">
-                  <h3>Compatibilità</h3>
-                  <p>Sviluppato per funzionare ovunque</p>
-                </div>
-                <div class="platform-grid">
-                  <div class="platform-card">
-                    <div class="platform-icon">🌐</div>
-                    <h4>Browser</h4>
-                    <ul>
-                      <li><span class="check">✓</span> Web Crypto API</li>
-                      <li><span class="check">✓</span> localStorage</li>
-                      <li><span class="check">✓</span> Gun.js P2P</li>
-                    </ul>
-                  </div>
-                  <div class="platform-card">
-                    <div class="platform-icon">💻</div>
-                    <h4>Node.js</h4>
-                    <ul>
-                      <li><span class="check">✓</span> crypto module</li>
-                      <li><span class="check">✓</span> node-localstorage</li>
-                      <li><span class="check">✓</span> Gun.js P2P</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div> -->
         </div>
       </div>
       <div class="footer">
@@ -424,10 +264,10 @@ const manager = new WalletManager({
         <div class="container">
           <div class="row">
             <div class="eight columns offset-by-two">
-              <img class="hedgehog-logo" src="images/hedgehogLogoHorizontalWhite.svg" />
+              <img class="hedgehog-logo" src="images/shogunLogoHorizontalWhite.svg" />
               <h1>Build DApps For The Other 99%</h1>
               <div class="button-wrapper">
-                <a href="https://github.com/AudiusProject/hedgehog" target="_blank" class='button'>View on GitHub <img
+                <a href="https://github.com/scobru/shogun" target="_blank" class='button'>View on GitHub <img
                     src="images/iconGithubPurple.svg" /></a>
               </div>
             </div>
@@ -451,12 +291,8 @@ const manager = new WalletManager({
             </div>
             <div class="four columns">
               <div class="social">
-                <a class='social-button' href="https://www.facebook.com/AudiusProject" target="_blank"><img
-                    src="images/iconFacebook.svg" /></a>
-                <a class='social-button' href="https://twitter.com/audius" target="_blank"><img
-                    src="images/iconTwitter.svg" /></a>
-                <a class='social-button' href="https://instagram.com/audius" target="_blank"><img
-                    src="images/iconInstagram.svg" /></a>
+                <a class='social-button' href="https://t.me/plancia_org" target="_blank"><img
+                    src="images/telegram-icon.webp" /></a>
               </div>
             </div>
           </div>
@@ -466,12 +302,8 @@ const manager = new WalletManager({
               <canvas class="confetti"></canvas>
             </div>
             <div class="social">
-              <a class='social-button' href="https://www.facebook.com/AudiusProject" target="_blank"><img
-                  src="images/iconFacebook.svg" /></a>
-              <a class='social-button' href="https://twitter.com/audius" target="_blank"><img
-                  src="images/iconTwitter.svg" /></a>
-              <a class='social-button' href="https://instagram.com/audius" target="_blank"><img
-                  src="images/iconInstagram.svg" /></a>
+              <a class='social-button' href="https://t.me/plancia_org" target="_blank"><img
+                  src="images/telegram-icon.webp" /></a>
             </div>
           </div>
           <div class="mobile-show row bottom">
