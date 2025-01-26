@@ -1,117 +1,173 @@
 # SHOGUN API Reference
 
-## 🔐 WalletManager
+## 👛 WalletManager
 
-### Costruttore
+### Constructor
 
 ```typescript
-constructor()
+constructor(options?: {
+  peers?: string[],          // Custom Gun peers
+  localStorage?: boolean,    // Enable/disable localStorage
+  radisk?: boolean,         // Enable/disable radisk
+  gun?: Gun                 // Existing Gun instance
+})
 ```
-Crea una nuova istanza di WalletManager. Inizializza Gun, user e i manager per Ethereum e StealthChain.
+Creates a new WalletManager instance. Initializes Gun, user and managers for Ethereum and StealthChain.
 
-### Metodi di Account
+**Parameters:**
+- `options`: Optional configuration object
+  - `peers`: Array of Gun peer URLs (default: predefined peers)
+  - `localStorage`: Whether to use localStorage (default: false)
+  - `radisk`: Whether to use radisk storage (default: false)
+  - `gun`: Existing Gun instance to use instead of creating a new one
+
+**Default Configuration:**
+```typescript
+{
+  peers: [
+    "https://gun-manhattan.herokuapp.com/gun",
+    "https://peer.wallie.io/gun",
+    "https://gun-relay.scobrudot.dev/gun"
+  ],
+  localStorage: false,
+  radisk: false
+}
+```
+
+### Account Methods
 
 #### createAccount
 ```typescript
 async createAccount(alias: string, passphrase: string, callback?: (error?: Error) => void): Promise<void>
 ```
-Crea un nuovo account GunDB.
-- `alias`: Username per l'account
-- `passphrase`: Password per l'account
-- `callback`: Callback opzionale per gestire errori
+Creates a new GunDB account.
+- `alias`: Account username
+- `passphrase`: Account password
+- `callback`: Optional callback for error handling
 
 #### login
 ```typescript
 async login(alias: string, passphrase: string): Promise<string>
 ```
-Effettua il login con le credenziali specificate.
-- `alias`: Username dell'account
-- `passphrase`: Password dell'account
-- **Ritorna**: Chiave pubblica dell'utente autenticato
+Performs login with specified credentials.
+- `alias`: Account username
+- `passphrase`: Account password
+- **Returns**: Public key of authenticated user
 
 #### logout
 ```typescript
 logout(): void
 ```
-Disconnette l'utente corrente.
+Logs out current user.
 
 #### loginWithPrivateKey
 ```typescript
 async loginWithPrivateKey(privateKey: string): Promise<string>
 ```
-Effettua il login usando una chiave privata.
-- `privateKey`: Chiave privata Ethereum
-- **Ritorna**: Chiave pubblica dell'account
+Performs login using an Ethereum private key.
+- `privateKey`: Ethereum private key
+- **Returns**: Account public key
 
-### Gestione Wallet
+### Wallet Management
 
 #### saveWallet
 ```typescript
 async saveWallet(wallet: Wallet, publicKey: string, storageType?: StorageType): Promise<void>
 ```
-Salva un wallet nello storage specificato.
-- `wallet`: Wallet da salvare
-- `publicKey`: Chiave pubblica associata
-- `storageType`: Tipo di storage (GUN, LOCAL, BOTH)
+Saves a wallet to specified storage.
+- `wallet`: Wallet to save
+- `publicKey`: Associated public key
+- `storageType`: Storage type (GUN, LOCAL, BOTH)
 
-#### retrieveWallet
+#### saveWalletToGun
 ```typescript
-async retrieveWallet(publicKey: string, storageType?: StorageType): Promise<Wallet | null>
+async saveWalletToGun(wallet: Wallet, publicKey: string): Promise<void>
 ```
-Recupera un wallet dallo storage.
-- `publicKey`: Chiave pubblica del wallet
-- `storageType`: Tipo di storage da cui recuperare
-- **Ritorna**: Il wallet trovato o null
+Saves a wallet to Gun.
+- `wallet`: Wallet to save
+- `publicKey`: Associated public key
+
+#### retrieveWallets
+```typescript
+async retrieveWallets(publicKey: string): Promise<Wallet[]>
+```
+Retrieves all wallets from Gun.
+- `publicKey`: User's public key
+- **Returns**: Array of wallets
+
+#### retrieveWalletLocally
+```typescript
+async retrieveWalletLocally(publicKey: string): Promise<Wallet | null>
+```
+Retrieves a wallet from localStorage.
+- `publicKey`: User's public key
+- **Returns**: Found wallet or null
+
+#### deleteWallet
+```typescript
+async deleteWallet(publicKey: string, walletAddress: string): Promise<void>
+```
+Deletes a specific wallet.
+- `publicKey`: User's public key
+- `walletAddress`: Address of wallet to delete
+
+#### convertToEthPk
+```typescript
+async convertToEthPk(gunPrivateKey: string): Promise<string>
+```
+Converts a Gun private key to Ethereum format.
+- `gunPrivateKey`: Gun private key in base64Url format
+- **Returns**: Private key in hex format
 
 #### createWalletObj
 ```typescript
 static async createWalletObj(gunKeyPair: GunKeyPair): Promise<WalletResult>
 ```
-Crea un nuovo wallet da una coppia di chiavi Gun.
-- `gunKeyPair`: Coppia di chiavi Gun
-- **Ritorna**: Oggetto contenente il wallet e l'entropia
+Creates a new wallet from a Gun key pair.
+- `gunKeyPair`: Gun key pair
+- **Returns**: Object containing wallet and entropy
 
 #### createWalletFromSalt
 ```typescript
 static async createWalletFromSalt(gunKeyPair: GunKeyPair, salt: string): Promise<Wallet>
 ```
-Crea un wallet da salt e coppia di chiavi Gun.
-- `gunKeyPair`: Coppia di chiavi Gun
-- `salt`: Salt per la derivazione
-- **Ritorna**: Nuovo wallet
+Creates a wallet from salt and Gun key pair.
+- `gunKeyPair`: Gun key pair
+- `salt`: Salt for derivation
+- **Returns**: New wallet
 
-### Gestione Dati
+### Data Management
 
 #### exportAllData
 ```typescript
-async exportAllData(alias: string): Promise<string>
+async exportAllData(publicKey: string): Promise<string>
 ```
-Esporta tutti i dati dell'utente.
-- `alias`: Username dell'utente
-- **Ritorna**: JSON contenente tutti i dati
+Exports all user data.
+- `publicKey`: User's public key
+- **Returns**: JSON containing all data
 
 #### importAllData
 ```typescript
-async importAllData(jsonData: string, alias: string): Promise<void>
+async importAllData(jsonData: string, publicKey: string): Promise<void>
 ```
-Importa i dati dell'utente.
-- `jsonData`: Dati JSON da importare
-- `alias`: Username per l'importazione
+Imports user data.
+- `jsonData`: JSON data to import
+- `publicKey`: User's public key
 
 #### checkLocalData
 ```typescript
-async checkLocalData(alias: string): Promise<{hasWallet: boolean, hasStealthKeys: boolean, hasPasskey: boolean}>
+async checkLocalData(publicKey: string): Promise<{hasWallet: boolean, hasStealthKeys: boolean, hasPasskey: boolean}>
 ```
-Verifica i dati locali dell'utente.
-- `alias`: Username da verificare
-- **Ritorna**: Stato dei dati locali
+Checks user's local data.
+- `publicKey`: Public key to check
+- **Returns**: Local data status
 
 #### clearLocalData
 ```typescript
-async clearLocalData(alias: string): Promise<void>
+async clearLocalData(publicKey: string): Promise<void>
 ```
-Cancella tutti i dati locali dell'utente.
-- `alias`: Username di cui cancellare i dati
+Clears all local data for a user.
+- `publicKey`: Public key of data to clear
 
 ### Utility
 
@@ -119,139 +175,156 @@ Cancella tutti i dati locali dell'utente.
 ```typescript
 getPublicKey(): string
 ```
-Ottiene la chiave pubblica dell'utente corrente.
-- **Ritorna**: Chiave pubblica dell'utente
+Gets current user's public key.
+- **Returns**: User's public key
 
 #### getCurrentUserKeyPair
 ```typescript
 getCurrentUserKeyPair(): GunKeyPair
 ```
-Ottiene la coppia di chiavi dell'utente corrente.
-- **Ritorna**: Coppia di chiavi Gun
+Gets current user's key pair.
+- **Returns**: Gun key pair
+
+### Key Management
+
+#### exportGunKeyPair
+```typescript
+async exportGunKeyPair(): Promise<string>
+```
+Exports current user's Gun key pair.
+- **Returns**: JSON string of key pair
+
+#### importGunKeyPair
+```typescript
+async importGunKeyPair(keyPairJson: string): Promise<string>
+```
+Imports a Gun key pair.
+- `keyPairJson`: JSON string of key pair
+- **Returns**: Imported account's public key
 
 ## 🕶 StealthChain
 
-### Costruttore
+### Constructor
 
 ```typescript
 constructor(gun: Gun)
 ```
-Crea una nuova istanza di StealthChain.
-- `gun`: Istanza di Gun da utilizzare
+Creates a new StealthChain instance.
+- `gun`: Gun instance to use
 
-### Metodi
+### Methods
 
 #### generateStealthKeys
 ```typescript
 generateStealthKeys(cb: Callback<StealthKeyPair>): void
 ```
-Genera una nuova coppia di chiavi stealth.
-- `cb`: Callback che riceve la coppia di chiavi
+Generates a new stealth key pair.
+- `cb`: Callback receiving key pair
 - **Callback Result**: `StealthKeyPair`
 
 #### generateStealthAddress
 ```typescript
 generateStealthAddress(recipientPublicKey: string, cb: Callback<StealthAddressResult>): void
 ```
-Genera un indirizzo stealth per un destinatario.
-- `recipientPublicKey`: Chiave pubblica del destinatario
-- `cb`: Callback che riceve il risultato
+Generates a stealth address for a recipient.
+- `recipientPublicKey`: Recipient's public key
+- `cb`: Callback receiving result
 - **Callback Result**: `StealthAddressResult`
 
 #### openStealthAddress
 ```typescript
 openStealthAddress(stealthAddress: string, ephemeralKey: string, cb: Callback<ethers.Wallet>): void
 ```
-Apre un indirizzo stealth.
-- `stealthAddress`: Indirizzo stealth da aprire
-- `ephemeralKey`: Chiave effimera
-- `cb`: Callback che riceve il wallet
+Opens a stealth address.
+- `stealthAddress`: Stealth address to open
+- `ephemeralKey`: Ephemeral key
+- `cb`: Callback receiving wallet
 - **Callback Result**: `ethers.Wallet`
 
 #### saveStealthKeys
 ```typescript
 saveStealthKeys(stealthKeyPair: StealthKeyPair, cb: Callback<void>): void
 ```
-Salva le chiavi stealth.
-- `stealthKeyPair`: Coppia di chiavi da salvare
-- `cb`: Callback di completamento
+Saves stealth keys.
+- `stealthKeyPair`: Key pair to save
+- `cb`: Completion callback
 
 #### retrieveStealthKeysFromRegistry
 ```typescript
 retrieveStealthKeysFromRegistry(publicKey: string, cb: Callback<string>): void
 ```
-Recupera le chiavi stealth dal registro.
-- `publicKey`: Chiave pubblica da cercare
-- `cb`: Callback che riceve le chiavi
+Retrieves stealth keys from registry.
+- `publicKey`: Public key to look up
+- `cb`: Callback receiving keys
 
 ## ⛓️ EthereumManager
 
-### Costruttore
+### Constructor
 
 ```typescript
 constructor(walletManager: WalletManager)
 ```
-Crea una nuova istanza di EthereumManager.
-- `walletManager`: Istanza di WalletManager
+Creates a new EthereumManager instance.
+- `walletManager`: WalletManager instance
 
-### Metodi
+### Methods
 
 #### setCustomProvider
 ```typescript
 setCustomProvider(rpcUrl: string, privateKey: string): void
 ```
-Imposta un provider personalizzato.
-- `rpcUrl`: URL del provider RPC
-- `privateKey`: Chiave privata per il wallet
+Sets a custom provider.
+- `rpcUrl`: RPC provider URL
+- `privateKey`: Wallet private key
 
 #### createAccountWithEthereum
 ```typescript
 async createAccountWithEthereum(): Promise<string>
 ```
-Crea un account usando un account Ethereum.
-- **Ritorna**: Username creato (indirizzo Ethereum)
+Creates an account using an Ethereum account.
+- **Returns**: Created username (Ethereum address)
 
 #### loginWithEthereum
 ```typescript
 async loginWithEthereum(): Promise<string | null>
 ```
-Effettua il login usando un account Ethereum.
-- **Ritorna**: Chiave pubblica se il login ha successo
+Performs login using an Ethereum account.
+- **Returns**: Public key if login successful
 
-## 📝 Tipi e Interfacce
+## 📝 Types and Interfaces
 
 ### StorageType
 ```typescript
 enum StorageType {
-  GUN,    // Storage decentralizzato
-  LOCAL,  // Storage locale
-  BOTH    // Entrambi gli storage
+  GUN,    // Decentralized storage
+  LOCAL,  // Local storage
+  BOTH    // Both storages
 }
 ```
 
 ### StealthKeyPair
 ```typescript
 interface StealthKeyPair {
-  pub: string;    // Chiave pubblica
-  priv: string;   // Chiave privata
-  epub: string;   // Chiave pubblica effimera
-  epriv: string;  // Chiave privata effimera
+  pub: string;    // Public key
+  priv: string;   // Private key
+  epub: string;   // Ephemeral public key
+  epriv: string;  // Ephemeral private key
 }
 ```
 
 ### StealthAddressResult
 ```typescript
 interface StealthAddressResult {
-  stealthAddress: string;      // Indirizzo stealth generato
-  ephemeralPublicKey: string;  // Chiave pubblica effimera
-  recipientPublicKey: string;  // Chiave pubblica del destinatario
+  stealthAddress: string;      // Generated stealth address
+  ephemeralPublicKey: string;  // Ephemeral public key
+  recipientPublicKey: string;  // Recipient public key
 }
 ```
 
 ### WalletResult
 ```typescript
 interface WalletResult {
-  walletObj: Wallet;  // Oggetto wallet
-  entropy: string;    // Entropia utilizzata
+  walletObj: Wallet;  // Wallet object
+  entropy: string;    // Used entropy
 }
 ``` 

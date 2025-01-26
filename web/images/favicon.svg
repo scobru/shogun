@@ -1,0 +1,15 @@
+<svg width="240px" height="120px" viewBox="0 0 240 120" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <g id="Logo" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <!-- Icon Section -->
+        <g transform="translate(10, 10)">
+            <path id="Abstract-Shape" fill="#6C63FF" d="M30,15 C40,0 60,0 70,15 C80,30 60,50 45,50 C30,50 20,30 30,15 Z"></path>
+            <circle id="Inner-Circle" fill="#FFFFFF" cx="45" cy="30" r="8"></circle>
+            <circle id="Outer-Ring" stroke="#FFFFFF" stroke-width="2" cx="45" cy="30" r="15"></circle>
+            <path id="Decorative-Element" fill="#FFFFFF" d="M40,20 L50,20 L45,25 Z"></path>
+        </g>
+        <!-- Text Section -->
+        <text id="Logo-Text" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#484459" x="90" y="40">
+            SHOGUN
+        </text>
+    </g>
+</svg>
