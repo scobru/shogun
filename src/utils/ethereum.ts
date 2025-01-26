@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 import type { EthereumProvider } from "../interfaces/EthereumProvider";
 
-export const MESSAGE_TO_SIGN = "Access Hugo with Ethereum";
+export const MESSAGE_TO_SIGN = "Access Shogun with Ethereum";
 
 /**
  * Verifica se MetaMask è disponibile
