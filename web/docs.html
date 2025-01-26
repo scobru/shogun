@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Shogun - Documentazione</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="css/normalize.css">
+  <link rel="stylesheet" href="css/skeleton.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="icon" type="image/png" href="images/favicon.svg">
+
+  <style>
+    .docs-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    .docs-section {
+      margin-bottom: 60px;
+    }
+
+    .docs-section h2 {
+      color: #484459;
+      font-size: 32px;
+      margin-bottom: 20px;
+      text-align: left;
+    }
+
+    .docs-section h3 {
+      color: #9070B7;
+      font-size: 24px;
+      margin: 30px 0 15px;
+      text-align: left;
+    }
+
+    .docs-section h4 {
+      color: #484459;
+      font-size: 20px;
+      margin: 25px 0 10px;
+      text-align: left;
+    }
+
+    .method {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid #e0e0e0;
+    }
+
+    .method-signature {
+      font-family: 'Consolas', 'Monaco', monospace;
+      background: #2d2d2d;
+      color: #ffffff;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+      line-height: 1.5;
+      font-size: 15px;
+    }
+
+    .parameter-list {
+      margin-left: 20px;
+    }
+
+    .parameter {
+      margin-bottom: 10px;
+      background: #ffffff;
+      padding: 12px 15px;
+      border-radius: 6px;
+      border: 1px solid #e0e0e0;
+    }
+
+    .parameter-name {
+      font-weight: bold;
+      color: #9070B7;
+      display: inline-block;
+      margin-right: 8px;
+    }
+
+    .return-value {
+      margin-top: 15px;
+      font-style: italic;
+      color: #9070B7;
+    }
+
+    .type-definition {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid #e0e0e0;
+    }
+
+    .type-name {
+      color: #9070B7;
+      font-weight: bold;
+      margin-bottom: 15px;
+      font-size: 1.2em;
+      padding-bottom: 5px;
+      border-bottom: 2px solid #9070B7;
+    }
+
+    pre {
+      background: #2d2d2d;
+      color: #ffffff;
+      padding: 20px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 15px 0;
+      line-height: 1.5;
+      font-size: 15px;
+    }
+
+    code {
+      font-family: 'Consolas', 'Monaco', monospace;
+    }
+
+    /* Syntax highlighting */
+    .type-keyword { color: #569CD6; font-weight: bold; }
+    .type-name { color: #4EC9B0; }
+    .type-string { color: #CE9178; }
+    .type-comment { color: #6A9955; }
+    .type-parameter { color: #9CDCFE; }
+
+    .nav-docs {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      background: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      z-index: 1000;
+    }
+
+    .nav-docs .content {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 15px 20px;
+    }
+
+    .nav-docs img {
+      height: 40px;
+    }
+
+    .nav-docs .links a {
+      margin-left: 20px;
+      color: #484459;
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    .nav-docs .links a:hover {
+      color: #9070B7;
+    }
+
+    .main-content {
+      margin-top: 80px;
+    }
+
+    @media (max-width: 768px) {
+      .docs-container {
+        padding: 20px;
+      }
+
+      .method, .type-definition {
+        padding: 15px;
+      }
+
+      pre, .method-signature {
+        padding: 15px;
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <nav class="nav-docs">
+    <div class="content">
+      <a href="index.html">
+        <img src="images/shogunLogoHorizontal.svg" alt="Shogun Logo">
+      </a>
+      <div class="links">
+        <a href="https://github.com/scobru/shogun" target="_blank">Github</a>
+        <a href="index.html">Home</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="main-content">
+    <div class="docs-container">
+      <div class="docs-section">
+        <h1>Shogun Documentation</h1>
+        <p>Shogun is a client-side Ethereum wallet that uses username and password. This documentation provides a complete overview of the available APIs.</p>
+      </div>
+
+      <div class="docs-section">
+        <h2>👛 WalletManager</h2>
+        <p>Main class for wallet management and authentication.</p>
+
+        <div class="method">
+          <h3>Constructor</h3>
+          <div class="method-signature"><span class="type-keyword">constructor</span>(<span class="type-parameter">options</span>?: {
+  <span class="type-parameter">peers</span>?: <span class="type-keyword">string</span>[];
+  <span class="type-parameter">localStorage</span>?: <span class="type-keyword">boolean</span>;
+  <span class="type-parameter">radisk</span>?: <span class="type-keyword">boolean</span>;
+  <span class="type-parameter">gun</span>?: <span class="type-name">Gun</span>;
+})</div>
+          <p>Creates a new WalletManager instance.</p>
+          <div class="parameter-list">
+            <div class="parameter">
+              <span class="parameter-name">peers</span>: Array of Gun peer URLs (default: predefined peers)
+            </div>
+            <div class="parameter">
+              <span class="parameter-name">localStorage</span>: Enable/disable localStorage (default: false)
+            </div>
+            <div class="parameter">
+              <span class="parameter-name">radisk</span>: Enable/disable radisk storage (default: false)
+            </div>
+            <div class="parameter">
+              <span class="parameter-name">gun</span>: Existing Gun instance to use
+            </div>
+          </div>
+        </div>
+
+        <h3>Account Methods</h3>
+
+        <div class="method">
+          <h4>createAccount</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">createAccount</span>(<span class="type-parameter">alias</span>: <span class="type-keyword">string</span>, <span class="type-parameter">passphrase</span>: <span class="type-keyword">string</span>, <span class="type-parameter">callback</span>?: (<span class="type-parameter">error</span>?: <span class="type-name">Error</span>) => <span class="type-keyword">void</span>): <span class="type-name">Promise</span><<span class="type-keyword">void</span>></div>
+          <p>Creates a new GunDB account.</p>
+          <div class="parameter-list">
+            <div class="parameter">
+              <span class="parameter-name">alias</span>: Account username
+            </div>
+            <div class="parameter">
+              <span class="parameter-name">passphrase</span>: Account password
+            </div>
+            <div class="parameter">
+              <span class="parameter-name">callback</span>: Optional callback for error handling
+            </div>
+          </div>
+        </div>
+
+        <div class="method">
+          <h4>login</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">login</span>(<span class="type-parameter">alias</span>: <span class="type-keyword">string</span>, <span class="type-parameter">passphrase</span>: <span class="type-keyword">string</span>): <span class="type-name">Promise</span><<span class="type-keyword">string</span>></div>
+          <p>Performs login with specified credentials.</p>
+          <div class="return-value">Returns: Public key of authenticated user</div>
+        </div>
+
+        <h3>Wallet Management</h3>
+
+        <div class="method">
+          <h4>saveWallet</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">saveWallet</span>(<span class="type-parameter">wallet</span>: <span class="type-name">Wallet</span>, <span class="type-parameter">publicKey</span>: <span class="type-keyword">string</span>, <span class="type-parameter">storageType</span>?: <span class="type-name">StorageType</span>): <span class="type-name">Promise</span><<span class="type-keyword">void</span>></div>
+          <p>Saves a wallet to specified storage.</p>
+        </div>
+
+        <div class="method">
+          <h4>retrieveWallets</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">retrieveWallets</span>(<span class="type-parameter">publicKey</span>: <span class="type-keyword">string</span>): <span class="type-name">Promise</span><<span class="type-name">Wallet</span>[]></div>
+          <p>Retrieves all wallets from Gun.</p>
+        </div>
+      </div>
+
+      <div class="docs-section">
+        <h2>🕶 StealthChain</h2>
+        <p>Manages stealth address functionality.</p>
+
+        <div class="method">
+          <h4>generateStealthKeys</h4>
+          <div class="method-signature"><span class="type-name">generateStealthKeys</span>(<span class="type-parameter">cb</span>: <span class="type-name">Callback</span><<span class="type-name">StealthKeyPair</span>>): <span class="type-keyword">void</span></div>
+          <p>Generates a new stealth key pair.</p>
+        </div>
+
+        <div class="method">
+          <h4>generateStealthAddress</h4>
+          <div class="method-signature"><span class="type-name">generateStealthAddress</span>(<span class="type-parameter">recipientPublicKey</span>: <span class="type-keyword">string</span>, <span class="type-parameter">cb</span>: <span class="type-name">Callback</span><<span class="type-name">StealthAddressResult</span>>): <span class="type-keyword">void</span></div>
+          <p>Generates a stealth address for a recipient.</p>
+        </div>
+      </div>
+
+      <div class="docs-section">
+        <h2>⛓️ EthereumManager</h2>
+        <p>Manages Ethereum interactions.</p>
+
+        <div class="method">
+          <h4>setCustomProvider</h4>
+          <div class="method-signature"><span class="type-name">setCustomProvider</span>(<span class="type-parameter">rpcUrl</span>: <span class="type-keyword">string</span>, <span class="type-parameter">privateKey</span>: <span class="type-keyword">string</span>): <span class="type-keyword">void</span></div>
+          <p>Sets a custom provider.</p>
+        </div>
+
+        <div class="method">
+          <h4>loginWithEthereum</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">loginWithEthereum</span>(): <span class="type-name">Promise</span><<span class="type-keyword">string</span> | <span class="type-keyword">null</span>></div>
+          <p>Performs login using an Ethereum account.</p>
+        </div>
+      </div>
+
+      <div class="docs-section">
+        <h2>📝 Types and Interfaces</h2>
+
+        <div class="type-definition">
+          <div class="type-name">StorageType</div>
+          <pre><code><span class="type-keyword">enum</span> StorageType {
+  <span class="type-name">GUN</span>,    <span class="type-comment">// Decentralized storage</span>
+  <span class="type-name">LOCAL</span>,  <span class="type-comment">// Local storage</span>
+  <span class="type-name">BOTH</span>    <span class="type-comment">// Both storages</span>
+}</code></pre>
+        </div>
+
+        <div class="type-definition">
+          <div class="type-name">StealthKeyPair</div>
+          <pre><code><span class="type-keyword">interface</span> StealthKeyPair {
+  <span class="type-name">pub</span>: <span class="type-keyword">string</span>;    <span class="type-comment">// Public key</span>
+  <span class="type-name">priv</span>: <span class="type-keyword">string</span>;   <span class="type-comment">// Private key</span>
+  <span class="type-name">epub</span>: <span class="type-keyword">string</span>;   <span class="type-comment">// Ephemeral public key</span>
+  <span class="type-name">epriv</span>: <span class="type-keyword">string</span>;  <span class="type-comment">// Ephemeral private key</span>
+}</code></pre>
+        </div>
+
+        <div class="type-definition">
+          <div class="type-name">StealthAddressResult</div>
+          <pre><code><span class="type-keyword">interface</span> StealthAddressResult {
+  <span class="type-name">stealthAddress</span>: <span class="type-keyword">string</span>;      <span class="type-comment">// Generated stealth address</span>
+  <span class="type-name">ephemeralPublicKey</span>: <span class="type-keyword">string</span>;  <span class="type-comment">// Ephemeral public key</span>
+  <span class="type-name">recipientPublicKey</span>: <span class="type-keyword">string</span>;  <span class="type-comment">// Recipient public key</span>
+}</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.onscroll = function() {
+      var nav = document.querySelector('.nav-docs');
+      if (window.pageYOffset > 0) {
+        nav.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+      } else {
+        nav.style.boxShadow = 'none';
+      }
+    };
+  </script>
+</body>
+</html> 

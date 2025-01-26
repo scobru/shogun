@@ -287,6 +287,8 @@ a:hover {
 }
 
 .social-button img {
+  width: 30px;
+  height: 30px;
   cursor: pointer;
   transition: all .07s ease-in-out!important;
 }
