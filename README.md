@@ -1,5 +1,7 @@
 # SHOGUN - Decentralized Wallet Manager
 
+inspired by [https://github.com/AudiusProject/hedgehog]
+
 **SHOGUN** is a decentralized wallet manager that uses Gun.js to handle wallets and private keys directly in the browser. It provides a complete authentication and key management system with support for stealth addresses.
 
 ## ✨ Key Features
@@ -328,8 +330,3 @@ Pull requests are welcome! For major changes:
 
 - [ ] WebAuthn/Passkey authentication
 - [ ] StealthChain smart contracts
-- [ ] Layer 2 integration
-- [ ] Hardware wallet support
-- [ ] Security improvements
-- [ ] Performance optimizations
-- [ ] Extended test coverage
