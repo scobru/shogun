@@ -268,6 +268,189 @@
           <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">retrieveWallets</span>(<span class="type-parameter">publicKey</span>: <span class="type-keyword">string</span>): <span class="type-name">Promise</span><<span class="type-name">Wallet</span>[]></div>
           <p>Retrieves all wallets from Gun.</p>
         </div>
+
+        <div class="method">
+          <h4>logout</h4>
+          <div class="method-signature"><span class="type-name">logout</span>(): <span class="type-keyword">void</span></div>
+          <p>Logs out current user.</p>
+        </div>
+
+        <div class="method">
+          <h4>loginWithPrivateKey</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">loginWithPrivateKey</span>(<span class="type-parameter">privateKey</span>: <span class="type-keyword">string</span>): <span class="type-name">Promise</span><<span class="type-keyword">string</span>></div>
+          <p>Performs login using an Ethereum private key.</p>
+          <div class="parameter-list">
+            <div class="parameter">
+              <span class="parameter-name">privateKey</span>: Ethereum private key
+            </div>
+          </div>
+          <div class="return-value">Returns: Account public key</div>
+        </div>
+
+        <div class="method">
+          <h4>saveWalletToGun</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">saveWalletToGun</span>(<span class="type-parameter">wallet</span>: <span class="type-name">Wallet</span>, <span class="type-parameter">publicKey</span>: <span class="type-keyword">string</span>): <span class="type-name">Promise</span><<span class="type-keyword">void</span>></div>
+          <p>Saves a wallet to Gun.</p>
+          <div class="parameter-list">
+            <div class="parameter">
+              <span class="parameter-name">wallet</span>: Wallet to save
+            </div>
+            <div class="parameter">
+              <span class="parameter-name">publicKey</span>: Associated public key
+            </div>
+          </div>
+        </div>
+
+        <div class="method">
+          <h4>retrieveWalletLocally</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">retrieveWalletLocally</span>(<span class="type-parameter">publicKey</span>: <span class="type-keyword">string</span>): <span class="type-name">Promise</span><<span class="type-name">Wallet</span> | <span class="type-keyword">null</span>></div>
+          <p>Retrieves a wallet from localStorage.</p>
+          <div class="parameter-list">
+            <div class="parameter">
+              <span class="parameter-name">publicKey</span>: User's public key
+            </div>
+          </div>
+          <div class="return-value">Returns: Found wallet or null</div>
+        </div>
+
+        <div class="method">
+          <h4>deleteWallet</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">deleteWallet</span>(<span class="type-parameter">publicKey</span>: <span class="type-keyword">string</span>, <span class="type-parameter">walletAddress</span>: <span class="type-keyword">string</span>): <span class="type-name">Promise</span><<span class="type-keyword">void</span>></div>
+          <p>Deletes a specific wallet.</p>
+          <div class="parameter-list">
+            <div class="parameter">
+              <span class="parameter-name">publicKey</span>: User's public key
+            </div>
+            <div class="parameter">
+              <span class="parameter-name">walletAddress</span>: Address of wallet to delete
+            </div>
+          </div>
+        </div>
+
+        <div class="method">
+          <h4>convertToEthPk</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">convertToEthPk</span>(<span class="type-parameter">gunPrivateKey</span>: <span class="type-keyword">string</span>): <span class="type-name">Promise</span><<span class="type-keyword">string</span>></div>
+          <p>Converts a Gun private key to Ethereum format.</p>
+          <div class="parameter-list">
+            <div class="parameter">
+              <span class="parameter-name">gunPrivateKey</span>: Gun private key in base64Url format
+            </div>
+          </div>
+          <div class="return-value">Returns: Private key in hex format</div>
+        </div>
+
+        <div class="method">
+          <h4>createWalletObj</h4>
+          <div class="method-signature"><span class="type-keyword">static async</span> <span class="type-name">createWalletObj</span>(<span class="type-parameter">gunKeyPair</span>: <span class="type-name">GunKeyPair</span>): <span class="type-name">Promise</span><<span class="type-name">WalletResult</span>></div>
+          <p>Creates a new wallet from a Gun key pair.</p>
+          <div class="parameter-list">
+            <div class="parameter">
+              <span class="parameter-name">gunKeyPair</span>: Gun key pair
+            </div>
+          </div>
+          <div class="return-value">Returns: Object containing wallet and entropy</div>
+        </div>
+
+        <div class="method">
+          <h4>createWalletFromSalt</h4>
+          <div class="method-signature"><span class="type-keyword">static async</span> <span class="type-name">createWalletFromSalt</span>(<span class="type-parameter">gunKeyPair</span>: <span class="type-name">GunKeyPair</span>, <span class="type-parameter">salt</span>: <span class="type-keyword">string</span>): <span class="type-name">Promise</span><<span class="type-name">Wallet</span>></div>
+          <p>Creates a wallet from salt and Gun key pair.</p>
+          <div class="parameter-list">
+            <div class="parameter">
+              <span class="parameter-name">gunKeyPair</span>: Gun key pair
+            </div>
+            <div class="parameter">
+              <span class="parameter-name">salt</span>: Salt for derivation
+            </div>
+          </div>
+          <div class="return-value">Returns: New wallet</div>
+        </div>
+
+        <h3>Data Management</h3>
+
+        <div class="method">
+          <h4>exportAllData</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">exportAllData</span>(<span class="type-parameter">publicKey</span>: <span class="type-keyword">string</span>): <span class="type-name">Promise</span><<span class="type-keyword">string</span>></div>
+          <p>Exports all user data.</p>
+          <div class="parameter-list">
+            <div class="parameter">
+              <span class="parameter-name">publicKey</span>: User's public key
+            </div>
+          </div>
+          <div class="return-value">Returns: JSON containing all data</div>
+        </div>
+
+        <div class="method">
+          <h4>importAllData</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">importAllData</span>(<span class="type-parameter">jsonData</span>: <span class="type-keyword">string</span>, <span class="type-parameter">publicKey</span>: <span class="type-keyword">string</span>): <span class="type-name">Promise</span><<span class="type-keyword">void</span>></div>
+          <p>Imports user data.</p>
+          <div class="parameter-list">
+            <div class="parameter">
+              <span class="parameter-name">jsonData</span>: JSON data to import
+            </div>
+            <div class="parameter">
+              <span class="parameter-name">publicKey</span>: User's public key
+            </div>
+          </div>
+        </div>
+
+        <div class="method">
+          <h4>checkLocalData</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">checkLocalData</span>(<span class="type-parameter">publicKey</span>: <span class="type-keyword">string</span>): <span class="type-name">Promise</span><<span class="type-keyword">{</span>hasWallet: <span class="type-keyword">boolean</span>, hasStealthKeys: <span class="type-keyword">boolean</span>, hasPasskey: <span class="type-keyword">boolean</span><span class="type-keyword">}</span>></div>
+          <p>Checks user's local data.</p>
+          <div class="parameter-list">
+            <div class="parameter">
+              <span class="parameter-name">publicKey</span>: Public key to check
+            </div>
+          </div>
+          <div class="return-value">Returns: Local data status</div>
+        </div>
+
+        <div class="method">
+          <h4>clearLocalData</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">clearLocalData</span>(<span class="type-parameter">publicKey</span>: <span class="type-keyword">string</span>): <span class="type-name">Promise</span><<span class="type-keyword">void</span>></div>
+          <p>Clears all local data for a user.</p>
+          <div class="parameter-list">
+            <div class="parameter">
+              <span class="parameter-name">publicKey</span>: Public key of data to clear
+            </div>
+          </div>
+        </div>
+
+        <h3>Utility Methods</h3>
+
+        <div class="method">
+          <h4>getPublicKey</h4>
+          <div class="method-signature"><span class="type-name">getPublicKey</span>(): <span class="type-keyword">string</span></div>
+          <p>Gets current user's public key.</p>
+          <div class="return-value">Returns: User's public key</div>
+        </div>
+
+        <div class="method">
+          <h4>getCurrentUserKeyPair</h4>
+          <div class="method-signature"><span class="type-name">getCurrentUserKeyPair</span>(): <span class="type-name">GunKeyPair</span></div>
+          <p>Gets current user's key pair.</p>
+          <div class="return-value">Returns: Gun key pair</div>
+        </div>
+
+        <div class="method">
+          <h4>exportGunKeyPair</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">exportGunKeyPair</span>(): <span class="type-name">Promise</span><<span class="type-keyword">string</span>></div>
+          <p>Exports current user's Gun key pair.</p>
+          <div class="return-value">Returns: JSON string of key pair</div>
+        </div>
+
+        <div class="method">
+          <h4>importGunKeyPair</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">importGunKeyPair</span>(<span class="type-parameter">keyPairJson</span>: <span class="type-keyword">string</span>): <span class="type-name">Promise</span><<span class="type-keyword">string</span>></div>
+          <p>Imports a Gun key pair.</p>
+          <div class="parameter-list">
+            <div class="parameter">
+              <span class="parameter-name">keyPairJson</span>: JSON string of key pair
+            </div>
+          </div>
+          <div class="return-value">Returns: Imported account's public key</div>
+        </div>
       </div>
 
       <div class="docs-section">
