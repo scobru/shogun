@@ -37,7 +37,7 @@ export class EthereumManager {
    * Gets the appropriate signer (custom or browser)
    * @returns {Promise<ethers.Signer>} The Ethereum signer
    */
-  private async getSigner(): Promise<ethers.Signer> {
+  public async getSigner(): Promise<ethers.Signer> {
     if (this.customWallet) {
       return this.customWallet;
     }
