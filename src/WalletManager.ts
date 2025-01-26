@@ -416,7 +416,6 @@ export class WalletManager {
 
       const walletData = {
         address: wallet.address,
-        privateKey: wallet.privateKey,
         entropy: (wallet as any).entropy,
         timestamp: Date.now(),
       };
@@ -426,7 +425,6 @@ export class WalletManager {
       const node = this.gun.get("wallets").get(publicKey);
 
       node.get("address").put(walletData.address);
-      node.get("privateKey").put(walletData.privateKey);
       node.get("entropy").put(walletData.entropy);
       node.get("timestamp").put(walletData.timestamp);
 
@@ -435,7 +433,6 @@ export class WalletManager {
         if (
           data &&
           data.address === wallet.address &&
-          data.privateKey === wallet.privateKey &&
           !hasResolved
         ) {
           console.log("✅ Wallet saved successfully");
@@ -468,7 +465,7 @@ export class WalletManager {
       this.gun
         .get("wallets")
         .get(publicKey)
-        .once((data: any) => {
+        .once(async (data: any) => {
           console.log(`📥 Data received:`, data);
 
           if (!data) {
@@ -479,13 +476,21 @@ export class WalletManager {
           }
 
           try {
-            const wallet = new Wallet(data.publicKey, data.entropy);
-            console.log("✅ Wallet created:", wallet);
+            if (!data.entropy) {
+              throw new Error("Missing entropy for wallet recreation");
+            }
+            
+            const wallet = await WalletManager.createWalletFromSalt(
+              this.user._.sea,
+              data.entropy
+            );
+            
+            console.log("✅ Wallet created:", wallet.address);
             wallets.push(wallet);
             hasResolved = true;
             resolve(wallets);
           } catch (error) {
-            console.error("❌ Error parsing wallet:", error);
+            console.error("❌ Error recreating wallet:", error);
             reject(error);
           }
         });
