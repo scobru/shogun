@@ -1,4 +1,5 @@
-import { sha256 } from 'js-sha256';
+// Import sha256 usando require
+const sha256 = require('js-sha256').sha256;
 import type { WebAuthnResult, WebAuthnVerifyResult } from '../interfaces/WebAuthnResult';
 
 // Utility per convertire ArrayBuffer in base64
@@ -123,7 +124,7 @@ export class WebAuthnService {
         allowCredentials: [{
           id: base64ToBuffer(credentialId),
           type: 'public-key',
-          transports: ['internal', 'platform']
+          transports: ['internal'] as AuthenticatorTransport[]
         }],
         timeout: 60000,
         userVerification: "required"
@@ -162,7 +163,7 @@ export class WebAuthnService {
         allowCredentials: [{
           id: base64ToBuffer(credentialId),
           type: 'public-key',
-          transports: ['internal', 'platform']
+          transports: ['internal'] as AuthenticatorTransport[]
         }],
         timeout: 60000,
         userVerification: "required"
