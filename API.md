@@ -202,6 +202,56 @@ Imports a Gun key pair.
 - `keyPairJson`: JSON string of key pair
 - **Returns**: Imported account's public key
 
+### WebAuthn Methods
+
+#### isWebAuthnSupported
+```typescript
+isWebAuthnSupported(): boolean
+```
+Verifica se WebAuthn è supportato nel browser corrente.
+- **Returns**: `true` se WebAuthn è supportato, `false` altrimenti
+
+#### createAccountWithWebAuthn
+```typescript
+async createAccountWithWebAuthn(alias: string): Promise<WalletResult>
+```
+Crea un nuovo account utilizzando WebAuthn per l'autenticazione.
+- `alias`: Username dell'account
+- **Returns**: Oggetto `WalletResult` contenente il wallet creato
+- **Throws**: Error se WebAuthn non è supportato o se l'account esiste già
+
+#### loginWithWebAuthn
+```typescript
+async loginWithWebAuthn(alias: string): Promise<string>
+```
+Effettua il login utilizzando WebAuthn.
+- `alias`: Username dell'account
+- **Returns**: Public key dell'utente autenticato
+- **Throws**: Error se WebAuthn non è supportato o se le credenziali non sono valide
+
+### WebAuthn Interfaces
+
+#### WebAuthnResult
+```typescript
+interface WebAuthnResult {
+  success: boolean;           // Indica se l'operazione è riuscita
+  username?: string;          // Username dell'account
+  password?: string;          // Password generata
+  credentialId?: string;      // ID della credenziale WebAuthn
+  error?: string;            // Messaggio di errore se presente
+}
+```
+
+#### WebAuthnVerifyResult
+```typescript
+interface WebAuthnVerifyResult {
+  success: boolean;                    // Indica se la verifica è riuscita
+  authenticatorData?: ArrayBuffer;     // Dati dell'autenticatore
+  signature?: ArrayBuffer;             // Firma della verifica
+  error?: string;                     // Messaggio di errore se presente
+}
+```
+
 ## 🕶 StealthChain
 
 ### Constructor

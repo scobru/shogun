@@ -10,6 +10,7 @@ import { EthereumManager } from "./EthereumManager";
 import { StealthChain } from "./StealthChain";
 import type { GunKeyPair } from "./interfaces/GunKeyPair";
 import { WalletResult, WalletData } from "./interfaces/WalletResult";
+import { WebAuthnService } from './utils/WebAuthnService';
 
 // Importiamo crypto condizionalmente
 let cryptoModule: any;
@@ -122,6 +123,7 @@ export class WalletManager {
   private ethereumManager: EthereumManager;
   private stealthChain: StealthChain;
   private isAuthenticating = false;
+  private webAuthnService: WebAuthnService;
 
   /**
    * Creates a WalletManager instance
@@ -141,6 +143,7 @@ export class WalletManager {
     this.user = this.gun.user();
     this.ethereumManager = new EthereumManager(this);
     this.stealthChain = new StealthChain(this.gun);
+    this.webAuthnService = new WebAuthnService(this.gun);
   }
 
   /**
@@ -876,5 +879,66 @@ export class WalletManager {
     storage.removeItem(`wallet_${publicKey}`);
     
     return Promise.resolve();
+  }
+
+  /**
+   * Crea un account utilizzando WebAuthn
+   * @param {string} alias - Username dell'account
+   * @returns {Promise<WalletResult>} Risultato della creazione dell'account
+   */
+  public async createAccountWithWebAuthn(alias: string): Promise<WalletResult> {
+    try {
+      if (!this.webAuthnService.isSupported()) {
+        throw new Error('WebAuthn non è supportato su questo browser');
+      }
+
+      const webAuthnResult = await this.webAuthnService.generateCredentials(alias);
+      if (!webAuthnResult.success || !webAuthnResult.password) {
+        throw new Error(webAuthnResult.error || 'Errore durante la generazione delle credenziali WebAuthn');
+      }
+
+      await this.createAccount(alias, webAuthnResult.password);
+
+      // Creiamo il wallet usando il credentialId come entropy
+      const walletResult = await WalletManager.createWalletObj(this.user._.sea);
+      
+      // Salviamo il wallet
+      const wallet = new Wallet(walletResult.walletObj.privateKey);
+      await this.saveWallet(wallet, this.user.is.pub, StorageType.BOTH);
+
+      return walletResult;
+    } catch (error) {
+      throw new Error(`Errore durante la creazione dell'account con WebAuthn: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`);
+    }
+  }
+
+  /**
+   * Effettua il login utilizzando WebAuthn
+   * @param {string} alias - Username dell'account
+   * @returns {Promise<string>} Public key dell'utente
+   */
+  public async loginWithWebAuthn(alias: string): Promise<string> {
+    try {
+      if (!this.webAuthnService.isSupported()) {
+        throw new Error('WebAuthn non è supportato su questo browser');
+      }
+
+      const webAuthnResult = await this.webAuthnService.login(alias);
+      if (!webAuthnResult.success || !webAuthnResult.password) {
+        throw new Error(webAuthnResult.error || 'Errore durante il login con WebAuthn');
+      }
+
+      return this.login(alias, webAuthnResult.password);
+    } catch (error) {
+      throw new Error(`Errore durante il login con WebAuthn: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`);
+    }
+  }
+
+  /**
+   * Verifica se WebAuthn è supportato
+   * @returns {boolean} true se WebAuthn è supportato
+   */
+  public isWebAuthnSupported(): boolean {
+    return this.webAuthnService.isSupported();
   }
 }

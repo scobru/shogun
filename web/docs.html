@@ -518,6 +518,65 @@
 }</code></pre>
         </div>
       </div>
+
+      <div class="docs-section">
+        <h2>🔐 WebAuthn</h2>
+        <p>Supporto per l'autenticazione biometrica e passwordless tramite WebAuthn.</p>
+
+        <div class="method">
+          <h4>isWebAuthnSupported</h4>
+          <div class="method-signature"><span class="type-name">isWebAuthnSupported</span>(): <span class="type-keyword">boolean</span></div>
+          <p>Verifica se WebAuthn è supportato nel browser corrente.</p>
+          <div class="return-value">Returns: true se WebAuthn è supportato</div>
+        </div>
+
+        <div class="method">
+          <h4>createAccountWithWebAuthn</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">createAccountWithWebAuthn</span>(<span class="type-parameter">alias</span>: <span class="type-keyword">string</span>): <span class="type-name">Promise</span><<span class="type-name">WalletResult</span>></div>
+          <p>Crea un nuovo account utilizzando WebAuthn per l'autenticazione.</p>
+          <div class="parameter-list">
+            <div class="parameter">
+              <span class="parameter-name">alias</span>: Username dell'account
+            </div>
+          </div>
+          <div class="return-value">Returns: Oggetto WalletResult contenente il wallet creato</div>
+        </div>
+
+        <div class="method">
+          <h4>loginWithWebAuthn</h4>
+          <div class="method-signature"><span class="type-keyword">async</span> <span class="type-name">loginWithWebAuthn</span>(<span class="type-parameter">alias</span>: <span class="type-keyword">string</span>): <span class="type-name">Promise</span><<span class="type-keyword">string</span>></div>
+          <p>Effettua il login utilizzando WebAuthn.</p>
+          <div class="parameter-list">
+            <div class="parameter">
+              <span class="parameter-name">alias</span>: Username dell'account
+            </div>
+          </div>
+          <div class="return-value">Returns: Public key dell'utente autenticato</div>
+        </div>
+
+        <h3>Interfaces</h3>
+
+        <div class="type-definition">
+          <div class="type-name">WebAuthnResult</div>
+          <pre><code><span class="type-keyword">interface</span> WebAuthnResult {
+  <span class="type-name">success</span>: <span class="type-keyword">boolean</span>;     <span class="type-comment">// Indica se l'operazione è riuscita</span>
+  <span class="type-name">username</span>?: <span class="type-keyword">string</span>;    <span class="type-comment">// Username dell'account</span>
+  <span class="type-name">password</span>?: <span class="type-keyword">string</span>;    <span class="type-comment">// Password generata</span>
+  <span class="type-name">credentialId</span>?: <span class="type-keyword">string</span>; <span class="type-comment">// ID della credenziale WebAuthn</span>
+  <span class="type-name">error</span>?: <span class="type-keyword">string</span>;      <span class="type-comment">// Messaggio di errore se presente</span>
+}</code></pre>
+        </div>
+
+        <div class="type-definition">
+          <div class="type-name">WebAuthnVerifyResult</div>
+          <pre><code><span class="type-keyword">interface</span> WebAuthnVerifyResult {
+  <span class="type-name">success</span>: <span class="type-keyword">boolean</span>;                    <span class="type-comment">// Indica se la verifica è riuscita</span>
+  <span class="type-name">authenticatorData</span>?: <span class="type-keyword">ArrayBuffer</span>;     <span class="type-comment">// Dati dell'autenticatore</span>
+  <span class="type-name">signature</span>?: <span class="type-keyword">ArrayBuffer</span>;             <span class="type-comment">// Firma della verifica</span>
+  <span class="type-name">error</span>?: <span class="type-keyword">string</span>;                     <span class="type-comment">// Messaggio di errore se presente</span>
+}</code></pre>
+        </div>
+      </div>
     </div>
   </div>
 

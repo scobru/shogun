@@ -183,6 +183,39 @@ const keypair = await manager.exportGunKeyPair();
 const pubKey = await manager.importGunKeyPair(keypairJson);
 ```
 
+### WebAuthn Authentication
+
+```typescript
+// Initialize WalletManager
+const manager = new WalletManager();
+
+// Check if WebAuthn is supported
+if (manager.isWebAuthnSupported()) {
+  // Create account with WebAuthn
+  try {
+    const result = await manager.createAccountWithWebAuthn('username');
+    console.log('Account created:', result);
+  } catch (error) {
+    console.error('Error:', error);
+  }
+
+  // Login with WebAuthn
+  try {
+    const publicKey = await manager.loginWithWebAuthn('username');
+    console.log('Logged in with public key:', publicKey);
+  } catch (error) {
+    console.error('Error:', error);
+  }
+}
+```
+
+WebAuthn provides several benefits:
+- 🔐 Biometric authentication (fingerprint, face recognition)
+- 🔑 Platform-specific secure key storage
+- 🌐 No password required
+- 🔒 Enhanced security against phishing
+- ⚡ Seamless user experience
+
 ## 🔒 Security
 
 ### Key Management
