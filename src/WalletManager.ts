@@ -898,6 +898,7 @@ export class WalletManager {
         throw new Error('WebAuthn non è supportato su questo browser');
       }
 
+      // Crea l'account con la password generata
       await this.createAccount(alias, password);
 
       // Creiamo il wallet usando l'entropy fornita
