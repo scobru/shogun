@@ -886,22 +886,23 @@ export class WalletManager {
    * @param {string} alias - Username dell'account
    * @returns {Promise<WalletResult>} Risultato della creazione dell'account
    */
-  public async createAccountWithWebAuthn(alias: string): Promise<WalletResult> {
+  // ... existing code ...
+
+  public async createAccountWithWebAuthn(
+    alias: string,
+    entropy: string,
+    password: string
+  ): Promise<WalletResult> {
     try {
       if (!this.webAuthnService.isSupported()) {
         throw new Error('WebAuthn non è supportato su questo browser');
       }
 
-      const webAuthnResult = await this.webAuthnService.generateCredentials(alias);
-      if (!webAuthnResult.success || !webAuthnResult.password) {
-        throw new Error(webAuthnResult.error || 'Errore durante la generazione delle credenziali WebAuthn');
-      }
+      await this.createAccount(alias, password);
 
-      await this.createAccount(alias, webAuthnResult.password);
-
-      // Creiamo il wallet usando il credentialId come entropy
+      // Creiamo il wallet usando l'entropy fornita
       const walletResult = await WalletManager.createWalletObj(this.user._.sea);
-      
+
       // Salviamo il wallet
       const wallet = new Wallet(walletResult.walletObj.privateKey);
       await this.saveWallet(wallet, this.user.is.pub, StorageType.BOTH);
@@ -911,6 +912,8 @@ export class WalletManager {
       throw new Error(`Errore durante la creazione dell'account con WebAuthn: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`);
     }
   }
+
+// ... existing code ...
 
   /**
    * Effettua il login utilizzando WebAuthn
