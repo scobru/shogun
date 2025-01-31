@@ -208,48 +208,74 @@ Imports a Gun key pair.
 ```typescript
 isWebAuthnSupported(): boolean
 ```
-Verifica se WebAuthn è supportato nel browser corrente.
-- **Returns**: `true` se WebAuthn è supportato, `false` altrimenti
+Checks if WebAuthn is supported in the current browser.
+- **Returns**: `true` if WebAuthn is supported, `false` otherwise
+- **Note**: Also verifies Web Crypto API support
 
 #### createAccountWithWebAuthn
 ```typescript
 async createAccountWithWebAuthn(alias: string): Promise<WalletResult>
 ```
-Crea un nuovo account utilizzando WebAuthn per l'autenticazione.
-- `alias`: Username dell'account
-- **Returns**: Oggetto `WalletResult` contenente il wallet creato
-- **Throws**: Error se WebAuthn non è supportato o se l'account esiste già
+Creates a new account using WebAuthn for authentication.
+- `alias`: Account username (3-64 characters, only letters, numbers, underscores and hyphens)
+- **Returns**: `WalletResult` object containing the created wallet
+- **Process**:
+  1. Generates a random salt
+  2. Creates WebAuthn credentials
+  3. Generates password deterministically from username + salt
+  4. Saves only the salt in Gun
+- **Throws**:
+  - If WebAuthn is not supported
+  - If username is invalid
+  - If account already exists
+  - If timeout (60s) is exceeded
 
 #### loginWithWebAuthn
 ```typescript
 async loginWithWebAuthn(alias: string): Promise<string>
 ```
-Effettua il login utilizzando WebAuthn.
-- `alias`: Username dell'account
-- **Returns**: Public key dell'utente autenticato
-- **Throws**: Error se WebAuthn non è supportato o se le credenziali non sono valide
+Performs login using WebAuthn.
+- `alias`: Account username
+- **Returns**: Authenticated user's public key
+- **Process**:
+  1. Retrieves salt from Gun
+  2. Verifies WebAuthn authentication
+  3. Regenerates password from username + salt
+- **Throws**:
+  - If WebAuthn is not supported
+  - If username is invalid
+  - If credentials are not found
+  - If timeout (60s) is exceeded
 
 ### WebAuthn Interfaces
 
 #### WebAuthnResult
 ```typescript
 interface WebAuthnResult {
-  success: boolean;           // Indica se l'operazione è riuscita
-  username?: string;          // Username dell'account
-  password?: string;          // Password generata
-  credentialId?: string;      // ID della credenziale WebAuthn
-  error?: string;            // Messaggio di errore se presente
+  success: boolean;           // Indicates if operation was successful
+  username?: string;          // Account username
+  password?: string;          // Password generated from username + salt
+  credentialId?: string;      // WebAuthn credential ID
+  error?: string;            // Error message if present
 }
 ```
 
 #### WebAuthnVerifyResult
 ```typescript
 interface WebAuthnVerifyResult {
-  success: boolean;                    // Indica se la verifica è riuscita
-  authenticatorData?: ArrayBuffer;     // Dati dell'autenticatore
-  signature?: ArrayBuffer;             // Firma della verifica
-  error?: string;                     // Messaggio di errore se presente
+  success: boolean;                    // Indicates if verification was successful
+  authenticatorData?: ArrayBuffer;     // Authenticator data
+  signature?: ArrayBuffer;             // Verification signature
+  error?: string;                     // Error message if present
 }
+```
+
+### Costanti e Configurazione
+
+```typescript
+const TIMEOUT_MS = 60000;           // Timeout operazioni WebAuthn (60 secondi)
+const MIN_USERNAME_LENGTH = 3;      // Lunghezza minima username
+const MAX_USERNAME_LENGTH = 64;     // Lunghezza massima username
 ```
 
 ## 🕶 StealthChain
@@ -377,4 +403,72 @@ interface WalletResult {
   walletObj: Wallet;  // Wallet object
   entropy: string;    // Used entropy
 }
-``` 
+```
+
+## 🔫 Gun Node Structure
+
+### Wallets
+```
+gun/
+└── wallets/
+    └── [publicKey]/
+        ├── address      # Wallet address
+        ├── entropy      # Entropy for regeneration
+        └── timestamp    # Last modification timestamp
+```
+
+### WebAuthn
+```
+gun/
+└── shogun/
+    └── webauthn-credentials/
+        └── [username]/
+            ├── salt        # Salt for credential generation
+            ├── timestamp   # Creation timestamp
+            └── lastUsed    # Last access timestamp
+```
+
+### Stealth Keys
+```
+gun/
+└── stealthKeys/
+    └── [publicKey]/
+        ├── pub     # Stealth public key
+        ├── priv    # Stealth private key (encrypted)
+        ├── epub    # Ephemeral public key
+        └── epriv   # Ephemeral private key (encrypted)
+```
+
+### Users
+```
+gun/
+└── ~[publicKey]/  # ~ prefix for Gun users
+    └── stealthKeys/
+        ├── pub    # Public key
+        ├── priv   # Private key (encrypted)
+        ├── epub   # Ephemeral public key
+        └── epriv  # Ephemeral private key (encrypted)
+```
+
+### Public Registry
+```
+gun/
+└── stealthKeys/
+    └── [publicKey]  # Ephemeral public key (epub)
+```
+
+### Security Notes
+
+1. **Sensitive Data**
+   - Private keys are always encrypted before storage
+   - Salts are used to regenerate credentials instead of storing them
+   - Passwords are never stored
+
+2. **Data Access**
+   - Wallets are accessible only by their owner
+   - Stealth public keys are in the public registry
+   - Private keys are encrypted with user's key
+
+3. **Timestamps**
+   - Each node includes a timestamp to track changes
+   - Useful for synchronization and debugging 

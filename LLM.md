@@ -110,58 +110,141 @@ const status = await manager.checkLocalData(publicKey);
 await manager.clearLocalData(publicKey);
 ```
 
-## 🕶️ Indirizzi Stealth
+## 🕶️ Stealth Addresses
 
-### Generazione Chiavi Stealth
+### Stealth Key Generation
 ```typescript
 const stealthChain = manager.getStealthChain();
 stealthChain.generateStealthKeys((keyPair) => {
-  // Gestisci il keyPair
+  // Handle keyPair
 });
 ```
 
-### Generazione Indirizzo Stealth
+### Stealth Address Generation
 ```typescript
 stealthChain.generateStealthAddress(recipientPublicKey, (result) => {
-  // result contiene stealthAddress, ephemeralPublicKey, recipientPublicKey
+  // result contains stealthAddress, ephemeralPublicKey, recipientPublicKey
 });
 ```
 
-## ⚠️ Gestione Errori
+## 🔐 WebAuthn
 
-Principali tipi di errori da gestire:
-1. Errori di autenticazione
+### Overview
+```typescript
+// Registration
+const result = await manager.createAccountWithWebAuthn(alias);
+/* result = {
+  success: true,
+  username: string,
+  password: string,    // Generated deterministically from username + salt
+  credentialId: string // WebAuthn credential ID
+} */
+
+// Login
+const pubKey = await manager.loginWithWebAuthn(alias);
+```
+
+### Salt and Credential Management
+```typescript
+// Service only saves salt in Gun
+await gun.get(DAPP_NAME)
+  .get("webauthn-credentials")
+  .get(username)
+  .put({
+    salt,
+    timestamp: Date.now()
+  });
+
+// Credentials are generated deterministically
+const generateCredentials = (username: string, salt: string) => {
+  return {
+    password: sha256(username + salt)
+  };
+};
+```
+
+### Validations
+```typescript
+// Username validation
+if (username.length < 3 || username.length > 64) {
+  throw new Error('Username length invalid');
+}
+if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+  throw new Error('Invalid username characters');
+}
+
+// WebAuthn support check
+if (!manager.isWebAuthnSupported()) {
+  throw new Error('WebAuthn not supported');
+}
+```
+
+### Error Handling
+Main errors to handle:
+1. Validation errors
+   - "Username must be between 3 and 64 characters"
+   - "Username can only contain letters, numbers, underscores and hyphens"
+
+2. WebAuthn errors
+   - "WebAuthn not supported in this browser"
+   - "Username already registered with WebAuthn"
+   - "No WebAuthn credentials found"
+   - "WebAuthn verification failed"
+
+3. Timeout errors
+   - 60 seconds timeout for WebAuthn operations
+
+### Best Practices
+1. **Security**
+   - Always use dynamic challenges for each operation
+   - Always verify WebAuthn support before use
+   - Never store credentials, only salt
+
+2. **UX**
+   - Handle timeouts (60 seconds)
+   - Provide clear error feedback
+   - Implement fallbacks for unsupported browsers
+
+3. **Implementation**
+   - Use `AbortController` for timeout handling
+   - Always verify authenticator response
+   - Keep salt secure in Gun
+
+## ⚠️ Error Handling
+
+Main error types to handle:
+1. Authentication errors
    - "User not authenticated"
    - "Invalid credentials"
    - "Account already exists"
 
-2. Errori WebAuthn
+2. WebAuthn errors
    - "WebAuthn not supported"
    - "Biometric verification failed"
    - "User verification required"
 
-3. Errori di rete
+3. Network errors
    - "Network error"
    - "Connection timeout"
    - "Gun peer unreachable"
 
-4. Errori di storage
+4. Storage errors
    - "Local storage not available"
    - "Data save failed"
    - "Invalid data format"
 
-Esempio di gestione errori:
+Error handling example:
 ```typescript
 try {
   await manager.createAccountWithWebAuthn(alias);
 } catch (error) {
   if (error.message.includes('WebAuthn not supported')) {
-    // Fallback a autenticazione standard
+    // Fallback to standard authentication
     await manager.createAccount(alias, passphrase);
   } else if (error.message.includes('already exists')) {
-    // Gestisci account esistente
+    // Handle existing account
   } else {
-    // Gestisci altri errori
+    // Handle other errors
     console.error('Error:', error);
   }
 }
@@ -207,3 +290,128 @@ Quando interagisci con Shogun, verifica sempre:
    - Verifica supporto browser (Web Crypto API, localStorage)
    - Gestisci ambienti Node.js (crypto module)
    - Supporta multiple versioni Gun.js 
+
+## 🔫 Esempi Pratici Gun
+
+### Salvataggio Wallet
+```typescript
+// Salva un wallet
+await gun.get("wallets")
+  .get(publicKey)
+  .put({
+    address: wallet.address,
+    entropy: walletData.entropy,
+    timestamp: Date.now()
+  });
+
+// Recupera un wallet
+gun.get("wallets")
+  .get(publicKey)
+  .once((data) => {
+    if (data?.entropy) {
+      // Rigenera il wallet dall'entropy
+      const wallet = createWalletFromSalt(data.entropy);
+    }
+  });
+```
+
+### Gestione WebAuthn
+```typescript
+// Salva credenziali WebAuthn
+await gun.get(DAPP_NAME)
+  .get("webauthn-credentials")
+  .get(username)
+  .put({
+    salt: generatedSalt,
+    timestamp: Date.now()
+  });
+
+// Verifica login
+gun.get(DAPP_NAME)
+  .get("webauthn-credentials")
+  .get(username)
+  .once((data) => {
+    if (data?.salt) {
+      // Genera credenziali dal salt
+      const credentials = generateCredentialsFromSalt(username, data.salt);
+    }
+  });
+```
+
+### Chiavi Stealth
+```typescript
+// Salva chiavi stealth pubbliche
+gun.get("stealthKeys")
+  .get(publicKey)
+  .put(stealthKeyPair.epub);
+
+// Recupera chiavi stealth
+gun.user(publicKey)
+  .get("stealthKeys")
+  .once((data) => {
+    if (data?.pub && data?.epub) {
+      // Usa le chiavi per operazioni stealth
+    }
+  });
+```
+
+### Best Practices
+
+1. **Gestione Concorrenza**
+   ```typescript
+   // Usa once() per letture singole
+   gun.once((data) => {});
+   
+   // Usa on() per dati che cambiano
+   gun.on((data) => {});
+   ```
+
+2. **Timeout e Errori**
+   ```typescript
+   // Implementa sempre timeout
+   const timeout = setTimeout(() => {
+     reject(new Error("Timeout"));
+   }, 25000);
+
+   gun.once((data) => {
+     clearTimeout(timeout);
+     // Processa i dati
+   });
+   ```
+
+3. **Validazione Dati**
+   ```typescript
+   // Verifica sempre i dati ricevuti
+   gun.once((data) => {
+     if (!data || !data.required_field) {
+       throw new Error("Dati invalidi");
+     }
+     // Processa i dati validi
+   });
+   ```
+
+### Debugging
+
+1. **Logging Strutturato**
+   ```typescript
+   gun.once((data) => {
+     console.log("📥 Data received:", {
+       path: "wallets/" + publicKey,
+       data,
+       timestamp: new Date()
+     });
+   });
+   ```
+
+2. **Gestione Errori**
+   ```typescript
+   try {
+     await gun.get("path").put(data);
+   } catch (error) {
+     console.error("❌ Gun error:", {
+       operation: "put",
+       path: "path",
+       error: error.message
+     });
+   }
+   ``` 

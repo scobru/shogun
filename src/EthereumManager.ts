@@ -1,11 +1,8 @@
 import { ethers } from "ethers";
 import { WalletManager } from "./WalletManager";
-import {
-  MESSAGE_TO_SIGN,
-  generatePassword,
-  verifySignature,
-  getEthereumSigner,
-} from "./utils/ethereum";
+import { MESSAGE_TO_SIGN } from "./services/ethereum";
+import { EthereumService } from "./services/ethereum";
+import { AuthenticationError, ValidationError } from "./utils/errors";
 
 /**
  * Manages Ethereum wallet functionality and authentication
@@ -14,6 +11,7 @@ export class EthereumManager {
   private walletManager: WalletManager;
   private customProvider: ethers.JsonRpcProvider | null = null;
   private customWallet: ethers.Wallet | null = null;
+  private ethereumService: EthereumService;
 
   /**
    * Creates an EthereumManager instance
@@ -21,33 +19,44 @@ export class EthereumManager {
    */
   constructor(walletManager: WalletManager) {
     this.walletManager = walletManager;
+    this.ethereumService = new EthereumService();
   }
 
   /**
    * Sets a custom provider with private key
    * @param {string} rpcUrl - RPC URL for the provider
    * @param {string} privateKey - Private key for the wallet
+   * @throws {ValidationError} Se la chiave privata non è valida
    */
   public setCustomProvider(rpcUrl: string, privateKey: string): void {
-    this.customProvider = new ethers.JsonRpcProvider(rpcUrl);
-    this.customWallet = new ethers.Wallet(privateKey, this.customProvider);
+    try {
+      this.customProvider = new ethers.JsonRpcProvider(rpcUrl);
+      this.customWallet = new ethers.Wallet(privateKey, this.customProvider);
+    } catch (error) {
+      throw new ValidationError("Chiave privata non valida");
+    }
   }
 
   /**
    * Gets the appropriate signer (custom or browser)
    * @returns {Promise<ethers.Signer>} The Ethereum signer
+   * @throws {AuthenticationError} Se non è possibile ottenere il signer
    */
   public async getSigner(): Promise<ethers.Signer> {
-    if (this.customWallet) {
-      return this.customWallet;
+    try {
+      if (this.customWallet) {
+        return this.customWallet;
+      }
+      return await this.ethereumService.getEthereumSigner();
+    } catch (error) {
+      throw new AuthenticationError("Impossibile ottenere il signer Ethereum");
     }
-    return getEthereumSigner();
   }
 
   /**
    * Creates an account using an Ethereum account
    * @returns {Promise<string>} The created username (Ethereum address)
-   * @throws {Error} If account creation fails
+   * @throws {AuthenticationError} Se la creazione dell'account fallisce
    */
   public async createAccountWithEthereum(): Promise<string> {
     try {
@@ -56,7 +65,7 @@ export class EthereumManager {
 
       // Sign message to generate password
       const signature = await signer.signMessage(MESSAGE_TO_SIGN);
-      const password = await generatePassword(signature);
+      const password = await this.ethereumService.generatePassword(signature);
 
       // Use address as username
       const username = address.toLowerCase();
@@ -66,15 +75,21 @@ export class EthereumManager {
 
       return username;
     } catch (error) {
-      console.error("Error creating account with Ethereum:", error);
-      throw error;
+      if (error instanceof AuthenticationError) {
+        throw error;
+      }
+      throw new AuthenticationError(
+        `Errore durante la creazione dell'account Ethereum: ${
+          error instanceof Error ? error.message : "Errore sconosciuto"
+        }`
+      );
     }
   }
 
   /**
    * Logs in with an Ethereum account
    * @returns {Promise<string|null>} Public key if login successful, null otherwise
-   * @throws {Error} If login fails
+   * @throws {AuthenticationError} Se il login fallisce
    */
   public async loginWithEthereum(): Promise<string | null> {
     try {
@@ -83,7 +98,7 @@ export class EthereumManager {
 
       // Sign message to generate password
       const signature = await signer.signMessage(MESSAGE_TO_SIGN);
-      const password = await generatePassword(signature);
+      const password = await this.ethereumService.generatePassword(signature);
 
       // Use address as username
       const username = address.toLowerCase();
@@ -91,8 +106,14 @@ export class EthereumManager {
       // Perform login
       return this.walletManager.login(username, password);
     } catch (error) {
-      console.error("Error logging in with Ethereum:", error);
-      throw error;
+      if (error instanceof AuthenticationError) {
+        throw error;
+      }
+      throw new AuthenticationError(
+        `Errore durante il login con Ethereum: ${
+          error instanceof Error ? error.message : "Errore sconosciuto"
+        }`
+      );
     }
   }
 }

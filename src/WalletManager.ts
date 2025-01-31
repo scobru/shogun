@@ -10,12 +10,23 @@ import { EthereumManager } from "./EthereumManager";
 import { StealthChain } from "./StealthChain";
 import type { GunKeyPair } from "./interfaces/GunKeyPair";
 import { WalletResult, WalletData } from "./interfaces/WalletResult";
-import { WebAuthnService } from './utils/WebAuthnService';
+import { WebAuthnService } from "./services/webAuthn";
+import { EthereumService } from "./services/ethereum";
+import { CredentialManager } from "./services/CredentialManager";
+import { WebAuthnError, NetworkError, ValidationError, WalletError, AuthenticationError } from "./utils/errors";
+import { validateAlias, validatePrivateKey, validateEthereumAddress } from "./utils/validation";
+import type { ActivityPubKeys } from "./interfaces/ActivityPubKeys";
 
 // Importiamo crypto condizionalmente
 let cryptoModule: any;
 try {
-  cryptoModule = require("crypto");
+  if (typeof window === 'undefined') {
+    // Siamo in Node.js
+    cryptoModule = require("crypto");
+  } else {
+    // Siamo nel browser
+    cryptoModule = require("crypto-browserify");
+  }
 } catch {
   cryptoModule = null;
 }
@@ -97,12 +108,14 @@ class LocalStorageManager {
     hasWallet: boolean;
     hasStealthKeys: boolean;
     hasPasskey: boolean;
+    hasActivityPubKeys: boolean;
   }> {
     const storage = getLocalStorage();
     return {
       hasWallet: storage.getItem(`wallet_${publicKey}`) !== null,
       hasStealthKeys: storage.getItem(`stealthKeys_${publicKey}`) !== null,
       hasPasskey: storage.getItem(`passkey_${publicKey}`) !== null,
+      hasActivityPubKeys: storage.getItem(`activitypub_${publicKey}`) !== null,
     };
   }
 
@@ -111,8 +124,64 @@ class LocalStorageManager {
     storage.removeItem(`wallet_${publicKey}`);
     storage.removeItem(`stealthKeys_${publicKey}`);
     storage.removeItem(`passkey_${publicKey}`);
+    storage.removeItem(`activitypub_${publicKey}`);
+  }
+
+  static async saveActivityPubKeys(keys: ActivityPubKeys, publicKey: string): Promise<void> {
+    const storage = getLocalStorage();
+    storage.setItem(`activitypub_${publicKey}`, JSON.stringify(keys));
+  }
+
+  static async retrieveActivityPubKeys(publicKey: string): Promise<ActivityPubKeys | null> {
+    const storage = getLocalStorage();
+    const keysData = storage.getItem(`activitypub_${publicKey}`);
+    if (!keysData) return null;
+    try {
+      const parsed = JSON.parse(keysData);
+      if (!parsed.publicKey || !parsed.privateKey) {
+        return null;
+      }
+      return {
+        publicKey: parsed.publicKey,
+        privateKey: parsed.privateKey,
+        createdAt: parsed.createdAt || Date.now(),
+      };
+    } catch (error) {
+      console.error("Errore nel recupero delle chiavi ActivityPub locali:", error);
+      return null;
+    }
   }
 }
+
+interface GunAck {
+  err?: string;
+  ok?: boolean;
+}
+
+interface GunData {
+  publicKey?: string;
+  privateKey?: string;
+  createdAt?: number;
+}
+
+// Funzione helper per la generazione delle chiavi RSA
+const generateRSAKeyPair = () => {
+  if (!cryptoModule) {
+    throw new Error("Modulo crypto non disponibile");
+  }
+
+  return cryptoModule.generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem",
+    },
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem",
+    },
+  });
+};
 
 /**
  * Main class for managing wallet and related functionality
@@ -124,6 +193,8 @@ export class WalletManager {
   private stealthChain: StealthChain;
   private isAuthenticating = false;
   private webAuthnService: WebAuthnService;
+  private ethereumService: EthereumService;
+  private credentialManager: CredentialManager;
 
   /**
    * Creates a WalletManager instance
@@ -134,16 +205,17 @@ export class WalletManager {
       peers: [
         "https://gun-manhattan.herokuapp.com/gun",
         "https://peer.wallie.io/gun",
-        "https://ruling-mastodon-improved.ngrok-free.app/gun",
         "https://gun-relay.scobrudot.dev/gun",
       ],
       localStorage: false,
-      radisk:false
+      radisk: false,
     });
     this.user = this.gun.user();
     this.ethereumManager = new EthereumManager(this);
     this.stealthChain = new StealthChain(this.gun);
     this.webAuthnService = new WebAuthnService(this.gun);
+    this.ethereumService = new EthereumService();
+    this.credentialManager = new CredentialManager();
   }
 
   /**
@@ -266,7 +338,7 @@ export class WalletManager {
    */
   public async login(alias: string, passphrase: string): Promise<string> {
     try {
-      // If there's an authentication in progress, wait a bit and retry
+      // Se c'è un'autenticazione in corso, attendi e riprova
       if (this.isAuthenticating) {
         await this.waitForAuth();
         this.user.leave();
@@ -277,27 +349,19 @@ export class WalletManager {
       console.log("Starting login process for:", alias);
 
       return new Promise<string>((resolve, reject) => {
-        // If user is already authenticated with same credentials, return public key
-        if (this.user.is?.alias === alias) {
-          console.log("User already authenticated with same credentials");
-          this.isAuthenticating = false;
-          resolve(this.user.is.pub);
-          return;
-        }
-
-        // Safety timeout
+        // Timeout di sicurezza
         const timeoutId = setTimeout(() => {
           this.isAuthenticating = false;
           this.user.leave();
           reject(new Error("Authentication timeout"));
-        }, 30000); // Increased to 30 seconds
+        }, 30000); // Aumentato a 30 secondi
 
         this.user.auth(alias, passphrase, (ack: any) => {
           try {
             if (ack.err) {
               this.isAuthenticating = false;
               if (ack.err.includes("being created")) {
-                // If user is being created, wait and retry
+                // Se l'utente è in fase di creazione, attendi e riprova
                 setTimeout(async () => {
                   try {
                     const result = await this.login(alias, passphrase);
@@ -433,11 +497,7 @@ export class WalletManager {
 
       node.on((data: any) => {
         console.log("📥 Data received after save:", data);
-        if (
-          data &&
-          data.address === wallet.address &&
-          !hasResolved
-        ) {
+        if (data && data.address === wallet.address && !hasResolved) {
           console.log("✅ Wallet saved successfully");
           hasResolved = true;
           resolve();
@@ -482,12 +542,12 @@ export class WalletManager {
             if (!data.entropy) {
               throw new Error("Missing entropy for wallet recreation");
             }
-            
+
             const wallet = await WalletManager.createWalletFromSalt(
               this.user._.sea,
               data.entropy
             );
-            
+
             console.log("✅ Wallet created:", wallet.address);
             wallets.push(wallet);
             hasResolved = true;
@@ -521,16 +581,21 @@ export class WalletManager {
 
   async loginWithPrivateKey(privateKey: string): Promise<string> {
     try {
-      // First set the wallet
+      validatePrivateKey(privateKey);
+      
       this.ethereumManager.setCustomProvider("", privateKey);
-      // Then login
       const pubKey = await this.ethereumManager.loginWithEthereum();
+      
       if (!pubKey) {
-        throw new Error("Invalid private key");
+        throw new WalletError("Chiave privata non valida");
       }
+      
       return pubKey;
     } catch (error) {
-      throw new Error("Invalid private key");
+      if (error instanceof ValidationError || error instanceof WalletError) {
+        throw error;
+      }
+      throw new AuthenticationError("Errore durante il login con chiave privata");
     }
   }
 
@@ -626,7 +691,9 @@ export class WalletManager {
     }
 
     const wallet = await LocalStorageManager.retrieveWallet(publicKey);
-    const stealthKeys = await this.stealthChain.retrieveStealthKeysLocally(publicKey);
+    const stealthKeys = await this.stealthChain.retrieveStealthKeysLocally(
+      publicKey
+    );
 
     const exportData = {
       wallet: wallet
@@ -866,18 +933,17 @@ export class WalletManager {
    * @param {string} walletAddress - Address of the wallet to delete
    * @returns {Promise<void>}
    */
-  public async deleteWallet(publicKey: string, walletAddress: string): Promise<void> {
+  public async deleteWallet(
+    publicKey: string,
+    walletAddress: string
+  ): Promise<void> {
     // Rimuovi da Gun senza controlli
-    this.gun
-      .get("wallets")
-      .get(publicKey)
-      .get(walletAddress)
-      .put(null);
+    this.gun.get("wallets").get(publicKey).get(walletAddress).put(null);
 
     // Rimuovi da localStorage senza verifiche
     const storage = getLocalStorage();
     storage.removeItem(`wallet_${publicKey}`);
-    
+
     return Promise.resolve();
   }
 
@@ -885,36 +951,35 @@ export class WalletManager {
    * Crea un account utilizzando WebAuthn
    * @param {string} alias - Username dell'account
    * @returns {Promise<WalletResult>} Risultato della creazione dell'account
+   * @throws {WebAuthnError} Se WebAuthn non è supportato o fallisce la registrazione
+   * @throws {NetworkError} Se c'è un problema di rete
    */
-  // ... existing code ...
-
-  public async createAccountWithWebAuthn(
-    alias: string,
-    entropy: string,
-    password: string
-  ): Promise<WalletResult> {
+  public async createAccountWithWebAuthn(alias: string): Promise<WalletResult> {
     try {
+      validateAlias(alias);
+
       if (!this.webAuthnService.isSupported()) {
-        throw new Error('WebAuthn non è supportato su questo browser');
+        throw new WebAuthnError("WebAuthn non è supportato su questo browser");
       }
 
-      // Crea l'account con la password generata
-      await this.createAccount(alias, password);
+      const webAuthnResult = await this.webAuthnService.generateCredentials(alias);
+      if (!webAuthnResult.success || !webAuthnResult.password) {
+        throw new WebAuthnError(webAuthnResult.error || "Errore durante la registrazione con WebAuthn");
+      }
 
-      // Creiamo il wallet usando l'entropy fornita
+      await this.createAccount(alias, webAuthnResult.password);
       const walletResult = await WalletManager.createWalletObj(this.user._.sea);
-
-      // Salviamo il wallet
       const wallet = new Wallet(walletResult.walletObj.privateKey);
       await this.saveWallet(wallet, this.user.is.pub, StorageType.BOTH);
 
       return walletResult;
     } catch (error) {
-      throw new Error(`Errore durante la creazione dell'account con WebAuthn: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`);
+      if (error instanceof ValidationError || error instanceof WebAuthnError) {
+        throw error;
+      }
+      throw new NetworkError(`Errore durante la creazione dell'account con WebAuthn: ${error instanceof Error ? error.message : "Errore sconosciuto"}`);
     }
   }
-
-// ... existing code ...
 
   /**
    * Effettua il login utilizzando WebAuthn
@@ -923,18 +988,24 @@ export class WalletManager {
    */
   public async loginWithWebAuthn(alias: string): Promise<string> {
     try {
+      validateAlias(alias);
+
       if (!this.webAuthnService.isSupported()) {
-        throw new Error('WebAuthn non è supportato su questo browser');
+        throw new WebAuthnError("WebAuthn non è supportato su questo browser");
       }
 
       const webAuthnResult = await this.webAuthnService.login(alias);
       if (!webAuthnResult.success || !webAuthnResult.password) {
-        throw new Error(webAuthnResult.error || 'Errore durante il login con WebAuthn');
+        throw new WebAuthnError(webAuthnResult.error || "Errore durante il login con WebAuthn");
       }
 
-      return this.login(alias, webAuthnResult.password);
+      const pubKey = await this.login(alias, webAuthnResult.password);
+      return pubKey;
     } catch (error) {
-      throw new Error(`Errore durante il login con WebAuthn: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`);
+      if (error instanceof ValidationError || error instanceof WebAuthnError) {
+        throw error;
+      }
+      throw new AuthenticationError(`Errore durante il login con WebAuthn: ${error instanceof Error ? error.message : "Errore sconosciuto"}`);
     }
   }
 
@@ -944,5 +1015,160 @@ export class WalletManager {
    */
   public isWebAuthnSupported(): boolean {
     return this.webAuthnService.isSupported();
+  }
+
+  /**
+   * Genera una coppia di chiavi RSA per ActivityPub
+   * @returns {Promise<ActivityPubKeys>} Coppia di chiavi RSA
+   * @throws {Error} Se la generazione delle chiavi fallisce
+   */
+  public generateActivityPubKeys(): Promise<ActivityPubKeys> {
+    return new Promise((resolve, reject) => {
+      try {
+        const { privateKey, publicKey } = generateRSAKeyPair();
+
+        const keys: ActivityPubKeys = {
+          publicKey,
+          privateKey,
+          createdAt: Date.now(),
+        };
+
+        resolve(keys);
+      } catch (error) {
+        reject(new Error(`Errore nella generazione delle chiavi RSA: ${error instanceof Error ? error.message : "Errore sconosciuto"}`));
+      }
+    });
+  }
+
+  /**
+   * Salva le chiavi ActivityPub sia su Gun che localmente
+   * @param {ActivityPubKeys} keys - Chiavi da salvare
+   * @param {StorageType} storageType - Tipo di storage da utilizzare
+   * @returns {Promise<void>}
+   * @throws {Error} Se il salvataggio fallisce o l'utente non è autenticato
+   */
+  public async saveActivityPubKeys(
+    keys: ActivityPubKeys,
+    storageType: StorageType = StorageType.BOTH
+  ): Promise<void> {
+    if (!this.user.is) {
+      throw new Error("Utente non autenticato");
+    }
+
+    const publicKey = this.getPublicKey();
+
+    if (storageType === StorageType.LOCAL || storageType === StorageType.BOTH) {
+      await LocalStorageManager.saveActivityPubKeys(keys, publicKey);
+    }
+
+    if (storageType === StorageType.GUN || storageType === StorageType.BOTH) {
+      return new Promise((resolve, reject) => {
+        this.user.get("activitypub").get("keys").put(
+          {
+            publicKey: keys.publicKey,
+            privateKey: keys.privateKey,
+            createdAt: keys.createdAt,
+          },
+          (ack: GunAck) => {
+            if (ack.err) {
+              reject(new Error(ack.err));
+              return;
+            }
+
+            // Verifica che le chiavi siano state salvate correttamente
+            this.user.get("activitypub").get("keys").once((data: GunData) => {
+              if (data && data.publicKey === keys.publicKey) {
+                resolve();
+              } else {
+                reject(new Error("Verifica salvataggio chiavi fallita"));
+              }
+            });
+          }
+        );
+      });
+    }
+  }
+
+  /**
+   * Recupera le chiavi ActivityPub da Gun e/o localStorage
+   * @param {StorageType} storageType - Tipo di storage da utilizzare
+   * @returns {Promise<ActivityPubKeys|null>} Chiavi ActivityPub o null se non trovate
+   * @throws {Error} Se il recupero fallisce o l'utente non è autenticato
+   */
+  public async getActivityPubKeys(
+    storageType: StorageType = StorageType.BOTH
+  ): Promise<ActivityPubKeys | null> {
+    if (!this.user.is) {
+      throw new Error("Utente non autenticato");
+    }
+
+    const publicKey = this.getPublicKey();
+
+    if (storageType === StorageType.LOCAL) {
+      return LocalStorageManager.retrieveActivityPubKeys(publicKey);
+    }
+
+    if (storageType === StorageType.GUN) {
+      return new Promise((resolve, reject) => {
+        this.user.get("activitypub").get("keys").once((data: GunData) => {
+          if (!data) {
+            resolve(null);
+            return;
+          }
+
+          if (!data.publicKey || !data.privateKey) {
+            reject(new Error("Chiavi ActivityPub incomplete"));
+            return;
+          }
+
+          resolve({
+            publicKey: data.publicKey,
+            privateKey: data.privateKey,
+            createdAt: data.createdAt || Date.now(),
+          });
+        });
+      });
+    }
+
+    // Se siamo qui, storageType è BOTH
+    // Prima proviamo il recupero locale
+    const localKeys = await LocalStorageManager.retrieveActivityPubKeys(publicKey);
+    if (localKeys) return localKeys;
+
+    // Se non troviamo le chiavi localmente, proviamo su Gun
+    return this.getActivityPubKeys(StorageType.GUN);
+  }
+
+  /**
+   * Elimina le chiavi ActivityPub da Gun e localStorage
+   * @param {StorageType} storageType - Tipo di storage da utilizzare
+   * @returns {Promise<void>}
+   * @throws {Error} Se l'eliminazione fallisce o l'utente non è autenticato
+   */
+  public async deleteActivityPubKeys(
+    storageType: StorageType = StorageType.BOTH
+  ): Promise<void> {
+    if (!this.user.is) {
+      throw new Error("Utente non autenticato");
+    }
+
+    const publicKey = this.getPublicKey();
+
+    if (storageType === StorageType.LOCAL || storageType === StorageType.BOTH) {
+      const storage = getLocalStorage();
+      storage.removeItem(`activitypub_${publicKey}`);
+    }
+
+    if (storageType === StorageType.GUN || storageType === StorageType.BOTH) {
+      return new Promise((resolve, reject) => {
+        this.user.get("activitypub").get("keys").put(null, (ack: GunAck) => {
+          if (ack.err) {
+            reject(new Error(ack.err));
+            return;
+          }
+          resolve();
+        });
+      });
+    }
   }
 }

@@ -363,3 +363,43 @@ Pull requests are welcome! For major changes:
 
 - [ ] WebAuthn/Passkey authentication
 - [ ] StealthChain smart contracts
+
+## 🔑 ActivityPub Keys
+
+### Generazione e gestione chiavi RSA
+```typescript
+// Genera nuove chiavi RSA
+const keys = await walletManager.generateActivityPubKeys();
+
+// Salva le chiavi (sia su Gun che in localStorage)
+await walletManager.saveActivityPubKeys(keys);
+
+// Salva solo su Gun
+await walletManager.saveActivityPubKeys(keys, StorageType.GUN);
+
+// Salva solo in localStorage
+await walletManager.saveActivityPubKeys(keys, StorageType.LOCAL);
+
+// Recupera le chiavi (prima da localStorage, poi da Gun)
+const keys = await walletManager.getActivityPubKeys();
+
+// Recupera solo da Gun
+const keys = await walletManager.getActivityPubKeys(StorageType.GUN);
+
+// Recupera solo da localStorage
+const keys = await walletManager.getActivityPubKeys(StorageType.LOCAL);
+
+// Elimina le chiavi da entrambi gli storage
+await walletManager.deleteActivityPubKeys();
+```
+
+### Verifica presenza chiavi
+```typescript
+const status = await walletManager.checkLocalData(publicKey);
+/* status = {
+  hasWallet: boolean,
+  hasStealthKeys: boolean,
+  hasPasskey: boolean,
+  hasActivityPubKeys: boolean
+} */
+```
