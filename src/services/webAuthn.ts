@@ -1,18 +1,94 @@
 // Import sha256 usando require
 const sha256 = require('js-sha256').sha256;
 import type { WebAuthnResult, WebAuthnVerifyResult } from '../interfaces/WebAuthnResult';
-import crypto from 'crypto';
+
+// Importiamo crypto solo per Node.js
+let cryptoModule: any;
+try {
+  if (typeof window === "undefined") {
+    // Siamo in Node.js
+    cryptoModule = require("crypto");
+  }
+} catch {
+  cryptoModule = null;
+}
 
 // Costanti di sicurezza
 const TIMEOUT_MS = 60000; // 60 secondi
 const MIN_USERNAME_LENGTH = 3;
 const MAX_USERNAME_LENGTH = 64;
 
+// Interfaccia per le credenziali del dispositivo
+interface DeviceCredential {
+  deviceId: string;
+  timestamp: number;
+  name?: string;
+  platform?: string;
+}
+
+interface WebAuthnCredentials {
+  salt: string;
+  timestamp: number;
+  credentials: { [credentialId: string]: DeviceCredential };
+}
+
+// Funzione per generare un ID dispositivo univoco
+const generateDeviceId = (): string => {
+  const platform = typeof navigator !== 'undefined' ? navigator.platform : 'unknown';
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 15);
+  return uint8ArrayToHex(new TextEncoder().encode(`${platform}-${timestamp}-${random}`));
+};
+
+// Funzione per ottenere informazioni sulla piattaforma
+const getPlatformInfo = (): { name: string; platform: string } => {
+  if (typeof navigator === 'undefined') {
+    return { name: 'unknown', platform: 'unknown' };
+  }
+
+  const platform = navigator.platform;
+  const userAgent = navigator.userAgent;
+  let name = 'Unknown Device';
+
+  if (/iPhone|iPad|iPod/.test(platform)) {
+    name = 'iOS Device';
+  } else if (/Android/.test(userAgent)) {
+    name = 'Android Device';
+  } else if (/Win/.test(platform)) {
+    name = 'Windows Device';
+  } else if (/Mac/.test(platform)) {
+    name = 'Mac Device';
+  } else if (/Linux/.test(platform)) {
+    name = 'Linux Device';
+  }
+
+  return { name, platform };
+};
+
+// Funzione per convertire Uint8Array in stringa hex
+const uint8ArrayToHex = (arr: Uint8Array): string => {
+  return Array.from(arr)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+};
+
+// Genera bytes casuali in modo sicuro
+const getRandomBytes = (length: number): Uint8Array => {
+  if (typeof window !== "undefined" && window.crypto) {
+    // Usa WebCrypto nel browser
+    return window.crypto.getRandomValues(new Uint8Array(length));
+  } else if (cryptoModule) {
+    // Usa Node.js crypto
+    return new Uint8Array(cryptoModule.randomBytes(length));
+  }
+  throw new Error("Nessuna implementazione crittografica disponibile");
+};
+
 // Challenge statica per generare credenziali deterministiche
 const generateChallenge = (username: string): Uint8Array => {
   const timestamp = Date.now().toString();
-  const randomBytes = crypto.randomBytes(32);
-  const challengeData = `${username}-${timestamp}-${randomBytes.toString('hex')}`;
+  const randomBytes = getRandomBytes(32);
+  const challengeData = `${username}-${timestamp}-${uint8ArrayToHex(randomBytes)}`;
   return new TextEncoder().encode(challengeData);
 };
 
@@ -77,20 +153,60 @@ export class WebAuthnService {
     }
   }
 
-  // Genera credenziali WebAuthn deterministiche
-  public async generateCredentials(username: string): Promise<WebAuthnResult> {
+  // Recupera le credenziali WebAuthn da Gun
+  private async getWebAuthnCredentials(username: string): Promise<WebAuthnCredentials | null> {
+    return new Promise((resolve) => {
+      this.gun.get(this.DAPP_NAME)
+        .get("webauthn-credentials")
+        .get(username)
+        .once((data: any) => {
+          resolve(data || null);
+        });
+    });
+  }
+
+  // Salva le credenziali WebAuthn su Gun
+  private async saveWebAuthnCredentials(
+    username: string, 
+    credentials: WebAuthnCredentials
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.gun.get(this.DAPP_NAME)
+        .get("webauthn-credentials")
+        .get(username)
+        .put(credentials, (ack: any) => {
+          if (ack.err) {
+            reject(new Error(ack.err));
+          } else {
+            resolve();
+          }
+        });
+    });
+  }
+
+  public async generateCredentials(
+    username: string, 
+    isNewDevice: boolean = false,
+    deviceName?: string
+  ): Promise<WebAuthnResult> {
     try {
-      // Validazioni di sicurezza
       this.validateUsername(username);
 
       if (!this.isSupported()) {
         throw new Error('WebAuthn non è supportato su questo browser');
       }
 
-      // Verifica se l'username è già registrato
-      const existingSalt = await this.getSalt(username);
-      if (existingSalt) {
+      // Recupera le credenziali esistenti
+      const existingCreds = await this.getWebAuthnCredentials(username);
+      
+      // Se non è un nuovo dispositivo e l'username esiste, errore
+      if (existingCreds && !isNewDevice) {
         throw new Error('Username già registrato con WebAuthn');
+      }
+      
+      // Se è un nuovo dispositivo ma l'username non esiste, errore
+      if (!existingCreds && isNewDevice) {
+        throw new Error('Username non trovato. Registrati prima come nuovo utente');
       }
 
       // Genera una challenge unica per questa registrazione
@@ -138,26 +254,44 @@ export class WebAuthnService {
           signal: abortController.signal
         }) as PublicKeyCredential;
 
-        // Genera un salt casuale
-        const salt = crypto.randomBytes(32).toString('hex');
+        // Usa il salt esistente o ne crea uno nuovo
+        const salt = existingCreds?.salt || uint8ArrayToHex(getRandomBytes(32));
         
         // Genera le credenziali dal salt
         const { password } = generateCredentialsFromSalt(username, salt);
 
-        // Salva solo il salt in Gun
-        await this.gun.get(this.DAPP_NAME)
-          .get("webauthn-credentials")
-          .get(username)
-          .put({
-            salt,
-            timestamp: Date.now()
-          });
+        // Ottieni informazioni sul dispositivo
+        const { name: defaultDeviceName, platform } = getPlatformInfo();
+        const deviceId = generateDeviceId();
+
+        // Prepara le credenziali da salvare
+        const credentialId = bufferToBase64(credential.rawId);
+        const newCredential: DeviceCredential = {
+          deviceId,
+          timestamp: Date.now(),
+          name: deviceName || defaultDeviceName,
+          platform
+        };
+
+        // Aggiorna o crea le credenziali WebAuthn
+        const updatedCreds: WebAuthnCredentials = {
+          salt,
+          timestamp: Date.now(),
+          credentials: {
+            ...(existingCreds?.credentials || {}),
+            [credentialId]: newCredential
+          }
+        };
+
+        // Salva le credenziali aggiornate
+        await this.saveWebAuthnCredentials(username, updatedCreds);
 
         return {
           success: true,
           username,
           password,
-          credentialId: bufferToBase64(credential.rawId)
+          credentialId,
+          deviceInfo: newCredential
         };
       } finally {
         clearTimeout(timeoutId);
@@ -169,6 +303,29 @@ export class WebAuthnService {
         error: error instanceof Error ? error.message : 'Errore sconosciuto'
       };
     }
+  }
+
+  // Ottieni la lista dei dispositivi registrati
+  public async getRegisteredDevices(username: string): Promise<DeviceCredential[]> {
+    const creds = await this.getWebAuthnCredentials(username);
+    if (!creds?.credentials) {
+      return [];
+    }
+    return Object.values(creds.credentials);
+  }
+
+  // Rimuovi un dispositivo registrato
+  public async removeDevice(username: string, credentialId: string): Promise<boolean> {
+    const creds = await this.getWebAuthnCredentials(username);
+    if (!creds?.credentials || !creds.credentials[credentialId]) {
+      return false;
+    }
+
+    const updatedCreds = { ...creds };
+    delete updatedCreds.credentials[credentialId];
+
+    await this.saveWebAuthnCredentials(username, updatedCreds);
+    return true;
   }
 
   // Login con WebAuthn
@@ -240,9 +397,9 @@ export class WebAuthnService {
         throw new Error('Invalid credential ID');
       }
 
-      const challenge = crypto.randomBytes(32);
+      const challengeBytes = getRandomBytes(32);
       const assertionOptions: PublicKeyCredentialRequestOptions = {
-        challenge,
+        challenge: challengeBytes,
         allowCredentials: [{
           id: base64ToBuffer(credentialId),
           type: 'public-key',

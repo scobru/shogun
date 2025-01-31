@@ -2,18 +2,17 @@
  * Gestisce le credenziali WebAuthn in memoria
  */
 export class CredentialManager {
-  private credentials: Map<string, PublicKeyCredential> = new Map();
+  private credentials: Map<string, PublicKeyCredential[]> = new Map();
 
   /**
    * Aggiunge una credenziale per un alias
    * @param alias - Username dell'utente
    * @param credential - Credenziale WebAuthn
    */
-  public addCredential(alias: string, credential: PublicKeyCredential): void {
-    if (!alias || !credential) {
-      throw new Error('Alias e credenziale sono richiesti');
-    }
-    this.credentials.set(alias, credential);
+  public addCredential(userId: string, credential: PublicKeyCredential): void {
+    const userCredentials = this.credentials.get(userId) || [];
+    userCredentials.push(credential);
+    this.credentials.set(userId, userCredentials);
   }
 
   /**
@@ -21,8 +20,8 @@ export class CredentialManager {
    * @param alias - Username dell'utente
    * @returns La credenziale se trovata, undefined altrimenti
    */
-  public getCredential(alias: string): PublicKeyCredential | undefined {
-    return this.credentials.get(alias);
+  public getCredentials(userId: string): PublicKeyCredential[] | undefined {
+    return this.credentials.get(userId);
   }
 
   /**
@@ -30,8 +29,15 @@ export class CredentialManager {
    * @param alias - Username dell'utente
    * @returns true se la credenziale è stata rimossa, false se non esisteva
    */
-  public removeCredential(alias: string): boolean {
-    return this.credentials.delete(alias);
+  public removeCredential(userId: string, credentialId: string): boolean {
+    const userCredentials = this.credentials.get(userId);
+    if (!userCredentials) return false;
+
+    const updatedCredentials = userCredentials.filter(
+      (cred) => cred.id !== credentialId
+    );
+    this.credentials.set(userId, updatedCredentials);
+    return true;
   }
 
   /**

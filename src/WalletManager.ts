@@ -13,23 +13,20 @@ import { WalletResult, WalletData } from "./interfaces/WalletResult";
 import { WebAuthnService } from "./services/webAuthn";
 import { EthereumService } from "./services/ethereum";
 import { CredentialManager } from "./services/CredentialManager";
-import { WebAuthnError, NetworkError, ValidationError, WalletError, AuthenticationError } from "./utils/errors";
-import { validateAlias, validatePrivateKey, validateEthereumAddress } from "./utils/validation";
+import {
+  WebAuthnError,
+  NetworkError,
+  ValidationError,
+  WalletError,
+  AuthenticationError,
+} from "./utils/errors";
+import {
+  validateAlias,
+  validatePrivateKey,
+  validateEthereumAddress,
+} from "./utils/validation";
 import type { ActivityPubKeys } from "./interfaces/ActivityPubKeys";
-
-// Importiamo crypto condizionalmente
-let cryptoModule: any;
-try {
-  if (typeof window === 'undefined') {
-    // Siamo in Node.js
-    cryptoModule = require("crypto");
-  } else {
-    // Siamo nel browser
-    cryptoModule = require("crypto-browserify");
-  }
-} catch {
-  cryptoModule = null;
-}
+import type { GunData, GunAck } from "./interfaces/Gun";
 
 // Extend Gun type definitions
 declare module "gun" {
@@ -80,6 +77,24 @@ class LocalStorageManager {
     storage.setItem(`wallet_${publicKey}`, JSON.stringify(walletData));
   }
 
+  static async saveUser(pair: GunKeyPair, publicKey: string): Promise<void> {
+    const storage = getLocalStorage();
+    storage.setItem(`user_${publicKey}`, JSON.stringify(pair));
+  }
+
+  static async retrieveUser(publicKey: string): Promise<GunKeyPair | null> {
+    const storage = getLocalStorage();
+    const userData = storage.getItem(`user_${publicKey}`);
+    if (!userData) return null;
+    try {
+      const parsed = JSON.parse(userData);
+      return parsed;
+    } catch (error) {
+      console.error("Error retrieving user:", error);
+      return null;
+    }
+  }
+
   static async retrieveWallet(publicKey: string): Promise<Wallet | null> {
     const storage = getLocalStorage();
     const walletData = storage.getItem(`wallet_${publicKey}`);
@@ -127,12 +142,17 @@ class LocalStorageManager {
     storage.removeItem(`activitypub_${publicKey}`);
   }
 
-  static async saveActivityPubKeys(keys: ActivityPubKeys, publicKey: string): Promise<void> {
+  static async saveActivityPubKeys(
+    keys: ActivityPubKeys,
+    publicKey: string
+  ): Promise<void> {
     const storage = getLocalStorage();
     storage.setItem(`activitypub_${publicKey}`, JSON.stringify(keys));
   }
 
-  static async retrieveActivityPubKeys(publicKey: string): Promise<ActivityPubKeys | null> {
+  static async retrieveActivityPubKeys(
+    publicKey: string
+  ): Promise<ActivityPubKeys | null> {
     const storage = getLocalStorage();
     const keysData = storage.getItem(`activitypub_${publicKey}`);
     if (!keysData) return null;
@@ -147,40 +167,102 @@ class LocalStorageManager {
         createdAt: parsed.createdAt || Date.now(),
       };
     } catch (error) {
-      console.error("Errore nel recupero delle chiavi ActivityPub locali:", error);
+      console.error(
+        "Errore nel recupero delle chiavi ActivityPub locali:",
+        error
+      );
       return null;
     }
   }
 }
 
-interface GunAck {
-  err?: string;
-  ok?: boolean;
+// Importiamo crypto solo per Node.js
+let cryptoModule: any;
+try {
+  if (typeof window === "undefined") {
+    // Siamo in Node.js
+    cryptoModule = require("crypto");
+  }
+} catch {
+  cryptoModule = null;
 }
 
-interface GunData {
-  publicKey?: string;
-  privateKey?: string;
-  createdAt?: number;
-}
-
-// Funzione helper per la generazione delle chiavi RSA
-const generateRSAKeyPair = () => {
-  if (!cryptoModule) {
-    throw new Error("Modulo crypto non disponibile");
+// Funzione helper per la generazione delle chiavi RSA utilizzando WebCrypto o Node crypto
+const generateRSAKeyPair = async (): Promise<{ publicKey: string; privateKey: string }> => {
+  // Se siamo in Node.js, usa il modulo crypto
+  if (typeof window === "undefined" && cryptoModule) {
+    try {
+      return cryptoModule.generateKeyPairSync("rsa", {
+        modulusLength: 2048,
+        publicKeyEncoding: {
+          type: "spki",
+          format: "pem",
+        },
+        privateKeyEncoding: {
+          type: "pkcs8",
+          format: "pem",
+        },
+      });
+    } catch (error) {
+      throw new Error(
+        `Errore nella generazione delle chiavi RSA con Node crypto: ${
+          error instanceof Error ? error.message : "Errore sconosciuto"
+        }`
+      );
+    }
   }
 
-  return cryptoModule.generateKeyPairSync("rsa", {
-    modulusLength: 2048,
-    publicKeyEncoding: {
-      type: "spki",
-      format: "pem",
-    },
-    privateKeyEncoding: {
-      type: "pkcs8",
-      format: "pem",
-    },
-  });
+  // Se siamo nel browser, usa WebCrypto API
+  if (typeof window !== "undefined" && window.crypto && window.crypto.subtle) {
+    try {
+      // Genera la coppia di chiavi RSA
+      const keyPair = await window.crypto.subtle.generateKey(
+        {
+          name: "RSA-OAEP",
+          modulusLength: 2048,
+          publicExponent: new Uint8Array([1, 0, 1]), // 65537
+          hash: "SHA-256",
+        },
+        true, // extractable
+        ["encrypt", "decrypt"]
+      );
+
+      // Esporta la chiave pubblica
+      const publicKeyBuffer = await window.crypto.subtle.exportKey(
+        "spki",
+        keyPair.publicKey
+      );
+
+      // Converti il buffer in base64 in modo sicuro
+      const publicKeyArray = Array.from(new Uint8Array(publicKeyBuffer));
+      const publicKeyBase64 = btoa(String.fromCharCode.apply(null, publicKeyArray));
+      const publicKeyPEM = `-----BEGIN PUBLIC KEY-----\n${publicKeyBase64}\n-----END PUBLIC KEY-----`;
+
+      // Esporta la chiave privata
+      const privateKeyBuffer = await window.crypto.subtle.exportKey(
+        "pkcs8",
+        keyPair.privateKey
+      );
+
+      // Converti il buffer in base64 in modo sicuro
+      const privateKeyArray = Array.from(new Uint8Array(privateKeyBuffer));
+      const privateKeyBase64 = btoa(String.fromCharCode.apply(null, privateKeyArray));
+      const privateKeyPEM = `-----BEGIN PRIVATE KEY-----\n${privateKeyBase64}\n-----END PRIVATE KEY-----`;
+
+      return {
+        publicKey: publicKeyPEM,
+        privateKey: privateKeyPEM,
+      };
+    } catch (error) {
+      throw new Error(
+        `Errore nella generazione delle chiavi RSA con WebCrypto: ${
+          error instanceof Error ? error.message : "Errore sconosciuto"
+        }`
+      );
+    }
+  }
+
+  throw new Error("Nessuna implementazione crittografica disponibile (richiesto Node.js crypto o WebCrypto API)");
 };
 
 /**
@@ -201,15 +283,7 @@ export class WalletManager {
    * Initializes Gun, user and managers for Ethereum and StealthChain
    */
   constructor() {
-    this.gun = Gun({
-      peers: [
-        "https://gun-manhattan.herokuapp.com/gun",
-        "https://peer.wallie.io/gun",
-        "https://gun-relay.scobrudot.dev/gun",
-      ],
-      localStorage: false,
-      radisk: false,
-    });
+    this.gun = Gun();
     this.user = this.gun.user();
     this.ethereumManager = new EthereumManager(this);
     this.stealthChain = new StealthChain(this.gun);
@@ -582,20 +656,22 @@ export class WalletManager {
   async loginWithPrivateKey(privateKey: string): Promise<string> {
     try {
       validatePrivateKey(privateKey);
-      
+
       this.ethereumManager.setCustomProvider("", privateKey);
       const pubKey = await this.ethereumManager.loginWithEthereum();
-      
+
       if (!pubKey) {
         throw new WalletError("Chiave privata non valida");
       }
-      
+
       return pubKey;
     } catch (error) {
       if (error instanceof ValidationError || error instanceof WalletError) {
         throw error;
       }
-      throw new AuthenticationError("Errore durante il login con chiave privata");
+      throw new AuthenticationError(
+        "Errore durante il login con chiave privata"
+      );
     }
   }
 
@@ -619,6 +695,7 @@ export class WalletManager {
     if (!this.user._.sea) {
       throw new Error("User not authenticated");
     }
+    LocalStorageManager.saveUser(this.user._.sea, this.user.is.pub);
     return JSON.stringify(this.user._.sea);
   }
 
@@ -956,8 +1033,6 @@ export class WalletManager {
    */
   public async createAccountWithWebAuthn(alias: string): Promise<WalletResult> {
     try {
-      validateAlias(alias);
-
       if (!this.webAuthnService.isSupported()) {
         throw new WebAuthnError("WebAuthn non è supportato su questo browser");
       }
@@ -974,7 +1049,7 @@ export class WalletManager {
 
       return walletResult;
     } catch (error) {
-      if (error instanceof ValidationError || error instanceof WebAuthnError) {
+      if (error instanceof WebAuthnError) {
         throw error;
       }
       throw new NetworkError(`Errore durante la creazione dell'account con WebAuthn: ${error instanceof Error ? error.message : "Errore sconosciuto"}`);
@@ -996,7 +1071,9 @@ export class WalletManager {
 
       const webAuthnResult = await this.webAuthnService.login(alias);
       if (!webAuthnResult.success || !webAuthnResult.password) {
-        throw new WebAuthnError(webAuthnResult.error || "Errore durante il login con WebAuthn");
+        throw new WebAuthnError(
+          webAuthnResult.error || "Errore durante il login con WebAuthn"
+        );
       }
 
       const pubKey = await this.login(alias, webAuthnResult.password);
@@ -1005,7 +1082,11 @@ export class WalletManager {
       if (error instanceof ValidationError || error instanceof WebAuthnError) {
         throw error;
       }
-      throw new AuthenticationError(`Errore durante il login con WebAuthn: ${error instanceof Error ? error.message : "Errore sconosciuto"}`);
+      throw new AuthenticationError(
+        `Errore durante il login con WebAuthn: ${
+          error instanceof Error ? error.message : "Errore sconosciuto"
+        }`
+      );
     }
   }
 
@@ -1022,22 +1103,24 @@ export class WalletManager {
    * @returns {Promise<ActivityPubKeys>} Coppia di chiavi RSA
    * @throws {Error} Se la generazione delle chiavi fallisce
    */
-  public generateActivityPubKeys(): Promise<ActivityPubKeys> {
-    return new Promise((resolve, reject) => {
-      try {
-        const { privateKey, publicKey } = generateRSAKeyPair();
+  public async generateActivityPubKeys(): Promise<ActivityPubKeys> {
+    try {
+      const { privateKey, publicKey } = await generateRSAKeyPair();
 
-        const keys: ActivityPubKeys = {
-          publicKey,
-          privateKey,
-          createdAt: Date.now(),
-        };
+      const keys: ActivityPubKeys = {
+        publicKey,
+        privateKey,
+        createdAt: Date.now(),
+      };
 
-        resolve(keys);
-      } catch (error) {
-        reject(new Error(`Errore nella generazione delle chiavi RSA: ${error instanceof Error ? error.message : "Errore sconosciuto"}`));
-      }
-    });
+      return keys;
+    } catch (error) {
+      throw new Error(
+        `Errore nella generazione delle chiavi RSA: ${
+          error instanceof Error ? error.message : "Errore sconosciuto"
+        }`
+      );
+    }
   }
 
   /**
@@ -1063,28 +1146,34 @@ export class WalletManager {
 
     if (storageType === StorageType.GUN || storageType === StorageType.BOTH) {
       return new Promise((resolve, reject) => {
-        this.user.get("activitypub").get("keys").put(
-          {
-            publicKey: keys.publicKey,
-            privateKey: keys.privateKey,
-            createdAt: keys.createdAt,
-          },
-          (ack: GunAck) => {
-            if (ack.err) {
-              reject(new Error(ack.err));
-              return;
-            }
-
-            // Verifica che le chiavi siano state salvate correttamente
-            this.user.get("activitypub").get("keys").once((data: GunData) => {
-              if (data && data.publicKey === keys.publicKey) {
-                resolve();
-              } else {
-                reject(new Error("Verifica salvataggio chiavi fallita"));
+        this.user
+          .get("activitypub")
+          .get("keys")
+          .put(
+            {
+              publicKey: keys.publicKey,
+              privateKey: keys.privateKey,
+              createdAt: keys.createdAt,
+            },
+            (ack: GunAck) => {
+              if (ack.err) {
+                reject(new Error(ack.err));
+                return;
               }
-            });
-          }
-        );
+
+              // Verifica che le chiavi siano state salvate correttamente
+              this.user
+                .get("activitypub")
+                .get("keys")
+                .once((data: GunData) => {
+                  if (data && data.publicKey === keys.publicKey) {
+                    resolve();
+                  } else {
+                    reject(new Error("Verifica salvataggio chiavi fallita"));
+                  }
+                });
+            }
+          );
       });
     }
   }
@@ -1110,29 +1199,34 @@ export class WalletManager {
 
     if (storageType === StorageType.GUN) {
       return new Promise((resolve, reject) => {
-        this.user.get("activitypub").get("keys").once((data: GunData) => {
-          if (!data) {
-            resolve(null);
-            return;
-          }
+        this.user
+          .get("activitypub")
+          .get("keys")
+          .once((data: GunData) => {
+            if (!data) {
+              resolve(null);
+              return;
+            }
 
-          if (!data.publicKey || !data.privateKey) {
-            reject(new Error("Chiavi ActivityPub incomplete"));
-            return;
-          }
+            if (!data.publicKey || !data.privateKey) {
+              reject(new Error("Chiavi ActivityPub incomplete"));
+              return;
+            }
 
-          resolve({
-            publicKey: data.publicKey,
-            privateKey: data.privateKey,
-            createdAt: data.createdAt || Date.now(),
+            resolve({
+              publicKey: data.publicKey,
+              privateKey: data.privateKey,
+              createdAt: data.createdAt || Date.now(),
+            });
           });
-        });
       });
     }
 
     // Se siamo qui, storageType è BOTH
     // Prima proviamo il recupero locale
-    const localKeys = await LocalStorageManager.retrieveActivityPubKeys(publicKey);
+    const localKeys = await LocalStorageManager.retrieveActivityPubKeys(
+      publicKey
+    );
     if (localKeys) return localKeys;
 
     // Se non troviamo le chiavi localmente, proviamo su Gun
@@ -1161,13 +1255,16 @@ export class WalletManager {
 
     if (storageType === StorageType.GUN || storageType === StorageType.BOTH) {
       return new Promise((resolve, reject) => {
-        this.user.get("activitypub").get("keys").put(null, (ack: GunAck) => {
-          if (ack.err) {
-            reject(new Error(ack.err));
-            return;
-          }
-          resolve();
-        });
+        this.user
+          .get("activitypub")
+          .get("keys")
+          .put(null, (ack: GunAck) => {
+            if (ack.err) {
+              reject(new Error(ack.err));
+              return;
+            }
+            resolve();
+          });
       });
     }
   }
