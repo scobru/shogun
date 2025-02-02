@@ -37,7 +37,7 @@ declare module "gun" {
 
 const SEA = Gun.SEA;
 
-enum StorageType {
+export enum StorageType {
   GUN,
   LOCAL,
   BOTH,
@@ -282,8 +282,8 @@ export class WalletManager {
    * Creates a WalletManager instance
    * Initializes Gun, user and managers for Ethereum and StealthChain
    */
-  constructor() {
-    this.gun = Gun();
+  constructor(gunOptions: any) {
+    this.gun = Gun(gunOptions);
     this.user = this.gun.user();
     this.ethereumManager = new EthereumManager(this);
     this.stealthChain = new StealthChain(this.gun);
