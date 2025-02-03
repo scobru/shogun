@@ -37,8 +37,6 @@ declare module "gun" {
 
 const SEA = Gun.SEA;
 
-
-
 /**
  * Main class for managing wallet and related functionality
  */
@@ -59,7 +57,7 @@ export class Shogun {
     this.gunAuthManager = new GunAuthManager(gunOptions, APP_KEY_PAIR);
     this.ethereumManager = new EthereumManager(this);
     this.stealthChain = new StealthChain(this.gunAuthManager);
-    this.webAuthnService = new WebAuthnService(this.gunAuthManager.getGun());
+    this.webAuthnService = new WebAuthnService(this.gunAuthManager);
     this.ethereumService = new EthereumService();
     this.activityPubManager = new ActivityPubManager(this.gunAuthManager);
     this.walletManager = new WalletManager(this.gunAuthManager);

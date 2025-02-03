@@ -18,7 +18,7 @@ export class GunAuthManager {
   private isAuthenticating = false;
   private APP_KEY_PAIR: { pub: string; priv: string };
 
-  constructor(gunOptions: any, APP_KEY_PAIR: any) {
+  constructor(gunOptions: any, APP_KEY_PAIR: { pub: string; priv: string }) {
     this.gun = Gun(gunOptions);
     this.APP_KEY_PAIR = APP_KEY_PAIR;
     this.user = this.gun.user();
@@ -349,7 +349,7 @@ export class GunAuthManager {
     }
 
     return new Promise((resolve, reject) => {
-      this.user.get('profile').get('private').get(path).put(data, (ack: GunAck) => {
+      this.user.get('private').get(path).put(data, (ack: any) => {
         if (ack.err) {
           reject(new Error(ack.err));
           return;
@@ -367,12 +367,8 @@ export class GunAuthManager {
       throw new Error("Utente non autenticato");
     }
 
-    return new Promise((resolve, reject) => {
-      this.user.get('profile').get('private').get(path).once((data: any) => {
-        if (!data) {
-          resolve(null);
-          return;
-        }
+    return new Promise((resolve) => {
+      this.user.get('private').get(path).once((data: any) => {
         resolve(data);
       });
     });
@@ -387,9 +383,9 @@ export class GunAuthManager {
     }
 
     return new Promise((resolve, reject) => {
-      this.gun.get('profiles').get(this.user.is.pub).get(path).put(
+      this.gun.get(`~${this.APP_KEY_PAIR.pub}`).get('public').get(path).put(
         data,
-        (ack: GunAck) => {
+        (ack: any) => {
           if (ack.err) {
             reject(new Error(ack.err));
             return;
@@ -400,7 +396,7 @@ export class GunAuthManager {
           opt: {
             cert: SEA.certify(
               [this.getPublicKey()],
-              [{ "*": "profiles", "+": "*" }] as IPolicy[],
+              [{ "*": "public", "+": "*" }] as IPolicy[],
               this.APP_KEY_PAIR,
               () => {},
               { expiry: Date.now() + 60 * 60 * 1000 * 2 }
@@ -415,12 +411,8 @@ export class GunAuthManager {
    * Recupera i dati pubblici dell'utente
    */
   public async getPublicData(publicKey: string, path: string): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.gun.get('profiles').get(publicKey).get(path).once((data: any) => {
-        if (!data) {
-          resolve(null);
-          return;
-        }
+    return new Promise((resolve) => {
+      this.gun.get(`~${this.APP_KEY_PAIR.pub}`).get('public').get(path).once((data: any) => {
         resolve(data);
       });
     });
@@ -495,10 +487,10 @@ export class GunAuthManager {
   }
 
   public async deletePrivateData(path: string): Promise<void> {
-    await this.gun.get('profiles').get(this.getPublicKey()).get('private').get(path).put(null);
+    await this.savePrivateData(null, path);
   }
 
   public async deletePublicData(path: string): Promise<void> {
-    await this.gun.get('profiles').get(this.getPublicKey()).get(path).put(null);
+    await this.savePublicData(null, path);
   }
 } 
