@@ -1,218 +1,129 @@
-# 🤖 Shogun - Guida per LLM
+# 🤖 Shogun - LLM Guide
 
-Questa guida è progettata specificamente per i Large Language Models che devono interagire con Shogun.
+This guide is specifically designed for Large Language Models interacting with Shogun.
 
-## 📚 Panoramica
+## 📚 Overview
 
-Shogun è un wallet manager decentralizzato che utilizza Gun.js per gestire wallet e chiavi private direttamente nel browser. Supporta:
-- Autenticazione tradizionale (username/password)
-- Autenticazione biometrica (WebAuthn)
-- Indirizzi stealth
-- Storage decentralizzato
-- Gestione chiavi crittografiche
-- Integrazione Web3
+Shogun is a decentralized wallet manager that uses Gun.js to handle wallets and private keys directly in the browser. It supports:
+- Traditional authentication (username/password)
+- Biometric authentication (WebAuthn)
+- Stealth addresses
+- Decentralized storage
+- Cryptographic key management
+- Web3 integration
+- ActivityPub integration
 
-## 🔑 Gestione Account
+## 🔑 Account Management
 
-### Creazione Account Standard
+### Standard Account Creation
 ```typescript
-const manager = new WalletManager();
+const manager = new WalletManager(gunOptions, APP_KEY_PAIR);
 await manager.createAccount(alias, passphrase);
 ```
-- `alias`: string - Username dell'utente
-- `passphrase`: string - Password dell'utente
-- Ritorna: Promise<void>
-- Errori comuni: "Account already exists", "Network error"
+- `alias`: string - User's username
+- `passphrase`: string - User's password
+- Returns: Promise<void>
+- Common errors: "Account already exists", "Network error"
 
-### Creazione Account con WebAuthn
+### WebAuthn Account Creation
 ```typescript
-if (manager.isWebAuthnSupported()) {
+if (manager.webAuthnService.isSupported()) {
   const result = await manager.createAccountWithWebAuthn(alias);
 }
 ```
-- `alias`: string - Username dell'utente
-- Ritorna: Promise<WalletResult>
-- Verifica sempre il supporto WebAuthn prima dell'utilizzo
+- `alias`: string - User's username
+- Returns: Promise<WalletResult>
+- Always verify WebAuthn support before use
 
-### Login
+### Login Methods
 ```typescript
-// Login standard
+// Standard login
 const pubKey = await manager.login(alias, passphrase);
 
-// Login con WebAuthn
+// WebAuthn login
 const pubKey = await manager.loginWithWebAuthn(alias);
 
-// Login con chiave privata Ethereum
+// Ethereum private key login
 const pubKey = await manager.loginWithPrivateKey(privateKey);
 ```
 
-## 💼 Gestione Wallet
+## 💼 Wallet Management
 
-### Creazione Wallet
+### Wallet Creation
 ```typescript
-// Creazione da Gun keypair
+// Creation from Gun keypair
 const { walletObj, entropy } = await WalletManager.createWalletObj(gunKeyPair);
 
-// Creazione da salt specifico
+// Creation from specific salt
 const wallet = await WalletManager.createWalletFromSalt(gunKeyPair, salt);
 ```
 
-### Salvataggio Wallet
+### Wallet Storage
 ```typescript
-// Salvataggio completo (Gun + localStorage)
-await manager.saveWallet(wallet, publicKey, StorageType.BOTH);
+// Save wallet
+await manager.saveWallet(wallet);
 
-// Solo Gun
-await manager.saveWallet(wallet, publicKey, StorageType.GUN);
-
-// Solo localStorage
-await manager.saveWalletLocally(wallet, publicKey);
+// Retrieve wallet
+const wallet = await manager.getWallet();
 ```
 
-### Recupero Wallet
-```typescript
-// Recupero da entrambe le fonti
-const wallet = await manager.retrieveWallet(publicKey, StorageType.BOTH);
-
-// Solo da Gun
-const wallet = await manager.retrieveWallet(publicKey, StorageType.GUN);
-
-// Solo da localStorage
-const wallet = await manager.retrieveWalletLocally(publicKey);
-```
-
-## 🔒 Gestione Dati
+## 🔒 Data Management
 
 ### Export/Import
 ```typescript
-// Export completo
-const backup = await manager.exportAllData(publicKey);
+// Full export
+const backup = await manager.exportAllData();
 
-// Import completo
-await manager.importAllData(backup, publicKey);
+// Full import
+await manager.importAllData(backup);
 
-// Export/Import Gun keypair
+// Gun keypair export/import
 const keypair = await manager.exportGunKeyPair();
 const pubKey = await manager.importGunKeyPair(keypairJson);
 ```
 
-### Gestione LocalStorage
-```typescript
-// Verifica dati locali
-const status = await manager.checkLocalData(publicKey);
-/* status = {
-  hasWallet: boolean,
-  hasStealthKeys: boolean,
-  hasPasskey: boolean
-} */
+## 🔐 ActivityPub Integration
 
-// Pulizia dati locali
-await manager.clearLocalData(publicKey);
+### Key Management
+```typescript
+// Get private key
+const privateKey = await manager.getPrivateKey(username);
+
+// Save ActivityPub keys
+await manager.saveActivityPubKeys(keys);
+
+// Get ActivityPub keys
+const keys = await manager.getActivityPubKeys();
+
+// Delete ActivityPub keys
+await manager.deleteActivityPubKeys();
+
+// Sign data
+const { signature, signatureHeader } = await manager.signActivityPubData(stringToSign, username);
 ```
 
-## 🕶️ Stealth Addresses
+## 🔍 Validations
 
-### Stealth Key Generation
-```typescript
-const stealthChain = manager.getStealthChain();
-stealthChain.generateStealthKeys((keyPair) => {
-  // Handle keyPair
-});
-```
+Always validate:
 
-### Stealth Address Generation
-```typescript
-stealthChain.generateStealthAddress(recipientPublicKey, (result) => {
-  // result contains stealthAddress, ephemeralPublicKey, recipientPublicKey
-});
-```
+1. User Input
+   - Username: non-empty string
+   - Password: minimum length and complexity
+   - Ethereum addresses: valid format (0x...)
 
-## 🔐 WebAuthn
+2. System State
+   - WebAuthn support: `webAuthnService.isSupported()`
+   - Authentication: `manager.getPublicKey()`
+   - Gun availability: `manager.gunAuthManager.getGun()`
 
-### Overview
-```typescript
-// Registration
-const result = await manager.createAccountWithWebAuthn(alias);
-/* result = {
-  success: true,
-  username: string,
-  password: string,    // Generated deterministically from username + salt
-  credentialId: string // WebAuthn credential ID
-} */
-
-// Login
-const pubKey = await manager.loginWithWebAuthn(alias);
-```
-
-### Salt and Credential Management
-```typescript
-// Service only saves salt in Gun
-await gun.get(DAPP_NAME)
-  .get("webauthn-credentials")
-  .get(username)
-  .put({
-    salt,
-    timestamp: Date.now()
-  });
-
-// Credentials are generated deterministically
-const generateCredentials = (username: string, salt: string) => {
-  return {
-    password: sha256(username + salt)
-  };
-};
-```
-
-### Validations
-```typescript
-// Username validation
-if (username.length < 3 || username.length > 64) {
-  throw new Error('Username length invalid');
-}
-if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
-  throw new Error('Invalid username characters');
-}
-
-// WebAuthn support check
-if (!manager.isWebAuthnSupported()) {
-  throw new Error('WebAuthn not supported');
-}
-```
-
-### Error Handling
-Main errors to handle:
-1. Validation errors
-   - "Username must be between 3 and 64 characters"
-   - "Username can only contain letters, numbers, underscores and hyphens"
-
-2. WebAuthn errors
-   - "WebAuthn not supported in this browser"
-   - "Username already registered with WebAuthn"
-   - "No WebAuthn credentials found"
-   - "WebAuthn verification failed"
-
-3. Timeout errors
-   - 60 seconds timeout for WebAuthn operations
-
-### Best Practices
-1. **Security**
-   - Always use dynamic challenges for each operation
-   - Always verify WebAuthn support before use
-   - Never store credentials, only salt
-
-2. **UX**
-   - Handle timeouts (60 seconds)
-   - Provide clear error feedback
-   - Implement fallbacks for unsupported browsers
-
-3. **Implementation**
-   - Use `AbortController` for timeout handling
-   - Always verify authenticator response
-   - Keep salt secure in Gun
+3. Wallet Data
+   - Address validity: starts with "0x" and length 42
+   - Private key presence
+   - Entropy for deterministic derivation
 
 ## ⚠️ Error Handling
 
-Main error types to handle:
+Main error types:
 1. Authentication errors
    - "User not authenticated"
    - "Invalid credentials"
@@ -228,21 +139,20 @@ Main error types to handle:
    - "Connection timeout"
    - "Gun peer unreachable"
 
-4. Storage errors
-   - "Local storage not available"
-   - "Data save failed"
-   - "Invalid data format"
+4. Validation errors
+   - "Invalid Ethereum address"
+   - "Invalid private key"
+   - "Invalid username format"
 
 Error handling example:
 ```typescript
 try {
   await manager.createAccountWithWebAuthn(alias);
 } catch (error) {
-  if (error.message.includes('WebAuthn not supported')) {
-    // Fallback to standard authentication
-    await manager.createAccount(alias, passphrase);
-  } else if (error.message.includes('already exists')) {
-    // Handle existing account
+  if (error instanceof WebAuthnError) {
+    // Handle WebAuthn specific error
+  } else if (error instanceof ValidationError) {
+    // Handle validation error
   } else {
     // Handle other errors
     console.error('Error:', error);
@@ -250,160 +160,103 @@ try {
 }
 ```
 
-## 🔍 Validazioni
+## 🔫 Gun Data Structure
 
-Quando interagisci con Shogun, verifica sempre:
-
-1. Input utente
-   - Username: stringa non vuota
-   - Password: lunghezza minima e complessità
-   - Indirizzi Ethereum: formato valido (0x...)
-
-2. Stato sistema
-   - Supporto WebAuthn: `manager.isWebAuthnSupported()`
-   - Autenticazione: `manager.getPublicKey()`
-   - Disponibilità localStorage: `typeof localStorage !== 'undefined'`
-
-3. Dati wallet
-   - Validità indirizzo: inizia con "0x" e lunghezza 42
-   - Presenza chiave privata
-   - Presenza entropy per derivazione deterministica
-
-## 📝 Note Importanti
-
-1. **Sicurezza**
-   - Le chiavi private non sono mai salvate in chiaro
-   - Usa sempre `StorageType.BOTH` per ridondanza dati
-   - Pulisci i dati sensibili quando non necessari
-
-2. **Performance**
-   - Evita letture/scritture Gun frequenti
-   - Usa localStorage per dati frequentemente acceduti
-   - Implementa caching dove possibile
-
-3. **UX**
-   - Preferisci WebAuthn quando disponibile
-   - Fornisci feedback chiaro sugli errori
-   - Implementa fallback per funzionalità non supportate
-
-4. **Compatibilità**
-   - Verifica supporto browser (Web Crypto API, localStorage)
-   - Gestisci ambienti Node.js (crypto module)
-   - Supporta multiple versioni Gun.js 
-
-## 🔫 Esempi Pratici Gun
-
-### Salvataggio Wallet
+### Wallets
 ```typescript
-// Salva un wallet
-await gun.get("wallets")
+// Save wallet
+await gun.get('users')
   .get(publicKey)
+  .get('wallet')
   .put({
     address: wallet.address,
-    entropy: walletData.entropy,
-    timestamp: Date.now()
+    privateKey: encryptedPrivateKey,
+    entropy: wallet.entropy
   });
 
-// Recupera un wallet
-gun.get("wallets")
+// Retrieve wallet
+gun.get('users')
   .get(publicKey)
+  .get('wallet')
   .once((data) => {
     if (data?.entropy) {
-      // Rigenera il wallet dall'entropy
+      // Regenerate wallet from entropy
       const wallet = createWalletFromSalt(data.entropy);
     }
   });
 ```
 
-### Gestione WebAuthn
+### ActivityPub Keys
 ```typescript
-// Salva credenziali WebAuthn
-await gun.get(DAPP_NAME)
-  .get("webauthn-credentials")
-  .get(username)
-  .put({
-    salt: generatedSalt,
-    timestamp: Date.now()
-  });
-
-// Verifica login
-gun.get(DAPP_NAME)
-  .get("webauthn-credentials")
-  .get(username)
-  .once((data) => {
-    if (data?.salt) {
-      // Genera credenziali dal salt
-      const credentials = generateCredentialsFromSalt(username, data.salt);
-    }
-  });
-```
-
-### Chiavi Stealth
-```typescript
-// Salva chiavi stealth pubbliche
-gun.get("stealthKeys")
+// Save ActivityPub keys
+await gun.get('users')
   .get(publicKey)
-  .put(stealthKeyPair.epub);
+  .get('activityPubKeys')
+  .put({
+    publicKey: keys.publicKey,
+    privateKey: encryptedPrivateKey
+  });
 
-// Recupera chiavi stealth
-gun.user(publicKey)
-  .get("stealthKeys")
+// Retrieve ActivityPub keys
+gun.get('users')
+  .get(publicKey)
+  .get('activityPubKeys')
   .once((data) => {
-    if (data?.pub && data?.epub) {
-      // Usa le chiavi per operazioni stealth
+    if (data?.publicKey && data?.privateKey) {
+      // Use keys for ActivityPub operations
     }
   });
 ```
 
 ### Best Practices
 
-1. **Gestione Concorrenza**
+1. **Concurrency Management**
    ```typescript
-   // Usa once() per letture singole
+   // Use once() for single reads
    gun.once((data) => {});
    
-   // Usa on() per dati che cambiano
+   // Use on() for data that changes
    gun.on((data) => {});
    ```
 
-2. **Timeout e Errori**
+2. **Timeouts and Errors**
    ```typescript
-   // Implementa sempre timeout
+   // Always implement timeouts
    const timeout = setTimeout(() => {
      reject(new Error("Timeout"));
    }, 25000);
 
    gun.once((data) => {
      clearTimeout(timeout);
-     // Processa i dati
+     // Process data
    });
    ```
 
-3. **Validazione Dati**
+3. **Data Validation**
    ```typescript
-   // Verifica sempre i dati ricevuti
+   // Always validate received data
    gun.once((data) => {
      if (!data || !data.required_field) {
-       throw new Error("Dati invalidi");
+       throw new Error("Invalid data");
      }
-     // Processa i dati validi
+     // Process valid data
    });
    ```
 
 ### Debugging
 
-1. **Logging Strutturato**
+1. **Structured Logging**
    ```typescript
    gun.once((data) => {
      console.log("📥 Data received:", {
-       path: "wallets/" + publicKey,
+       path: "users/" + publicKey,
        data,
        timestamp: new Date()
      });
    });
    ```
 
-2. **Gestione Errori**
+2. **Error Handling**
    ```typescript
    try {
      await gun.get("path").put(data);

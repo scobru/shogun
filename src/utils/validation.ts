@@ -1,4 +1,5 @@
 import { ValidationError } from "./errors";
+import { ethers } from "ethers";
 
 /**
  * Costanti di validazione
@@ -21,42 +22,47 @@ export const VALIDATION_CONSTANTS = {
 
 /**
  * Valida un alias utente
- * @param alias - Alias da validare
- * @throws {ValidationError} Se l'alias non è valido
+ * @param alias - L'alias da validare
+ * @returns true se l'alias è valido, false altrimenti
  */
-export function validateAlias(alias: string): void {
-  if (!alias || typeof alias !== "string") {
-    throw new ValidationError("L'alias deve essere una stringa non vuota");
+export function validateAlias(alias: string): boolean {
+  if (!alias || typeof alias !== 'string') return false;
+  
+  // Se è un indirizzo Ethereum, lo accettiamo
+  if (alias.startsWith('0x') && alias.length === 42) {
+    return ethers.isAddress(alias);
   }
   
-  if (alias.length < VALIDATION_CONSTANTS.ALIAS.MIN_LENGTH || 
-      alias.length > VALIDATION_CONSTANTS.ALIAS.MAX_LENGTH) {
-    throw new ValidationError(
-      `L'alias deve essere lungo tra ${VALIDATION_CONSTANTS.ALIAS.MIN_LENGTH} e ${VALIDATION_CONSTANTS.ALIAS.MAX_LENGTH} caratteri`
-    );
-  }
-
-  if (!VALIDATION_CONSTANTS.ALIAS.PATTERN.test(alias)) {
-    throw new ValidationError("L'alias può contenere solo lettere, numeri, underscore e trattini");
-  }
+  // Altrimenti verifichiamo il formato standard
+  // Minimo 3 caratteri, massimo 30
+  if (alias.length < 3 || alias.length > 30) return false;
+  
+  // Solo caratteri alfanumerici e underscore
+  const aliasRegex = /^[a-zA-Z0-9_]+$/;
+  return aliasRegex.test(alias);
 }
 
 /**
- * Valida una chiave privata
- * @param privateKey - Chiave privata da validare
- * @throws {ValidationError} Se la chiave privata non è valida
+ * Valida una chiave privata Ethereum
+ * @param privateKey - La chiave privata da validare
+ * @returns true se la chiave è valida, false altrimenti
  */
-export function validatePrivateKey(privateKey: string): void {
-  if (!privateKey || typeof privateKey !== "string") {
-    throw new ValidationError("La chiave privata deve essere una stringa non vuota");
-  }
-
-  if (privateKey.length !== VALIDATION_CONSTANTS.PRIVATE_KEY.LENGTH) {
-    throw new ValidationError(`La chiave privata deve essere lunga ${VALIDATION_CONSTANTS.PRIVATE_KEY.LENGTH} caratteri`);
-  }
-
-  if (!VALIDATION_CONSTANTS.PRIVATE_KEY.HEX_PATTERN.test(privateKey)) {
-    throw new ValidationError("La chiave privata deve essere in formato esadecimale");
+export function validatePrivateKey(privateKey: string): boolean {
+  try {
+    if (!privateKey || typeof privateKey !== 'string') return false;
+    
+    // Rimuovi '0x' se presente
+    const cleanKey = privateKey.startsWith('0x') ? privateKey.slice(2) : privateKey;
+    
+    // Deve essere una stringa esadecimale di 64 caratteri
+    if (!/^[0-9a-fA-F]{64}$/.test(cleanKey)) return false;
+    
+    // Prova a creare un wallet con questa chiave
+    new ethers.Wallet(privateKey);
+    
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -85,15 +91,14 @@ export function validatePassword(password: string): void {
 
 /**
  * Valida un indirizzo Ethereum
- * @param address - Indirizzo da validare
- * @throws {ValidationError} Se l'indirizzo non è valido
+ * @param address - L'indirizzo da validare
+ * @returns true se l'indirizzo è valido, false altrimenti
  */
-export function validateEthereumAddress(address: string): void {
-  if (!address || typeof address !== "string") {
-    throw new ValidationError("L'indirizzo deve essere una stringa non vuota");
-  }
-
-  if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
-    throw new ValidationError("L'indirizzo Ethereum non è valido");
+export function validateEthereumAddress(address: string): boolean {
+  try {
+    if (!address || typeof address !== 'string') return false;
+    return ethers.isAddress(address);
+  } catch {
+    return false;
   }
 } 

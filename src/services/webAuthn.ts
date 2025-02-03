@@ -1,6 +1,7 @@
 // Import sha256 usando require
 const sha256 = require('js-sha256').sha256;
 import type { WebAuthnResult, WebAuthnVerifyResult } from '../interfaces/WebAuthnResult';
+import { GunAuthManager } from '../managers/GunAuthManager';
 
 // Importiamo crypto solo per Node.js
 let cryptoModule: any;
@@ -134,11 +135,15 @@ const generateCredentialsFromSalt = (username: string, salt: string): { password
 };
 
 export class WebAuthnService {
+  private gunAuthManager: GunAuthManager;
   private gun: any;
-  private readonly DAPP_NAME = 'shogun';
+  private APP_KEY_PAIR: { pub: string; priv: string };
 
-  constructor(gun: any) {
-    this.gun = gun;
+
+  constructor(gunAuthManager: GunAuthManager, APP_KEY_PAIR: { pub: string; priv: string }) {
+    this.gunAuthManager = gunAuthManager;
+    this.gun = gunAuthManager.getGun();
+    this.APP_KEY_PAIR = APP_KEY_PAIR;
   }
 
   private validateUsername(username: string): void {
@@ -156,7 +161,7 @@ export class WebAuthnService {
   // Recupera le credenziali WebAuthn da Gun
   private async getWebAuthnCredentials(username: string): Promise<WebAuthnCredentials | null> {
     return new Promise((resolve) => {
-      this.gun.get(this.DAPP_NAME)
+      this.gun.get(`~${this.gunAuthManager.APP_KEY_PAIR?.pub as string}`)
         .get("webauthn-credentials")
         .get(username)
         .once((data: any) => {

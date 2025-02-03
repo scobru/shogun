@@ -1,8 +1,6 @@
 # SHOGUN - Decentralized Wallet Manager
 
-inspired by [https://github.com/AudiusProject/hedgehog]
-
-**SHOGUN** is a decentralized wallet manager that uses Gun.js to handle wallets and private keys directly in the browser. It provides a complete authentication and key management system with support for stealth addresses.
+A decentralized wallet manager that uses Gun.js to handle wallets and private keys directly in the browser. It provides a complete authentication and key management system with support for stealth addresses and ActivityPub integration.
 
 ## ✨ Key Features
 
@@ -11,17 +9,19 @@ inspired by [https://github.com/AudiusProject/hedgehog]
   - Stealth address support
   - End-to-end encryption
   - Secure entropy management
+  - ActivityPub key management
 
 - 🌐 **Decentralization**
   - Distributed storage with Gun.js
   - P2P synchronization
   - No central server
+  - ActivityPub federation support
 
 - 🔄 **Portability**
   - Complete data import/export
   - Encrypted backups
   - Multi-device support
-  - Cross-platform localStorage management
+  - Cross-platform compatibility
 
 ## 🛠️ Requirements
 
@@ -33,21 +33,7 @@ inspired by [https://github.com/AudiusProject/hedgehog]
 ## 🚀 Installation
 
 ```bash
-# Install from npm
 npm install @scobru/shogun
-
-# Or clone the repository
-git clone https://github.com/scobru/shogun
-cd shogun
-
-# Install dependencies
-npm install
-
-# Build
-npm run build
-
-# Test
-npm test
 ```
 
 ## 📚 Quick Start
@@ -55,16 +41,17 @@ npm test
 ### Basic Usage
 
 ```typescript
-import { WalletManager, StorageType } from '@scobru/shogun'
+import { WalletManager } from '@scobru/shogun'
 
-// Initialize with custom Gun configuration
+// Initialize with Gun configuration
 const manager = new WalletManager({
   peers: ['https://your-gun-peer.com/gun'],
-  localStorage: true,
-  radisk: false
-});
+  localStorage: false,
+  radisk: false,
+  multicast: false
+}, APP_KEY_PAIR);
 
-// Create account with error handling
+// Create account
 try {
   await manager.createAccount('username', 'password');
 } catch (error) {
@@ -80,31 +67,33 @@ const { walletObj, entropy } = await WalletManager.createWalletObj(gunKeyPair);
 
 console.log('Address:', walletObj.address);
 console.log('Private Key:', walletObj.privateKey);
-console.log('Entropy:', walletObj.entropy);
+console.log('Entropy:', entropy);
 
-// Save wallet (multiple options)
-await manager.saveWallet(walletObj, pubKey, StorageType.BOTH);  // Gun + localStorage
-await manager.saveWallet(walletObj, pubKey, StorageType.GUN);   // Gun only
-await manager.saveWalletLocally(walletObj, pubKey);             // localStorage only
+// Save wallet
+await manager.saveWallet(walletObj);
 
 // Retrieve wallet
-const walletFromBoth = await manager.retrieveWallet(pubKey, StorageType.BOTH);
-const walletFromGun = await manager.retrieveWallet(pubKey, StorageType.GUN);
-const walletFromLocal = await manager.retrieveWalletLocally(pubKey);
+const wallet = await manager.getWallet();
 ```
 
-### Advanced Gun Configuration
+### ActivityPub Integration
 
 ```typescript
-const manager = new WalletManager({
-  peers: [
-    'https://your-gun-peer.com/gun',
-    'https://backup-peer.com/gun'
-  ],
-  localStorage: true,
-  radisk: true,
-  gun: existingGunInstance, // Use existing Gun instance
-});
+// Generate and save ActivityPub keys
+const keys = {
+  publicKey: 'public_key_data',
+  privateKey: 'private_key_data'
+};
+await manager.saveActivityPubKeys(keys);
+
+// Retrieve keys
+const storedKeys = await manager.getActivityPubKeys();
+
+// Sign ActivityPub data
+const { signature, signatureHeader } = await manager.signActivityPubData(
+  stringToSign,
+  username
+);
 ```
 
 ### Error Handling
@@ -119,12 +108,14 @@ try {
   
   // Create and save wallet
   const { walletObj } = await WalletManager.createWalletObj(manager.getCurrentUserKeyPair());
-  await manager.saveWallet(walletObj, pubKey, StorageType.BOTH);
+  await manager.saveWallet(walletObj);
   
 } catch (error) {
-  if (error.message.includes('already exists')) {
-    console.error('Account already exists');
-  } else if (error.message.includes('network')) {
+  if (error instanceof ValidationError) {
+    console.error('Validation error:', error);
+  } else if (error instanceof WebAuthnError) {
+    console.error('WebAuthn error:', error);
+  } else if (error instanceof NetworkError) {
     console.error('Network error:', error);
   } else {
     console.error('Unknown error:', error);
@@ -140,7 +131,7 @@ const salt = 'my_custom_salt';
 const wallet = await WalletManager.createWalletFromSalt(gunKeyPair, salt);
 
 console.log('Address:', wallet.address);
-console.log('Entropy:', wallet.entropy); // Will match the salt
+console.log('Entropy:', wallet.entropy);
 
 // Verify different wallets are created from different salts
 const wallet1 = await WalletManager.createWalletFromSalt(gunKeyPair, 'salt1');
@@ -148,35 +139,16 @@ const wallet2 = await WalletManager.createWalletFromSalt(gunKeyPair, 'salt2');
 console.log(wallet1.address !== wallet2.address); // true
 ```
 
-### LocalStorage Management
-
-```typescript
-// Check local data
-const status = await manager.checkLocalData(pubKey);
-console.log('Has wallet:', status.hasWallet);
-console.log('Has stealth keys:', status.hasStealthKeys);
-console.log('Has passkey:', status.hasPasskey);
-
-// Save wallet locally
-await manager.saveWalletLocally(wallet, pubKey);
-
-// Retrieve local wallet
-const localWallet = await manager.retrieveWalletLocally(pubKey);
-
-// Clear local data
-await manager.clearLocalData(pubKey);
-```
-
 ### Import/Export
 
 ```typescript
 // Export all data
-const backup = await manager.exportAllData(pubKey);
+const backup = await manager.exportAllData();
 
 // Import data
-await manager.importAllData(backup, pubKey);
+await manager.importAllData(backup);
 
-// Export Gun keypair only
+// Export Gun keypair
 const keypair = await manager.exportGunKeyPair();
 
 // Import Gun keypair
@@ -187,10 +159,10 @@ const pubKey = await manager.importGunKeyPair(keypairJson);
 
 ```typescript
 // Initialize WalletManager
-const manager = new WalletManager();
+const manager = new WalletManager(gunOptions, APP_KEY_PAIR);
 
 // Check if WebAuthn is supported
-if (manager.isWebAuthnSupported()) {
+if (manager.webAuthnService.isSupported()) {
   // Create account with WebAuthn
   try {
     const result = await manager.createAccountWithWebAuthn('username');
@@ -198,22 +170,14 @@ if (manager.isWebAuthnSupported()) {
   } catch (error) {
     console.error('Error:', error);
   }
-
-  // Login with WebAuthn
-  try {
-    const publicKey = await manager.loginWithWebAuthn('username');
-    console.log('Logged in with public key:', publicKey);
-  } catch (error) {
-    console.error('Error:', error);
-  }
 }
 ```
 
-WebAuthn provides several benefits:
-- 🔐 Biometric authentication (fingerprint, face recognition)
+WebAuthn provides:
+- 🔐 Biometric authentication
 - 🔑 Platform-specific secure key storage
-- 🌐 No password required
-- 🔒 Enhanced security against phishing
+- 🌐 Passwordless authentication
+- 🔒 Enhanced phishing protection
 - ⚡ Seamless user experience
 
 ## 🔒 Security
@@ -236,32 +200,26 @@ const walletData = {
 };
 
 // Data is stored encrypted
-await manager.saveWalletLocally(wallet, pubKey);
-
-// Always clean sensitive data when not needed
-await manager.clearLocalData(pubKey);
+await manager.saveWallet(wallet);
 ```
 
 ## 🐛 Debugging
 
-For debugging purposes, you can:
+For debugging purposes:
 
-1. Enable Gun.js debug logs by setting the environment variable:
+1. Enable Gun.js debug logs:
 ```bash
 GUN_ENV=debug
 ```
 
 2. Use browser developer tools to inspect:
    - Gun data synchronization
-   - localStorage contents
    - Network requests
 
 3. Monitor Gun events:
 ```typescript
-const manager = new WalletManager();
-const gun = manager.getGun();
+const gun = manager.gunAuthManager.getGun();
 
-// Monitor all Gun events
 gun.on('out', data => {
   console.log('Gun out:', data);
 });
@@ -271,62 +229,39 @@ gun.on('in', data => {
 });
 ```
 
-4. Check localStorage state:
-```typescript
-// Inspect stored data
-const status = await manager.checkLocalData(pubKey);
-console.log('Local storage status:', status);
-```
-
-5. Use try-catch blocks for error handling:
-```typescript
-try {
-  await manager.createAccount('username', 'password');
-} catch (error) {
-  console.error('Operation failed:', error);
-}
-```
-
 ## 📦 Interfaces
 
 ```typescript
-interface WalletData {
-  address: string;    // Ethereum address
-  privateKey: string; // Private key
-  entropy: string;    // Entropy used for generation
-}
-
 interface WalletResult {
-  walletObj: WalletData;
+  walletObj: {
+    address: string;
+    privateKey: string;
+    entropy: string;
+  };
   entropy: string;
 }
 
-interface StealthAddressResult {
-  stealthAddress: string;
-  ephemeralPublicKey: string;
-  recipientPublicKey: string;
+interface ActivityPubKeys {
+  publicKey: string;
+  privateKey: string;
 }
 
-enum StorageType {
-  GUN,    // Gun only
-  LOCAL,  // localStorage only
-  BOTH    // Both
+interface GunKeyPair {
+  pub: string;
+  priv: string;
+  epub?: string;
+  epriv?: string;
 }
 ```
 
 ## 🧪 Testing
 
 ```bash
-# All tests
+# Run tests
 npm test
 
-# Specific tests
-npm test -- -g "Local Storage"
+# Run specific test
 npm test -- -g "Wallet Creation"
-npm test -- -g "Gun KeyPair"
-
-# Test with coverage
-npm run test:coverage
 ```
 
 ## 💻 Compatibility
@@ -337,22 +272,19 @@ npm run test:coverage
   - Safari >= 14
   - Edge >= 80
   - Web Crypto API support required
-  - localStorage support required
 
 - **Node.js**:
   - Version >= 16.0.0
-  - crypto module
-  - node-localstorage for localStorage compatibility
-  - Gun.js for distributed storage
+  - crypto module support
 
 ## 🤝 Contributing
 
 Pull requests are welcome! For major changes:
 
 1. 🍴 Fork the repository
-2. 🔧 Create a branch (`git checkout -b feature/amazing`)
-3. 💾 Commit changes (`git commit -m 'Add feature'`)
-4. 🚀 Push branch (`git push origin feature/amazing`)
+2. 🔧 Create a branch
+3. 💾 Commit changes
+4. 🚀 Push branch
 5. 📝 Open a Pull Request
 
 ## 📄 License
@@ -361,45 +293,6 @@ Pull requests are welcome! For major changes:
 
 ## 🗺️ Roadmap
 
-- [ ] WebAuthn/Passkey authentication
-- [ ] StealthChain smart contracts
-
-## 🔑 ActivityPub Keys
-
-### Generazione e gestione chiavi RSA
-```typescript
-// Genera nuove chiavi RSA
-const keys = await walletManager.generateActivityPubKeys();
-
-// Salva le chiavi (sia su Gun che in localStorage)
-await walletManager.saveActivityPubKeys(keys);
-
-// Salva solo su Gun
-await walletManager.saveActivityPubKeys(keys, StorageType.GUN);
-
-// Salva solo in localStorage
-await walletManager.saveActivityPubKeys(keys, StorageType.LOCAL);
-
-// Recupera le chiavi (prima da localStorage, poi da Gun)
-const keys = await walletManager.getActivityPubKeys();
-
-// Recupera solo da Gun
-const keys = await walletManager.getActivityPubKeys(StorageType.GUN);
-
-// Recupera solo da localStorage
-const keys = await walletManager.getActivityPubKeys(StorageType.LOCAL);
-
-// Elimina le chiavi da entrambi gli storage
-await walletManager.deleteActivityPubKeys();
-```
-
-### Verifica presenza chiavi
-```typescript
-const status = await walletManager.checkLocalData(publicKey);
-/* status = {
-  hasWallet: boolean,
-  hasStealthKeys: boolean,
-  hasPasskey: boolean,
-  hasActivityPubKeys: boolean
-} */
-```
+- [ ] Enhanced ActivityPub integration
+- [ ] Improved WebAuthn support
+- [ ] Additional wallet types support

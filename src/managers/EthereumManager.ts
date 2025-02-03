@@ -1,24 +1,24 @@
 import { ethers } from "ethers";
-import { WalletManager } from "./WalletManager";
-import { MESSAGE_TO_SIGN } from "./services/ethereum";
-import { EthereumService } from "./services/ethereum";
-import { AuthenticationError, ValidationError } from "./utils/errors";
+import { Shogun } from "../Shogun";
+import { MESSAGE_TO_SIGN } from "../services/Ethereum";
+import { EthereumService } from "../services/Ethereum";
+import { AuthenticationError, ValidationError } from "../utils/errors";
 
 /**
  * Manages Ethereum wallet functionality and authentication
  */
 export class EthereumManager {
-  private walletManager: WalletManager;
+  private Shogun: Shogun;
   private customProvider: ethers.JsonRpcProvider | null = null;
   private customWallet: ethers.Wallet | null = null;
   private ethereumService: EthereumService;
 
   /**
    * Creates an EthereumManager instance
-   * @param {WalletManager} walletManager - Instance of WalletManager
+   * @param {Shogun} Shogun - Instance of Shogun
    */
-  constructor(walletManager: WalletManager) {
-    this.walletManager = walletManager;
+  constructor(Shogun: Shogun) {
+    this.Shogun = Shogun;
     this.ethereumService = new EthereumService();
   }
 
@@ -71,7 +71,7 @@ export class EthereumManager {
       const username = address.toLowerCase();
 
       // Create account
-      await this.walletManager.createAccount(username, password);
+      await this.Shogun.createAccount(username, password);
 
       return username;
     } catch (error) {
@@ -104,7 +104,7 @@ export class EthereumManager {
       const username = address.toLowerCase();
 
       // Perform login
-      return this.walletManager.login(username, password);
+      return this.Shogun.login(username, password);
     } catch (error) {
       if (error instanceof AuthenticationError) {
         throw error;

@@ -1,6 +1,6 @@
 {
   "name": "@scobru/shogun",
-  "version": "0.0.14b",
+  "version": "0.0.14d",
   "description": "A Metamask alternative that empowers you to build good UX with decentralized wallet management using Gun.js",
   "browser": {
     "node-localstorage": false
@@ -26,7 +26,9 @@
     "ts-mocha": "^10.0.0",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "concurrently": "^8.2.2",
+    "wait-on": "^7.2.0"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -40,7 +42,8 @@
     "lint:fix": "npm run lint -- --fix",
     "typecheck": "tsc",
     "pretest": "npm run build",
-    "test": "mocha tests/**/*.test.js",
+    "test": "mocha tests/**/*.test.js --timeout 30000",
+    "test:server": "node tests/gun-server.js",
     "prepublishOnly": "npm run build",
     "prepare": "npm run build",
     "version": "git add -A src",

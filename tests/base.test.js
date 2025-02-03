@@ -2,11 +2,26 @@ const { describe, it, before, beforeEach, afterEach, after } = require("mocha");
 const assert = require("assert");
 const { ethers } = require("ethers");
 const Gun = require('gun');
+require('gun/sea');
 
 const { WalletManager } = require("../src/WalletManager");
 
-// Utility function to wait for data to be available in Gun
-async function waitForGunData(gun, path, timeout = 5000) {
+// Configurazione di test per Gun e APP_KEY_PAIR
+const gunOptions = {
+  peers: ['http://localhost:8765/gun'],
+  file: 'radata_test',
+  radisk: false,
+  localStorage: false,
+  multicast: false
+};
+
+const APP_KEY_PAIR = {
+  pub: "test_pub_key",
+  priv: "test_priv_key"
+};
+
+// Utility function to wait for Gun data
+async function waitForGunData(path, timeout = 5000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error(`Timeout waiting for data at ${path}`));
@@ -17,6 +32,18 @@ async function waitForGunData(gun, path, timeout = 5000) {
       resolve(data);
     });
   });
+}
+
+// Utility function to wait for authentication
+async function waitForAuth(walletManager, timeout = 5000) {
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeout) {
+    if (walletManager.getPublicKey()) {
+      return true;
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error('Authentication timeout');
 }
 
 // Generate unique usernames
@@ -32,7 +59,7 @@ describe("EthereumManager Test Suite", function () {
   const TEST_RPC_URL = "https://optimism.llamarpc.com";
 
   beforeEach(async function () {
-    walletManager = new WalletManager();
+    walletManager = new WalletManager(gunOptions, APP_KEY_PAIR);
     ethereumManager = walletManager.getEthereumManager();
     
     // Create a test wallet
@@ -42,16 +69,17 @@ describe("EthereumManager Test Suite", function () {
     ethereumManager.setCustomProvider(TEST_RPC_URL, testWallet.privateKey);
   });
 
-  afterEach(function () {
-    if (walletManager.gun) {
-      walletManager.gun.off();
+  afterEach(async function () {
+    if (walletManager) {
+      walletManager.logout();
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
-    walletManager.logout();
   });
 
   describe("Account Creation", function () {
     it("should create an account using Ethereum wallet", async function () {
       const address = await ethereumManager.createAccountWithEthereum();
+      await waitForAuth(walletManager);
       
       assert(address, "Should return an address");
       assert.strictEqual(
@@ -117,33 +145,34 @@ describe("EthereumManager Test Suite", function () {
       const address = await ethereumManager.createAccountWithEthereum();
       const pubKey = walletManager.getPublicKey();
       
-      // Wait for data to be saved to Gun
-      const savedData = await waitForGunData(
-        walletManager.gun,
-        `~${pubKey}`
-      );
-      
-      assert(savedData, "Data should be saved to Gun");
+      // Get wallet from Gun
+      const wallet = await walletManager.getWallet();
+      assert(wallet, "Wallet should be saved to Gun");
+      assert.strictEqual(wallet.address.toLowerCase(), address.toLowerCase(), "Addresses should match");
     });
 
     it("should sync data between sessions", async function () {
       // First session: create account
       await ethereumManager.createAccountWithEthereum();
       const firstPubKey = walletManager.getPublicKey();
+      const firstWallet = await walletManager.getWallet();
       
-      // Wait for data to be saved
-      await waitForGunData(walletManager.gun, `~${firstPubKey}`);
-      
-      // Simulate new session
+      // Logout
       walletManager.logout();
       
       // Second session: login
       const secondPubKey = await ethereumManager.loginWithEthereum();
+      const secondWallet = await walletManager.getWallet();
       
       assert.strictEqual(
         firstPubKey,
         secondPubKey,
         "Public keys should be the same between sessions"
+      );
+      assert.strictEqual(
+        firstWallet.address.toLowerCase(),
+        secondWallet.address.toLowerCase(),
+        "Wallet addresses should be the same between sessions"
       );
     });
   });
