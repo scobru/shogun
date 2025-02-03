@@ -1,5 +1,5 @@
-import { defineConfig } from 'vite';
-import { resolve } from 'path';
+import { defineConfig } from 'vite'
+import { resolve } from 'path'
 
 export default defineConfig({
   resolve: {
@@ -19,4 +19,4 @@ export default defineConfig({
   esbuild: {
     target: 'esnext'
   }
-}); 
+})

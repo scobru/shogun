@@ -27,10 +27,21 @@ export class EthereumManager {
    */
   public setCustomProvider(rpcUrl: string, privateKey: string): void {
     try {
+      if (!rpcUrl || typeof rpcUrl !== 'string') {
+        throw new ValidationError("RPC URL non valido");
+      }
+      if (!privateKey || typeof privateKey !== 'string') {
+        throw new ValidationError("Chiave privata non valida");
+      }
+
       this.customProvider = new ethers.JsonRpcProvider(rpcUrl);
       this.customWallet = new ethers.Wallet(privateKey, this.customProvider);
     } catch (error) {
-      throw new ValidationError("Chiave privata non valida");
+      throw new ValidationError(
+        `Errore nella configurazione del provider: ${
+          error instanceof Error ? error.message : "Errore sconosciuto"
+        }`
+      );
     }
   }
 
@@ -44,9 +55,17 @@ export class EthereumManager {
       if (this.customWallet) {
         return this.customWallet;
       }
-      return await this.ethereumService.getEthereumSigner();
+      const signer = await this.ethereumService.getEthereumSigner();
+      if (!signer) {
+        throw new AuthenticationError("Nessun signer Ethereum disponibile");
+      }
+      return signer;
     } catch (error) {
-      throw new AuthenticationError("Impossibile ottenere il signer Ethereum");
+      throw new AuthenticationError(
+        `Impossibile ottenere il signer Ethereum: ${
+          error instanceof Error ? error.message : "Errore sconosciuto"
+        }`
+      );
     }
   }
 
@@ -60,19 +79,19 @@ export class EthereumManager {
       const signer = await this.getSigner();
       const address = await signer.getAddress();
 
-      // Sign message to generate password
+      if (!address || !address.startsWith("0x")) {
+        throw new ValidationError("Indirizzo Ethereum non valido");
+      }
+
       const signature = await signer.signMessage(MESSAGE_TO_SIGN);
       const password = await this.ethereumService.generatePassword(signature);
 
-      // Use address as username
       const username = address.toLowerCase();
-
-      // Create account
       await this.gunAuthManager.createAccount(username, password);
 
       return username;
     } catch (error) {
-      if (error instanceof AuthenticationError) {
+      if (error instanceof AuthenticationError || error instanceof ValidationError) {
         throw error;
       }
       throw new AuthenticationError(
@@ -88,22 +107,28 @@ export class EthereumManager {
    * @returns {Promise<string|null>} Public key if login successful, null otherwise
    * @throws {AuthenticationError} Se il login fallisce
    */
-  public async loginWithEthereum(): Promise<string | null> {
+  public async loginWithEthereum(): Promise<string> {
     try {
       const signer = await this.getSigner();
       const address = await signer.getAddress();
 
-      // Sign message to generate password
+      if (!address || !address.startsWith("0x")) {
+        throw new ValidationError("Indirizzo Ethereum non valido");
+      }
+
       const signature = await signer.signMessage(MESSAGE_TO_SIGN);
       const password = await this.ethereumService.generatePassword(signature);
 
-      // Use address as username
       const username = address.toLowerCase();
+      const result = await this.gunAuthManager.login(username, password);
+      
+      if (!result) {
+        throw new AuthenticationError("Login fallito");
+      }
 
-      // Perform login
-      return this.gunAuthManager.login(username, password);
+      return result;
     } catch (error) {
-      if (error instanceof AuthenticationError) {
+      if (error instanceof AuthenticationError || error instanceof ValidationError) {
         throw error;
       }
       throw new AuthenticationError(

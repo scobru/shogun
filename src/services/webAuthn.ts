@@ -1,11 +1,13 @@
 // Import sha256 usando require
-const sha256 = require("js-sha256").sha256;
 import type {
   WebAuthnResult,
   WebAuthnVerifyResult,
 } from "../interfaces/WebAuthnResult";
 import { GunAuthManager } from "../managers/GunAuthManager";
 
+import jsSha256 from "js-sha256";
+import { WalletManager } from "../managers/WalletManager";
+const sha256 = jsSha256.sha256;
 // Importiamo crypto solo per Node.js
 let cryptoModule: any;
 try {
@@ -146,7 +148,7 @@ const generateCredentialsFromSalt = (
 export class WebAuthnService {
   private gunAuthManager: GunAuthManager;
 
-  constructor(gunAuthManager: GunAuthManager) {
+  constructor(gunAuthManager: GunAuthManager, ) {
     this.gunAuthManager = gunAuthManager;
   }
 
@@ -350,8 +352,7 @@ export class WebAuthnService {
     return true;
   }
 
-  // Login con WebAuthn
-  public async login(username: string): Promise<WebAuthnResult> {
+  public async authenticateUser(username: string): Promise<WebAuthnResult> {
     try {
       // Validazioni di sicurezza
       this.validateUsername(username);

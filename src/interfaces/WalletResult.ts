@@ -1,5 +1,3 @@
-import { Wallet } from './Wallet';
-
 export interface WalletData {
   address: string;
   privateKey: string;

@@ -55,12 +55,12 @@ export class Shogun {
    */
   constructor(gunOptions: any, APP_KEY_PAIR: any) {
     this.gunAuthManager = new GunAuthManager(gunOptions, APP_KEY_PAIR);
-    this.ethereumManager = new EthereumManager(this);
+    this.ethereumManager = new EthereumManager(this.gunAuthManager);
     this.stealthChain = new StealthChain(this.gunAuthManager);
+    this.walletManager = new WalletManager(this.gunAuthManager);
     this.webAuthnService = new WebAuthnService(this.gunAuthManager);
     this.ethereumService = new EthereumService();
     this.activityPubManager = new ActivityPubManager(this.gunAuthManager);
-    this.walletManager = new WalletManager(this.gunAuthManager);
   }
 
   /**
@@ -77,36 +77,24 @@ export class Shogun {
     return this.stealthChain;
   }
 
-  /**
-   * Gets the current user's keyPair
-   */
-  public getCurrentUserKeyPair(): GunKeyPair {
-    return this.gunAuthManager.getCurrentUserKeyPair();
+  public getGunAuthManager(): GunAuthManager {
+    return this.gunAuthManager;
   }
 
-  public getPublicKey(): string {
-    return this.gunAuthManager.getPublicKey();
+  public getEthereumService(): EthereumService {
+    return this.ethereumService;
   }
 
-  public async createAccount(alias: string, passphrase: string): Promise<void> {
-    if (!validateAlias(alias)) {
-      throw new ValidationError("Alias non valido");
-    }
-    const userPair = await this.gunAuthManager.createAccount(alias, passphrase);
-    const walletResult = await Shogun.createWalletObj(userPair);
-    const wallet = new Wallet(walletResult.walletObj.privateKey);
-    await this.saveWallet(wallet);
+  public getActivityPubManager(): ActivityPubManager {
+    return this.activityPubManager;
   }
 
-  public async login(alias: string, passphrase: string): Promise<string> {
-    if (!validateAlias(alias)) {
-      throw new ValidationError("Alias non valido");
-    }
-    return this.gunAuthManager.login(alias, passphrase);
+  public getWalletManager(): WalletManager {
+    return this.walletManager;
   }
 
-  public logout(): void {
-    this.gunAuthManager.logout();
+  public getWebAuthnService(): WebAuthnService {
+    return this.webAuthnService;
   }
 
   public async exportGunKeyPair(): Promise<string> {
@@ -116,19 +104,6 @@ export class Shogun {
   public async importGunKeyPair(keyPairJson: string): Promise<string> {
     return this.gunAuthManager.importGunKeyPair(keyPairJson);
   }
-
-  public async updateProfile(displayName: string): Promise<void> {
-    return this.gunAuthManager.updateProfile(displayName);
-  }
-
-  public async changePassword(oldPassword: string, newPassword: string): Promise<void> {
-    return this.gunAuthManager.changePassword(oldPassword, newPassword);
-  }
-
-  
-
-  
-
   /**
    * Exports all user data as a single JSON
    */
@@ -158,7 +133,6 @@ export class Shogun {
 
     return JSON.stringify(exportData);
   }
-
   /**
    * Imports all user data from a JSON export
    */
@@ -187,7 +161,7 @@ export class Shogun {
             configurable: true,
           });
         }
-        await this.saveWallet(wallet);
+        await this.walletManager.saveWallet(wallet);
       }
 
       // Save stealth keys if present
@@ -206,63 +180,5 @@ export class Shogun {
     }
   }
 
-  /**
-   * Crea un account utilizzando WebAuthn
-   */
-  public async createAccountWithWebAuthn(alias: string): Promise<WalletResult> {
-    try {
-      if (!this.webAuthnService.isSupported()) {
-        throw new WebAuthnError("WebAuthn non è supportato su questo browser");
-      }
 
-      const webAuthnResult = await this.webAuthnService.generateCredentials(
-        alias
-      );
-      if (!webAuthnResult.success || !webAuthnResult.password) {
-        throw new WebAuthnError(
-          webAuthnResult.error || "Errore durante la registrazione con WebAuthn"
-        );
-      }
-
-      await this.createAccount(alias, webAuthnResult.password);
-      const walletResult = await Shogun.createWalletObj(this.gunAuthManager.getCurrentUserKeyPair());
-      const wallet = new Wallet(walletResult.walletObj.privateKey);
-      await this.saveWallet(wallet);
-
-      return walletResult;
-    } catch (error) {
-      if (error instanceof WebAuthnError) {
-        throw error;
-      }
-      throw new NetworkError(
-        `Errore durante la creazione dell'account con WebAuthn: ${
-          error instanceof Error ? error.message : "Errore sconosciuto"
-        }`
-      );
-    }
-  }
-
-  // ActivityPub methods delegated to ActivityPubManager
-  public async getPrivateKey(username: string): Promise<string> {
-    return this.activityPubManager.getPrivateKey(username);
-  }
-
-  public async saveActivityPubKeys(keys: ActivityPubKeys): Promise<void> {
-    return this.gunAuthManager.saveActivityPubKeys(keys);
-  }
-
-  public async getActivityPubKeys(): Promise<ActivityPubKeys | null> {
-    return this.gunAuthManager.getActivityPubKeys();
-  }
-
-  public async deleteActivityPubKeys(): Promise<void> {
-    await this.gunAuthManager.savePrivateData(null, 'activityPubKeys');
-    await this.gunAuthManager.savePublicData(null, 'activityPubKeys');
-  }
-
-  public async signActivityPubData(
-    stringToSign: string,
-  ): Promise<{ signature: string; }> {
-    return this.activityPubManager.signActivityPubData(stringToSign);
-  }
 }

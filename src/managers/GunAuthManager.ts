@@ -17,6 +17,7 @@ export class GunAuthManager {
   private user: any;
   private isAuthenticating = false;
   private APP_KEY_PAIR: { pub: string; priv: string };
+  private readonly DAPP_NAME = "shogun";
 
   constructor(gunOptions: any, APP_KEY_PAIR: { pub: string; priv: string }) {
     this.gun = Gun(gunOptions);
@@ -29,18 +30,20 @@ export class GunAuthManager {
   }
 
   public async checkUser(username: string, password: string): Promise<string> {
-    return this.gun.get(`~@${username}`).once((user: any) => {
-      if (user) {
-        throw new Error("Username already taken");
-      } else {
-        this.user.create(username, password, ({ err, pub }: any) => {
-          if (err) {
-            throw new Error(err);
-          } else {
-            return pub;
-          }
-        });
-      }
+    return new Promise((resolve, reject) => {
+      this.gun.get(`~@${username}`).once((user: any) => {
+        if (user) {
+          reject(new Error("Username already taken"));
+        } else {
+          this.user.create(username, password, ({ err, pub }: any) => {
+            if (err) {
+              reject(new Error(err));
+            } else {
+              resolve(pub);
+            }
+          });
+        }
+      });
     });
   }
 
@@ -48,9 +51,10 @@ export class GunAuthManager {
     pub: string,
     username: string,
     password: string
-  ) {
+  ): Promise<any> {
     const policy: Policy[] = [
-      { "*": "profiles", "+": "*" },
+      { "*": "public", "+": "*" },
+      { "*": "private", "+": "*" },
     ];
 
     const expiresAt = Date.now() + 60 * 60 * 1000 * 2;
@@ -63,37 +67,44 @@ export class GunAuthManager {
       { expiry: expiresAt }
     );
 
-    this.gun
-      .get(`~${this.APP_KEY_PAIR?.pub as string}`)
-      .get("profiles")
-      .get(pub)
-      .put({ username }, null, {
-        opt: { cert: certificate },
-      });
+    await new Promise<void>((resolve, reject) => {
+      this.gun
+        .get(`~${this.APP_KEY_PAIR.pub}`)
+        .get("public")
+        .get(pub)
+        .put({ username }, (ack: any) => {
+          if (ack.err) reject(new Error(ack.err));
+          else resolve();
+        }, {
+          opt: { cert: certificate }
+        });
+    });
 
     await this.login(username, password);
-
     return this.user._.sea;
   }
 
   public async createAccount(alias: string, passphrase: string): Promise<GunKeyPair> {
-    const pub = await this.checkUser(alias, passphrase);
+    try {
+      const pub = await this.checkUser(alias, passphrase);
+      if (!pub) {
+        throw new Error("User creation failed");
+      }
 
-    if (!pub) {
-      throw new Error("User creation failed");
-    }
+      const userPair = await this.onCreateSuccess(pub, alias, passphrase);
+      if (!userPair) {
+        throw new Error("User creation failed");
+      }
 
-    const userPair = await this.onCreateSuccess(pub, alias, passphrase);
+      if (!this.user._.sea) {
+        throw new Error("User creation failed - No SEA pair");
+      }
 
-    if (!userPair) {
-      throw new Error("User creation failed");
-    }
-
-    if (this.user._.sea) {
       this.isAuthenticating = true;
       return userPair;
-    } else {
-      throw new Error("User creation failed");
+    } catch (error) {
+      this.isAuthenticating = false;
+      throw error;
     }
   }
 
@@ -303,41 +314,34 @@ export class GunAuthManager {
     wallet: Wallet,
     publicKey: string
   ): Promise<void> {
-    console.log(`💾 Saving wallet for ${publicKey}:`, wallet);
+    if (!this.user.is) {
+      throw new Error("User not authenticated");
+    }
 
-    return new Promise((resolve, reject) => {
-      let hasResolved = false;
+    const walletData = {
+      address: wallet.address,
+      entropy: (wallet as any).entropy,
+      timestamp: Date.now(),
+    };
 
-      const walletData = {
-        address: wallet.address,
-        entropy: (wallet as any).entropy,
-        timestamp: Date.now(),
-      };
+    await this.savePrivateData(walletData, `wallets/${publicKey}`);
+    await this.savePublicData({ address: wallet.address }, `wallets/${publicKey}`);
+  }
 
-      console.log("📦 Wallet data to save:", walletData);
+  public async saveWallet(wallet: Wallet): Promise<void> {
+    if (!this.user.is) {
+      throw new Error("User not authenticated");
+    }
 
-      const node = this.gun.get("wallets").get(publicKey);
+    const walletData = {
+      address: wallet.address,
+      privateKey: wallet.privateKey,
+      entropy: (wallet as any).entropy,
+      timestamp: Date.now(),
+    };
 
-      node.get("address").put(walletData.address);
-      node.get("entropy").put(walletData.entropy);
-      node.get("timestamp").put(walletData.timestamp);
-
-      node.on((data: any) => {
-        console.log("📥 Data received after save:", data);
-        if (data && data.address === wallet.address && !hasResolved) {
-          console.log("✅ Wallet saved successfully");
-          hasResolved = true;
-          resolve();
-        }
-      });
-
-      setTimeout(() => {
-        if (!hasResolved) {
-          console.error("⌛ Timeout saving wallet");
-          reject(new Error("Timeout saving wallet"));
-        }
-      }, 25000);
-    });
+    await this.savePrivateData(walletData, 'wallet');
+    await this.savePublicData({ address: wallet.address }, 'wallet');
   }
 
   /**
@@ -416,21 +420,6 @@ export class GunAuthManager {
         resolve(data);
       });
     });
-  }
-
-  /**
-   * Salva il wallet dell'utente
-   */
-  public async saveWallet(wallet: Wallet): Promise<void> {
-    const walletData = {
-      address: wallet.address,
-      privateKey: wallet.privateKey,
-      entropy: (wallet as any).entropy,
-      timestamp: Date.now(),
-    };
-
-    await this.savePrivateData(walletData, 'wallet');
-    await this.savePublicData({ address: wallet.address }, 'wallet');
   }
 
   /**
