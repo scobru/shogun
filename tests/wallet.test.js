@@ -1,6 +1,6 @@
 const { describe, it, beforeEach, afterEach } = require('mocha')
 const assert = require('assert')
-const { WalletManager } = require('../src/Shogun')
+const { Shogun } = require('../dist/Shogun')
 const { Wallet } = require('ethers')
 
 // Configurazione di test per Gun e APP_KEY_PAIR
@@ -21,7 +21,7 @@ describe('WalletManager Data Management', function () {
   let testWallet
 
   beforeEach(async function () {
-    walletManager = new WalletManager(gunOptions, APP_KEY_PAIR)
+    walletManager = new Shogun(gunOptions, APP_KEY_PAIR)
     testAlias = `testuser_${Math.random().toString(36).substring(2)}`
 
     // Create and authenticate a test user
@@ -128,7 +128,7 @@ describe('WalletManager Data Management', function () {
   describe('Wallet Creation', function () {
     it('should create a wallet object from Gun keypair', async function () {
       const gunKeyPair = walletManager.getCurrentUserKeyPair()
-      const result = await WalletManager.createWalletObj(gunKeyPair)
+      const result = await Shogun.createWalletObj(gunKeyPair)
 
       assert(result.walletObj, 'Should return a wallet object')
       assert(result.entropy, 'Should have entropy')
@@ -140,7 +140,7 @@ describe('WalletManager Data Management', function () {
       const gunKeyPair = walletManager.getCurrentUserKeyPair()
       const testSalt = 'test_salt_123'
 
-      const wallet = await WalletManager.createWalletFromSalt(gunKeyPair, testSalt)
+      const wallet = await Shogun.createWalletFromSalt(gunKeyPair, testSalt)
 
       assert(wallet instanceof Wallet, 'Should return a Wallet instance')
       assert(wallet.address.startsWith('0x'), 'Address should start with 0x')
@@ -150,7 +150,7 @@ describe('WalletManager Data Management', function () {
     it('should fail wallet creation with invalid Gun keypair', async function () {
       const invalidKeyPair = { pub: null }
       try {
-        await WalletManager.createWalletObj(invalidKeyPair)
+        await Shogun.createWalletObj(invalidKeyPair)
         assert.fail('Should throw an error')
       } catch (error) {
         assert(error.message.includes('Missing public key'))
@@ -160,8 +160,8 @@ describe('WalletManager Data Management', function () {
     it('should create different wallets with different salts', async function () {
       const gunKeyPair = walletManager.getCurrentUserKeyPair()
 
-      const wallet1 = await WalletManager.createWalletFromSalt(gunKeyPair, 'salt1')
-      const wallet2 = await WalletManager.createWalletFromSalt(gunKeyPair, 'salt2')
+      const wallet1 = await Shogun.createWalletFromSalt(gunKeyPair, 'salt1')
+      const wallet2 = await Shogun.createWalletFromSalt(gunKeyPair, 'salt2')
 
       assert.notStrictEqual(wallet1.address, wallet2.address, 'Wallets should have different addresses')
     })

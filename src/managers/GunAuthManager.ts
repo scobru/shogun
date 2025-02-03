@@ -72,19 +72,26 @@ export class GunAuthManager {
         .get(`~${this.APP_KEY_PAIR.pub}`)
         .get("public")
         .get(pub)
-        .put({ username }, (ack: any) => {
-          if (ack.err) reject(new Error(ack.err));
-          else resolve();
-        }, {
-          opt: { cert: certificate }
-        });
+        .put(
+          { username },
+          (ack: any) => {
+            if (ack.err) reject(new Error(ack.err));
+            else resolve();
+          },
+          {
+            opt: { cert: certificate },
+          }
+        );
     });
 
     await this.login(username, password);
     return this.user._.sea;
   }
 
-  public async createAccount(alias: string, passphrase: string): Promise<GunKeyPair> {
+  public async createAccount(
+    alias: string,
+    passphrase: string
+  ): Promise<GunKeyPair> {
     try {
       const pub = await this.checkUser(alias, passphrase);
       if (!pub) {
@@ -310,40 +317,6 @@ export class GunAuthManager {
     });
   }
 
-  public async saveWalletToGun(
-    wallet: Wallet,
-    publicKey: string
-  ): Promise<void> {
-    if (!this.user.is) {
-      throw new Error("User not authenticated");
-    }
-
-    const walletData = {
-      address: wallet.address,
-      entropy: (wallet as any).entropy,
-      timestamp: Date.now(),
-    };
-
-    await this.savePrivateData(walletData, `wallets/${publicKey}`);
-    await this.savePublicData({ address: wallet.address }, `wallets/${publicKey}`);
-  }
-
-  public async saveWallet(wallet: Wallet): Promise<void> {
-    if (!this.user.is) {
-      throw new Error("User not authenticated");
-    }
-
-    const walletData = {
-      address: wallet.address,
-      privateKey: wallet.privateKey,
-      entropy: (wallet as any).entropy,
-      timestamp: Date.now(),
-    };
-
-    await this.savePrivateData(walletData, 'wallet');
-    await this.savePublicData({ address: wallet.address }, 'wallet');
-  }
-
   /**
    * Salva i dati privati dell'utente
    */
@@ -353,13 +326,16 @@ export class GunAuthManager {
     }
 
     return new Promise((resolve, reject) => {
-      this.user.get('private').get(path).put(data, (ack: any) => {
-        if (ack.err) {
-          reject(new Error(ack.err));
-          return;
-        }
-        resolve();
-      });
+      this.user
+        .get("private")
+        .get(path)
+        .put(data, (ack: any) => {
+          if (ack.err) {
+            reject(new Error(ack.err));
+            return;
+          }
+          resolve();
+        });
     });
   }
 
@@ -372,9 +348,12 @@ export class GunAuthManager {
     }
 
     return new Promise((resolve) => {
-      this.user.get('private').get(path).once((data: any) => {
-        resolve(data);
-      });
+      this.user
+        .get("private")
+        .get(path)
+        .once((data: any) => {
+          resolve(data);
+        });
     });
   }
 
@@ -387,27 +366,31 @@ export class GunAuthManager {
     }
 
     return new Promise((resolve, reject) => {
-      this.gun.get(`~${this.APP_KEY_PAIR.pub}`).get('public').get(path).put(
-        data,
-        (ack: any) => {
-          if (ack.err) {
-            reject(new Error(ack.err));
-            return;
-          }
-          resolve();
-        },
-        {
-          opt: {
-            cert: SEA.certify(
-              [this.getPublicKey()],
-              [{ "*": "public", "+": "*" }] as IPolicy[],
-              this.APP_KEY_PAIR,
-              () => {},
-              { expiry: Date.now() + 60 * 60 * 1000 * 2 }
-            ),
+      this.gun
+        .get(`~${this.APP_KEY_PAIR.pub}`)
+        .get("public")
+        .get(path)
+        .put(
+          data,
+          (ack: any) => {
+            if (ack.err) {
+              reject(new Error(ack.err));
+              return;
+            }
+            resolve();
           },
-        }
-      );
+          {
+            opt: {
+              cert: SEA.certify(
+                [this.getPublicKey()],
+                [{ "*": "public", "+": "*" }] as IPolicy[],
+                this.APP_KEY_PAIR,
+                () => {},
+                { expiry: Date.now() + 60 * 60 * 1000 * 2 }
+              ),
+            },
+          }
+        );
     });
   }
 
@@ -416,63 +399,14 @@ export class GunAuthManager {
    */
   public async getPublicData(publicKey: string, path: string): Promise<any> {
     return new Promise((resolve) => {
-      this.gun.get(`~${this.APP_KEY_PAIR.pub}`).get('public').get(path).once((data: any) => {
-        resolve(data);
-      });
+      this.gun
+        .get(`~${this.APP_KEY_PAIR.pub}`)
+        .get("public")
+        .get(path)
+        .once((data: any) => {
+          resolve(data);
+        });
     });
-  }
-
-  /**
-   * Recupera il wallet dell'utente
-   */
-  public async getWallet(): Promise<Wallet | null> {
-    const walletData = await this.getPrivateData('wallet');
-    if (!walletData || !walletData.privateKey) return null;
-
-    const wallet = new Wallet(walletData.privateKey);
-    if (walletData.entropy) {
-      Object.defineProperty(wallet, "entropy", {
-        value: walletData.entropy,
-        writable: true,
-        enumerable: true,
-        configurable: true,
-      });
-    }
-    return wallet;
-  }
-
-  /**
-   * Salva le chiavi ActivityPub
-   */
-  public async saveActivityPubKeys(keys: ActivityPubKeys): Promise<void> {
-    const privateData = {
-      privateKey: keys.privateKey,
-      createdAt: keys.createdAt,
-    };
-
-    const publicData = {
-      publicKey: keys.publicKey,
-      createdAt: keys.createdAt,
-    };
-
-    await this.savePrivateData(privateData, 'activityPubKeys');
-    await this.savePublicData(publicData, 'activityPubKeys');
-  }
-
-  /**
-   * Recupera le chiavi ActivityPub
-   */
-  public async getActivityPubKeys(): Promise<ActivityPubKeys | null> {
-    const privateData = await this.getPrivateData('activityPubKeys');
-    const publicData = await this.getPublicData(this.getPublicKey(), 'activityPubKeys');
-
-    if (!privateData || !publicData) return null;
-
-    return {
-      privateKey: privateData.privateKey,
-      publicKey: publicData.publicKey,
-      createdAt: privateData.createdAt || publicData.createdAt || Date.now(),
-    };
   }
 
   public async deletePrivateData(path: string): Promise<void> {
@@ -482,4 +416,4 @@ export class GunAuthManager {
   public async deletePublicData(path: string): Promise<void> {
     await this.savePublicData(null, path);
   }
-} 
+}

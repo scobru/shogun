@@ -4,7 +4,8 @@ const { ethers } = require('ethers')
 const Gun = require('gun')
 require('gun/sea')
 
-const { WalletManager } = require('../src/WalletManager')
+const { Shogun } = require('../dist/Shogun')
+const { WalletManager } = require('../dist/managers/WalletManager')
 
 // Configurazione di test per Gun e APP_KEY_PAIR
 const gunOptions = {

@@ -1,13 +1,9 @@
 import { ethers } from "ethers";
-import { Shogun } from "../Shogun";
 import { MESSAGE_TO_SIGN } from "../services/Ethereum";
 import { EthereumService } from "../services/Ethereum";
 import { AuthenticationError, ValidationError } from "../utils/errors";
 import { GunAuthManager } from "./GunAuthManager";
 
-/**
- * Manages Ethereum wallet functionality and authentication
- */
 export class EthereumManager {
   private gunAuthManager: GunAuthManager;
   private customProvider: ethers.JsonRpcProvider | null = null;
@@ -19,12 +15,6 @@ export class EthereumManager {
     this.ethereumService = new EthereumService();
   }
 
-  /**
-   * Sets a custom provider with private key
-   * @param {string} rpcUrl - RPC URL for the provider
-   * @param {string} privateKey - Private key for the wallet
-   * @throws {ValidationError} Se la chiave privata non è valida
-   */
   public setCustomProvider(rpcUrl: string, privateKey: string): void {
     try {
       if (!rpcUrl || typeof rpcUrl !== 'string') {
@@ -45,11 +35,7 @@ export class EthereumManager {
     }
   }
 
-  /**
-   * Gets the appropriate signer (custom or browser)
-   * @returns {Promise<ethers.Signer>} The Ethereum signer
-   * @throws {AuthenticationError} Se non è possibile ottenere il signer
-   */
+ 
   public async getSigner(): Promise<ethers.Signer> {
     try {
       if (this.customWallet) {
@@ -69,12 +55,8 @@ export class EthereumManager {
     }
   }
 
-  /**
-   * Creates an account using an Ethereum account
-   * @returns {Promise<string>} The created username (Ethereum address)
-   * @throws {AuthenticationError} Se la creazione dell'account fallisce
-   */
-  public async createAccountWithEthereum(): Promise<string> {
+  
+  public async createAccount(): Promise<string> {
     try {
       const signer = await this.getSigner();
       const address = await signer.getAddress();
@@ -102,12 +84,7 @@ export class EthereumManager {
     }
   }
 
-  /**
-   * Logs in with an Ethereum account
-   * @returns {Promise<string|null>} Public key if login successful, null otherwise
-   * @throws {AuthenticationError} Se il login fallisce
-   */
-  public async loginWithEthereum(): Promise<string> {
+  public async login(): Promise<string> {
     try {
       const signer = await this.getSigner();
       const address = await signer.getAddress();

@@ -6,11 +6,10 @@ const Gun = require('gun')
 require('gun/sea')
 
 // Import the class we want to test
-const { StealthChain } = require('../src/chains/StealthChain')
+const { StealthChain } = require('../dist/chains/StealthChain')
 
 // Import (or instantiate) the WalletManager
-// The important thing is that we can extract the same Gun instance used by it
-const { WalletManager } = require('../src/Shogun')
+const { Shogun } = require('../dist/Shogun')
 
 // Configurazione di test per Gun e APP_KEY_PAIR
 const gunOptions = {
@@ -54,7 +53,7 @@ describe('StealthChain Test Suite', function () {
 
     console.log('\n=== Setup: creating manager and initializing StealthChain ===')
 
-    walletManager = new WalletManager(gunOptions, APP_KEY_PAIR)
+    walletManager = new Shogun(gunOptions, APP_KEY_PAIR)
     stealthChain = walletManager.getStealthChain()
     testAlias = `testuser_${Math.random().toString(36).substring(2)}`
 

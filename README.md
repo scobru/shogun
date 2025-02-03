@@ -41,28 +41,33 @@ npm install @scobru/shogun
 ### Basic Usage
 
 ```typescript
-import { WalletManager } from '@scobru/shogun'
+import { Shogun } from '@scobru/shogun'
 
-// Initialize with Gun configuration
-const manager = new WalletManager({
+// Initialize Shogun with Gun configuration
+const shogun = new Shogun({
   peers: ['https://your-gun-peer.com/gun'],
   localStorage: false,
   radisk: false,
   multicast: false
 }, APP_KEY_PAIR);
 
+// Get required managers and services
+const walletManager = shogun.getWalletManager();
+const webAuthnService = shogun.getWebAuthnService();
+const activityPubManager = shogun.getActivityPubManager();
+
 // Create account
 try {
-  await manager.createAccount('username', 'password');
+  await walletManager.createAccount('username', 'password');
 } catch (error) {
   console.error('Account creation failed:', error);
 }
 
 // Login
-const pubKey = await manager.login('username', 'password');
+const pubKey = await walletManager.login('username', 'password');
 
 // Create wallet
-const gunKeyPair = manager.getCurrentUserKeyPair();
+const gunKeyPair = walletManager.getCurrentUserKeyPair();
 const { walletObj, entropy } = await WalletManager.createWalletObj(gunKeyPair);
 
 console.log('Address:', walletObj.address);
@@ -70,27 +75,36 @@ console.log('Private Key:', walletObj.privateKey);
 console.log('Entropy:', entropy);
 
 // Save wallet
-await manager.saveWallet(walletObj);
+await walletManager.saveWallet(walletObj);
 
 // Retrieve wallet
-const wallet = await manager.getWallet();
+const wallet = await walletManager.getWallet();
+
+// Export all data
+const backup = await shogun.exportAllData();
+
+// Import data
+await shogun.importAllData(backup);
 ```
 
 ### ActivityPub Integration
 
 ```typescript
+// Get ActivityPub manager
+const activityPubManager = shogun.getActivityPubManager();
+
 // Generate and save ActivityPub keys
 const keys = {
   publicKey: 'public_key_data',
   privateKey: 'private_key_data'
 };
-await manager.saveActivityPubKeys(keys);
+await activityPubManager.saveActivityPubKeys(keys);
 
 // Retrieve keys
-const storedKeys = await manager.getActivityPubKeys();
+const storedKeys = await activityPubManager.getActivityPubKeys();
 
 // Sign ActivityPub data
-const { signature, signatureHeader } = await manager.signActivityPubData(
+const { signature, signatureHeader } = await activityPubManager.signActivityPubData(
   stringToSign,
   username
 );
@@ -100,15 +114,17 @@ const { signature, signatureHeader } = await manager.signActivityPubData(
 
 ```typescript
 try {
+  const walletManager = shogun.getWalletManager();
+  
   // Create account
-  await manager.createAccount('username', 'password');
+  await walletManager.createAccount('username', 'password');
   
   // Login
-  const pubKey = await manager.login('username', 'password');
+  const pubKey = await walletManager.login('username', 'password');
   
   // Create and save wallet
-  const { walletObj } = await WalletManager.createWalletObj(manager.getCurrentUserKeyPair());
-  await manager.saveWallet(walletObj);
+  const { walletObj } = await WalletManager.createWalletObj(walletManager.getCurrentUserKeyPair());
+  await walletManager.saveWallet(walletObj);
   
 } catch (error) {
   if (error instanceof ValidationError) {
@@ -296,3 +312,68 @@ Pull requests are welcome! For major changes:
 - [ ] Enhanced ActivityPub integration
 - [ ] Improved WebAuthn support
 - [ ] Additional wallet types support
+
+## 🏗️ Project Structure
+
+### Core Components
+
+```typescript
+Shogun (Main Class)
+├── WalletManager
+│   └── Wallet operations and management
+├── WebAuthnService
+│   └── Biometric authentication
+├── ActivityPubManager
+│   └── ActivityPub integration
+├── EthereumManager
+│   └── Ethereum operations
+├── StealthChain
+│   └── Stealth address operations
+└── GunAuthManager
+    └── Gun.js authentication
+
+```
+
+### Key Features by Component
+
+#### 🏰 Shogun
+- Central orchestrator
+- Manages all components
+- Handles data import/export
+- Provides access to all services
+
+#### 🔑 WalletManager
+- Account creation and login
+- Wallet creation and storage
+- Key pair management
+- Secure storage
+
+#### 🔐 WebAuthnService
+- Biometric authentication
+- Platform authenticator support
+- Passwordless login
+- Security key support
+
+#### 🌐 ActivityPubManager
+- Federation support
+- Key management
+- Data signing
+- Protocol integration
+
+#### ⛓️ EthereumManager
+- Ethereum wallet operations
+- Transaction management
+- Smart contract interaction
+- Network configuration
+
+#### 🕶️ StealthChain
+- Stealth address generation
+- Private transactions
+- Key management
+- Privacy features
+
+#### 🔫 GunAuthManager
+- Gun.js integration
+- P2P data sync
+- User authentication
+- Secure storage

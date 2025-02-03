@@ -1,5 +1,89 @@
 # SHOGUN API Reference
 
+## 🏰 Shogun Core
+
+### Constructor
+
+```typescript
+constructor(gunOptions: any, APP_KEY_PAIR: any)
+```
+Creates a new Shogun instance. Initializes Gun, and all required managers and services.
+
+**Parameters:**
+- `gunOptions`: Gun configuration object
+  - `peers`: Array of Gun peer URLs
+  - `localStorage`: Enable/disable localStorage
+  - `radisk`: Enable/disable radisk storage
+  - `multicast`: Enable/disable multicast
+- `APP_KEY_PAIR`: Application key pair for Gun authentication
+
+### Core Methods
+
+```typescript
+getWalletManager(): WalletManager
+```
+Returns the WalletManager instance for wallet operations.
+
+```typescript
+getWebAuthnService(): WebAuthnService
+```
+Returns the WebAuthnService instance for biometric authentication.
+
+```typescript
+getActivityPubManager(): ActivityPubManager
+```
+Returns the ActivityPubManager instance for ActivityPub operations.
+
+```typescript
+getEthereumManager(): EthereumManager
+```
+Returns the EthereumManager instance for Ethereum operations.
+
+```typescript
+getStealthChain(): StealthChain
+```
+Returns the StealthChain instance for stealth address operations.
+
+```typescript
+getGunAuthManager(): GunAuthManager
+```
+Returns the GunAuthManager instance for Gun.js authentication.
+
+### Data Management
+
+```typescript
+async exportAllData(): Promise<string>
+```
+Exports all user data as JSON, including:
+- Wallet data
+- Stealth keys
+- Gun key pair
+- Timestamp
+- Version
+Throws error if user not authenticated
+
+```typescript
+async importAllData(jsonData: string): Promise<void>
+```
+Imports user data from JSON export:
+- Validates data format and version
+- Imports Gun pair
+- Imports wallet data
+- Imports stealth keys
+Throws error if import fails
+
+### Key Management
+
+```typescript
+async exportGunKeyPair(): Promise<string>
+```
+Exports current user's Gun key pair.
+
+```typescript
+async importGunKeyPair(keyPairJson: string): Promise<string>
+```
+Imports a Gun key pair.
+
 ## 🔑 WalletManager
 
 ### Constructor

@@ -1,7 +1,6 @@
 import type { ActivityPubKeys } from "../interfaces/ActivityPubKeys";
 import { GunAuthManager } from "./GunAuthManager";
 
-// Importiamo crypto solo per Node.js
 let cryptoModule: any;
 try {
   if (typeof window === "undefined") {
@@ -19,9 +18,6 @@ export class ActivityPubManager {
     this.gunAuthManager = gunAuthManager;
   }
 
-  /**
-   * Genera una coppia di chiavi RSA per ActivityPub con validazione
-   */
   public async generateActivityPubKeys(): Promise<ActivityPubKeys> {
     try {
       const { privateKey, publicKey } = await this.generateRSAKeyPair();
@@ -32,6 +28,12 @@ export class ActivityPubManager {
       ) {
         throw new Error("Formato chiavi generato non valido");
       }
+
+      await this.saveActivityPubKeys({
+        publicKey,
+        privateKey,
+        createdAt: Date.now(),
+      });
 
       return {
         publicKey,
@@ -48,53 +50,43 @@ export class ActivityPubManager {
     }
   }
 
-  /**
-   * Salva le chiavi ActivityPub sia su Gun che localmente
-   */
-  public async saveActivityPubKeys(
-    keys: ActivityPubKeys,
-  ): Promise<void> {
+  public async saveActivityPubKeys(keys: ActivityPubKeys): Promise<void> {
     if (!this.gunAuthManager.getCurrentUserKeyPair()) {
       throw new Error("Utente non autenticato");
     }
     await this.gunAuthManager.savePrivateData(keys, "activitypub/keys");
-    await this.gunAuthManager.savePublicData(keys.publicKey, "activitypub/publicKey");
+    await this.gunAuthManager.savePublicData(
+      keys.publicKey,
+      "activitypub/publicKey"
+    );
   }
 
-  /**
-   * Recupera le chiavi ActivityPub da Gun e/o localStorage
-   */
-  public async getActivityPubKeys(
-  ): Promise<ActivityPubKeys | null> {
+  public async getActivityPubKeys(): Promise<ActivityPubKeys> {
     if (!this.gunAuthManager.getCurrentUserKeyPair()) {
       throw new Error("Utente non autenticato");
     }
-    return this.gunAuthManager.getPrivateData('activitypub/keys');
+    return this.gunAuthManager.getPrivateData("activitypub/keys");
   }
 
-  public async getActivityPubPublicKey(): Promise<string | null> {
+  public async getActivityPubPublicKey(): Promise<string> {
     if (!this.gunAuthManager.getCurrentUserKeyPair()) {
       throw new Error("Utente non autenticato");
     }
     const publicKey = await this.gunAuthManager.getPublicKey();
-    return this.gunAuthManager.getPublicData('activitypub/publicKey', publicKey);
+    return this.gunAuthManager.getPublicData(
+      "activitypub/publicKey",
+      publicKey
+    );
   }
 
-  /**
-   * Elimina le chiavi ActivityPub da Gun e localStorage
-   */
-  public async deleteActivityPubKeys(
-  ): Promise<void> {
+  public async deleteActivityPubKeys(): Promise<void> {
     if (!this.gunAuthManager.getCurrentUserKeyPair()) {
       throw new Error("Utente non autenticato");
     }
-    await this.gunAuthManager.deletePrivateData('activitypub/keys');
-    await this.gunAuthManager.deletePublicData('activitypub/publicKey');
+    await this.gunAuthManager.deletePrivateData("activitypub/keys");
+    await this.gunAuthManager.deletePublicData("activitypub/publicKey");
   }
 
-  /**
-   * Recupera la chiave privata in modo sicuro
-   */
   public async getPrivateKey(username: string): Promise<string> {
     try {
       // Verifica formato username
@@ -102,7 +94,9 @@ export class ActivityPubManager {
         throw new Error("Formato username non valido");
       }
 
-      const privateData = await this.gunAuthManager.getPrivateData('activitypub/keys');
+      const privateData = await this.gunAuthManager.getPrivateData(
+        "activitypub/keys"
+      );
       if (!privateData || !privateData.privateKey) {
         throw new Error("Chiave privata non trovata");
       }
@@ -118,9 +112,6 @@ export class ActivityPubManager {
     }
   }
 
-  /**
-   * Valida il formato della chiave PEM
-   */
   private validateKeyFormat(key: string): boolean {
     const pemHeader = key.startsWith("-----BEGIN PRIVATE KEY-----");
     const pemFooter = key.includes("-----END PRIVATE KEY-----");
@@ -128,9 +119,6 @@ export class ActivityPubManager {
     return pemHeader && pemFooter && keyLength;
   }
 
-  /**
-   * Importa una chiave privata PEM
-   */
   public async importPrivateKey(pem: string) {
     const pemContents = pem
       .replace("-----BEGIN PRIVATE KEY-----", "")
@@ -153,9 +141,6 @@ export class ActivityPubManager {
     );
   }
 
-  /**
-   * Firma i dati per ActivityPub utilizzando la chiave privata RSA
-   */
   public async signActivityPubData(
     stringToSign: string,
     username: string
@@ -204,12 +189,10 @@ export class ActivityPubManager {
     }
   }
 
-  // Funzione helper per la generazione delle chiavi RSA utilizzando WebCrypto o Node crypto
   private async generateRSAKeyPair(): Promise<{
     publicKey: string;
     privateKey: string;
   }> {
-    // Se siamo nel browser, usa WebCrypto API
     if (typeof window !== "undefined" && window.crypto?.subtle) {
       try {
         const keyPair = await window.crypto.subtle.generateKey(
@@ -224,7 +207,10 @@ export class ActivityPubManager {
         );
 
         // Funzione migliorata per convertire ArrayBuffer in PEM
-        const exportKey = async (key: CryptoKey, type: "public" | "private") => {
+        const exportKey = async (
+          key: CryptoKey,
+          type: "public" | "private"
+        ) => {
           const format = type === "public" ? "spki" : "pkcs8";
           const exported = await window.crypto.subtle.exportKey(format, key);
           const base64 = btoa(String.fromCharCode(...new Uint8Array(exported)));
@@ -266,4 +252,4 @@ export class ActivityPubManager {
 
     throw new Error("Nessuna implementazione crittografica disponibile");
   }
-} 
+}

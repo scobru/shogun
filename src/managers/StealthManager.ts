@@ -1,50 +1,16 @@
 import { ethers } from "ethers";
 import Gun from "gun";
 import "gun/sea";
-import { GunAuthManager } from "../managers/GunAuthManager";
+import { GunAuthManager } from "./GunAuthManager";
 import type { StealthKeyPair } from "../interfaces/StealthKeyPair";
 // If you have Gun and SEA type definitions, you can import them here.
 // For now, we use `any` to simplify.
 const SEA = Gun.SEA;
 
 /**
- * Converts a private key from base64Url format (Gun) to hex format (Ethereum)
- */
-function convertToEthPk(gunPrivateKey: string): string {
-  const base64UrlToHex = (base64url: string): string => {
-    const padding = "=".repeat((4 - (base64url.length % 4)) % 4);
-    const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/") + padding;
-    const binary = atob(base64);
-    const hex = Array.from(binary, (char) =>
-      char.charCodeAt(0).toString(16).padStart(2, "0")
-    ).join("");
-
-    if (hex.length !== 64) {
-      throw new Error("Cannot convert private key: invalid length");
-    }
-    return hex;
-  };
-
-  if (!gunPrivateKey || typeof gunPrivateKey !== "string") {
-    throw new Error("Cannot convert private key: invalid input");
-  }
-
-  try {
-    const hexPrivateKey = "0x" + base64UrlToHex(gunPrivateKey);
-    return hexPrivateKey;
-  } catch (error: unknown) {
-    if (error instanceof Error) {
-      throw new Error(`Cannot convert private key: ${error.message}`);
-    } else {
-      throw new Error("Cannot convert private key: unknown error");
-    }
-  }
-}
-
-/**
  * Main class for handling stealth logic using Gun and SEA
  */
-export class StealthChain {
+export class StealthManager {
   private gunAuthManager: GunAuthManager;
 
   constructor(gunAuthManager: GunAuthManager) {
@@ -94,9 +60,7 @@ export class StealthChain {
   /**
    * Genera un indirizzo stealth per la chiave pubblica del destinatario
    */
-  public async generateStealthAddress(
-    recipientPublicKey: string
-  ): Promise<{
+  public async generateStealthAddress(recipientPublicKey: string): Promise<{
     stealthAddress: string;
     ephemeralPublicKey: string;
     recipientPublicKey: string;
@@ -300,7 +264,7 @@ export class StealthChain {
   /**
    * Recupera le chiavi stealth dal profilo dell'utente
    */
-  public async getStealthKeys(): Promise<StealthKeyPair | null> {
+  public async getStealthKeys(): Promise<StealthKeyPair> {
     const privateData = await this.gunAuthManager.getPrivateData("stealthKeys");
     if (
       !privateData ||
@@ -309,7 +273,7 @@ export class StealthChain {
       !privateData.epub ||
       !privateData.epriv
     ) {
-      return null;
+      throw new Error("Invalid stealth keys");
     }
 
     return {
@@ -329,47 +293,5 @@ export class StealthChain {
       "stealthKeys"
     );
     return publicData?.epub || null;
-  }
-
-  /**
-   * @deprecated Use saveStealthKeys instead
-   */
-  public async saveStealthKeysToGun(
-    publicKey: string,
-    stealthKeys: { spendingKey: string; viewingKey: string }
-  ): Promise<void> {
-    await this.gunAuthManager.savePublicData(stealthKeys, "stealthKeys");
-  }
-
-  /**
-   * @deprecated Use getPublicStealthKey instead
-   */
-  public async retrieveStealthKeysFromGun(
-    publicKey: string
-  ): Promise<{ spendingKey: string; viewingKey: string } | null> {
-    return this.gunAuthManager.getPublicData(publicKey, "stealthKeys");
-  }
-
-  /**
-   * @deprecated Use saveStealthKeys instead
-   */
-  public async saveStealthKeysLocally(
-    publicKey: string,
-    stealthKeys: { spendingKey: string; viewingKey: string }
-  ): Promise<void> {
-    await this.saveStealthKeysToGun(publicKey, stealthKeys);
-  }
-
-  /**
-   * @deprecated Use getPublicStealthKey instead
-   */
-  public async retrieveStealthKeysLocally(
-    publicKey: string
-  ): Promise<{ spendingKey: string; viewingKey: string }> {
-    const keys = await this.retrieveStealthKeysFromGun(publicKey);
-    if (!keys) {
-      throw new Error("Stealth keys not found");
-    }
-    return keys;
   }
 }

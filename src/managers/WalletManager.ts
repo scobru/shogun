@@ -30,10 +30,16 @@ export class WalletManager {
   /**
    * Creates a new wallet from Gun public key
    */
-  public static async createWalletObj(
-    gunKeyPair: GunKeyPair
-  ): Promise<WalletResult> {
+  public async createWalletObj(): Promise<WalletResult> {
     try {
+      const user = await this.gunAuthManager.getUser();
+
+      if (!user.is) {
+        throw new Error("User not authenticated");
+      }
+
+      const gunKeyPair = user.pair();
+
       if (!gunKeyPair.pub) throw new Error("Missing public key");
 
       const salt = `${gunKeyPair.pub}_${Date.now()}_${Math.random()
@@ -63,7 +69,7 @@ export class WalletManager {
   /**
    * Creates a hash using Web Crypto API in browser or Node.js crypto in Node
    */
-  private static async createHash(data: string): Promise<string> {
+  private async createHash(data: string): Promise<string> {
     try {
       // Se siamo in Node.js
       if (typeof window === "undefined" && cryptoModule) {
@@ -98,7 +104,7 @@ export class WalletManager {
   /**
    * Creates a wallet from salt and Gun keypair
    */
-  public static async createWalletFromSalt(
+  public async createWalletFromSalt(
     gunKeyPair: GunKeyPair,
     salt: string
   ): Promise<Wallet> {
@@ -137,22 +143,143 @@ export class WalletManager {
   }
 
   /**
-   * Salva il wallet
+   * Recupera tutti i wallet dell'utente con tutte le loro informazioni
    */
-  public async saveWallet(wallet: Wallet): Promise<void> {
+  public async getWallets(): Promise<Array<Wallet & { entropy?: string; timestamp?: number }>> {
+    const publicKey = this.gunAuthManager.getPublicKey();
+    const walletData = await this.gunAuthManager.getPrivateData(
+      `wallets/${publicKey}`
+    );
+  
+    // Se non ci sono dati del wallet, ritorna array vuoto
+    if (!walletData) return [];
+
+    // Converti in array se è un singolo wallet
+    const walletsArray = Array.isArray(walletData) ? walletData : [walletData];
+
+    // Filtra wallet non validi e crea istanze Wallet con informazioni aggiuntive
+    const wallets = walletsArray
+      .filter(w => w && w.privateKey && w.address)
+      .map(w => {
+        const wallet = new Wallet(w.privateKey);
+        
+        // Aggiungi tutte le proprietà aggiuntive al wallet
+        if (w.entropy) {
+          Object.defineProperty(wallet, "entropy", {
+            value: w.entropy,
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+        }
+        
+        // Aggiungi il timestamp
+        if (w.timestamp) {
+          Object.defineProperty(wallet, "timestamp", {
+            value: w.timestamp,
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+        }
+
+        // Assicurati che la privateKey sia accessibile
+        Object.defineProperty(wallet, "privateKey", {
+          value: w.privateKey,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+
+        return wallet;
+      });
+
+    // Ordina per timestamp (dal più vecchio al più recente)
+    return wallets.sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
+  }
+
+  /**
+   * Recupera il wallet principale (derivato dalla chiave Gun)
+   */
+  public async getWallet(): Promise<Wallet> {
+    const user = await this.gunAuthManager.getUser();
+    const pair = user.pair();
+    const walletPK = this.convertToEthPk(pair.priv);
+    const wallet = new Wallet(walletPK);
+    return wallet;
+  }
+
+  /**
+   * Salva un nuovo wallet
+   */
+  public async saveWallet(wallet: Wallet, publicKey: string): Promise<void> {
+    const user = await this.gunAuthManager.getUser();
+
     if (!validateEthereumAddress(wallet.address)) {
       throw new ValidationError("Indirizzo Ethereum non valido");
     }
     if (!validatePrivateKey(wallet.privateKey)) {
       throw new ValidationError("Chiave privata non valida");
     }
-    await this.gunAuthManager.saveWallet(wallet);
+
+    if (!user.is) {
+      throw new Error("User not authenticated");
+    }
+
+    // Recupera i wallet esistenti
+    const existingWallets = await this.gunAuthManager.getPrivateData(`wallets/${publicKey}`);
+    
+    const walletData = {
+      address: wallet.address,
+      privateKey: wallet.privateKey, // Aggiungo la privateKey che mancava
+      entropy: (wallet as any).entropy,
+      timestamp: Date.now(),
+    };
+
+    // Se non ci sono wallet esistenti, crea un nuovo array
+    const updatedWallets = Array.isArray(existingWallets)
+      ? [...existingWallets, walletData]
+      : [walletData];
+
+    await this.gunAuthManager.savePrivateData(
+      updatedWallets,
+      `wallets/${publicKey}`
+    );
+    
+    await this.gunAuthManager.savePublicData(
+      { address: wallet.address },
+      `wallets/${publicKey}`
+    );
   }
 
-  /**
-   * Recupera il wallet
-   */
-  public async getWallet(): Promise<Wallet | null> {
-    return this.gunAuthManager.getWallet();
+  public convertToEthPk(gunPrivateKey: string): string {
+    const base64UrlToHex = (base64url: string): string => {
+      const padding = "=".repeat((4 - (base64url.length % 4)) % 4);
+      const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/") + padding;
+      const binary = atob(base64);
+      const hex = Array.from(binary, (char) =>
+        char.charCodeAt(0).toString(16).padStart(2, "0")
+      ).join("");
+
+      if (hex.length !== 64) {
+        throw new Error("Cannot convert private key: invalid length");
+      }
+      return hex;
+    };
+
+    if (!gunPrivateKey || typeof gunPrivateKey !== "string") {
+      throw new Error("Cannot convert private key: invalid input");
+    }
+
+    try {
+      const hexPrivateKey = "0x" + base64UrlToHex(gunPrivateKey);
+      return hexPrivateKey;
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        throw new Error(`Cannot convert private key: ${error.message}`);
+      } else {
+        throw new Error("Cannot convert private key: unknown error");
+      }
+    }
   }
 }

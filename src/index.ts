@@ -1,5 +1,5 @@
 import { Shogun } from "./Shogun";
-import { StealthChain } from "./chains/StealthChain";
+import { StealthManager } from "./managers/StealthManager";
 import { EthereumManager } from "./managers/EthereumManager";
 import { GunAuthManager } from "./managers/GunAuthManager";
 import { ActivityPubManager } from "./managers/ActivityPubManager";
@@ -15,10 +15,13 @@ import {
   WalletResult,
   ActivityPubKeys,
   GunAck,
-  GunData,
   Callback,
   StealthKeyPair,
+  UserKeys,
+  StealthAddressResult,
+  StealthKeyPairWrapper,
 } from "./interfaces";
+import { SEA } from "gun";
 
 export { Shogun };
 
@@ -29,12 +32,11 @@ export { EthereumService, WebAuthnService };
 export { EthereumManager, GunAuthManager, ActivityPubManager };
 
 // export chains
-export { StealthChain };
+export { StealthManager };
 
 // export interfaces
 export {
   GunAck,
-  GunData,
   Callback,
   StealthKeyPair,
   EthereumProvider,
@@ -45,4 +47,13 @@ export {
   Wallet,
   WalletResult,
   ActivityPubKeys,
+  UserKeys,
+  StealthAddressResult,
+  StealthKeyPairWrapper,
+};
+
+// Dev only
+export const generatePair = async (): Promise<GunKeyPair> => {
+  const pair = await SEA.pair();
+  return pair;
 };
