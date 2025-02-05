@@ -4,6 +4,9 @@ import { EthereumManager } from "./managers/EthereumManager";
 import { GunAuthManager } from "./managers/GunAuthManager";
 import { ActivityPubManager } from "./managers/ActivityPubManager";
 import { WebAuthnManager } from "./managers/WebAuthnManager";
+import { WalletManager } from "./managers/WalletManager";
+import UnstoppableChat from "./features/unstoppable";
+
 
 import {
   EthereumProvider,
@@ -28,9 +31,16 @@ export { Shogun };
 // export services
 
 // export managers
-export { EthereumManager, GunAuthManager, ActivityPubManager, WebAuthnManager, StealthManager };
+export {
+  EthereumManager,
+  GunAuthManager,
+  ActivityPubManager,
+  WebAuthnManager,
+  StealthManager,
+  WalletManager,
+  UnstoppableChat,
+};
 
-// export chains
 
 // export interfaces
 export {

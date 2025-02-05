@@ -72,10 +72,8 @@ async function main() {
       const clientBalance = ethers.formatEther(currentState.clientBalance);
       const relayBalance = ethers.formatEther(currentState.relayBalance);
       const paymentAmount = ethers.parseEther(amountEther.toString());
+      
       if (Number(clientBalance) < paymentAmount)
-
-
-
         throw new Error("Insufficient balance for micropayment");
       const newClientBalance = Number(clientBalance) - Number(paymentAmount);
       const newRelayBalance = Number(relayBalance) + Number(paymentAmount);

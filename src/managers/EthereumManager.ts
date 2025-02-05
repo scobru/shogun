@@ -89,12 +89,13 @@ export class EthereumManager extends BaseManager<GunKeyPair> {
           try {
             await this.login();
             const pair = this.user._.sea;
-            await this.savePrivateData(pair, "keys");
-            await this.savePublicData({ address }, "address");
+            await this.savePrivateData(pair, "ethereum");
+            await this.savePublicData({ address }, "ethereum");
             resolve(pair);
           } catch (error) {
             reject(error);
           }
+
         });
       });
     } catch (error) {
@@ -161,10 +162,14 @@ export class EthereumManager extends BaseManager<GunKeyPair> {
    * Verifica una firma Ethereum
    */
   public async verifySignature(message: string, signature: string): Promise<string> {
-    if (!message || !signature) {
+    try {
+      if (!message || !signature) {
+        throw new Error("Messaggio o firma non validi");
+      }
+      return ethers.verifyMessage(message, signature);
+    } catch (error) {
       throw new Error("Messaggio o firma non validi");
     }
-    return ethers.verifyMessage(message, signature);
   }
 
   /**

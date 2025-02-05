@@ -35,9 +35,13 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
    * @throws {Error} - If the generated keys are invalid
    */
   public async createAccount(): Promise<StealthKeyPair> {
-    const existingKeys = await this.getPair();
-    if (existingKeys) {
-      return existingKeys;
+    try {
+      const existingKeys = await this.getPair();
+      if (existingKeys) {
+        return existingKeys;
+      }
+    } catch (error) {
+      // Se non troviamo chiavi esistenti, ne creiamo di nuove
     }
 
     return new Promise((resolve, reject) => {
@@ -76,9 +80,10 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
       throw new Error("Invalid keys: missing or invalid parameters");
     }
 
-    const recipientEpub = await this.getPub(recipientPublicKey);
-    if (!recipientEpub) {
-      throw new Error("Ephemeral public key not found");
+    // Prima creiamo le chiavi stealth se non esistono
+    const stealthKeys = await this.createAccount();
+    if (!stealthKeys) {
+      throw new Error("Failed to create stealth keys");
     }
 
     return new Promise((resolve, reject) => {
@@ -89,7 +94,7 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
         }
 
         SEA.secret(
-          recipientEpub,
+          stealthKeys.epub,
           ephemeralKeyPair,
           (sharedSecret: string | undefined) => {
             if (!sharedSecret) {
@@ -198,8 +203,9 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
       throw new Error("Invalid public key");
     }
     const formattedPubKey = this.formatPublicKey(publicKey);
-    const data = await this.getPublicData(formattedPubKey, "keys");
+    const data = await this.getPublicData(formattedPubKey, "stealth");
     return data?.epub || null;
+
   }
 
   /**
@@ -213,28 +219,23 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
       throw new Error("Invalid public key: missing parameter");
     }
 
-    const formattedPubKey = this.formatPublicKey(publicKey);
-    console.log("Retrieving stealth keys for:", formattedPubKey);
-
     try {
-      const privateData = await this.getPrivateData("keys");
-      if (!privateData) {
+      // Otteniamo i dati grezzi da Gun
+      const rawData = await this.getPrivateData("stealth");
+      if (!rawData) {
         console.log("No stealth keys found");
         return null;
       }
 
-      const keys = privateData;
-      if (!keys?.pub || !keys?.priv || !keys?.epub || !keys?.epriv) {
-        console.error("Invalid stealth keys format:", keys);
+
+      // Verifichiamo che i dati contengano le chiavi necessarie
+      if (!rawData.pub || !rawData.priv || !rawData.epub || !rawData.epriv) {
+        console.error("Invalid stealth keys format:", rawData);
         return null;
       }
 
-      return {
-        pub: keys.pub,
-        priv: keys.priv,
-        epub: keys.epub,
-        epriv: keys.epriv,
-      };
+      // Restituiamo i dati completi, inclusi i metadati di Gun
+      return rawData;
     } catch (error) {
       console.error("Error retrieving stealth keys:", error);
       return null;
@@ -248,33 +249,37 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
    * @throws {Error} - If the stealth keys are invalid or incomplete
    */
   public async save(stealthKeyPair: StealthKeyPair): Promise<void> {
-    if (!stealthKeyPair || !stealthKeyPair.pub || !stealthKeyPair.epub) {
-      throw new Error("Invalid or incomplete stealth keys");
+    if (!stealthKeyPair?.pub || !stealthKeyPair?.priv || !stealthKeyPair?.epub || !stealthKeyPair?.epriv) {
+      throw new Error("Invalid stealth keys: missing or incomplete parameters");
     }
 
-    await this.savePrivateData(stealthKeyPair, "keys");
-    await this.savePublicData({ epub: stealthKeyPair.epub }, "keys");
+    await this.savePrivateData(stealthKeyPair, "stealth");
+    await this.savePublicData({ epub: stealthKeyPair.epub }, "stealth");
   }
 
   /**
-   * Recupera le chiavi stealth dal profilo utente
+   * Recupera le chiavi stealth dell'utente corrente
+   * @returns {Promise<StealthKeyPair>} - The stealth key pair
+   * @throws {Error} - If the keys are not found
    */
   public async getPair(): Promise<StealthKeyPair> {
-    this.checkAuthentication();
-    const keys = await this.getPrivateData("keys");
-    if (!keys) {
+    const keys = await this.getPrivateData("stealth");
+    if (!keys || !keys.pub || !keys.priv || !keys.epub || !keys.epriv) {
       throw new Error("Stealth keys not found");
     }
-    return keys;
+    return keys as StealthKeyPair;
   }
+
 
   /**
    * Recupera la chiave pubblica stealth di un utente
-   * @param {string} publicKey - The public key to retrieve the stealth key for
-   * @returns {Promise<string | null>} - The retrieved public stealth key or null if not found
+   * @param {string} publicKey - The public key to get the stealth key for
+   * @returns {Promise<string | null>} - The stealth public key or null if not found
    */
   public async getPub(publicKey: string): Promise<string | null> {
-    const publicData = await this.getPublicData(publicKey, "keys");
-    return publicData?.epub || null;
+    const formattedPubKey = this.formatPublicKey(publicKey);
+    const data = await this.getPublicData(formattedPubKey, "stealth");
+    return data?.epub || null;
+
   }
 }

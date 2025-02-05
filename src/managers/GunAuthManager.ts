@@ -18,31 +18,12 @@ interface Policy {
 export class GunAuthManager extends BaseManager<GunKeyPair> {
   private isAuthenticating = false;
   private pub: string = "";
+  protected storagePrefix = "auth";
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
     super(gun, APP_KEY_PAIR);
-    // Utilizziamo la chiave pubblica dell'applicazione come prefisso di storage
-    this.storagePrefix = APP_KEY_PAIR.pub;
     this.pub = "";
     this.user = this.gun.user();
-  }
-
-  /**
-   * Waits until una condizione è verificata o scade il timeout.
-   * @param condition Funzione che restituisce true se la condizione è verificata.
-   * @param timeout Timeout in millisecondi (default 10000ms).
-   */
-  private async waitUntil(
-    condition: () => boolean,
-    timeout: number = 10000
-  ): Promise<void> {
-    const start = Date.now();
-    while (!condition()) {
-      if (Date.now() - start > timeout) {
-        throw new Error("Timeout waiting for condition");
-      }
-      await new Promise((r) => setTimeout(r, 200));
-    }
   }
 
   private async resetGunState(): Promise<void> {
@@ -50,18 +31,18 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     this.isAuthenticating = false;
     this.pub = "";
     this.user.leave();
-    await new Promise(r => setTimeout(r, 2000));
-    
+    await new Promise((r) => setTimeout(r, 2000));
+
     // Creiamo una nuova istanza di Gun.user()
     this.user = this.gun.user();
-    await new Promise(r => setTimeout(r, 1000));
-    
+    await new Promise((r) => setTimeout(r, 1000));
+
     // Verifichiamo che lo stato sia effettivamente resettato
     if (this.user.is) {
       log("User still authenticated after reset, retrying...");
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise((r) => setTimeout(r, 2000));
       this.user = this.gun.user();
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 1000));
     }
   }
 
@@ -74,10 +55,10 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    */
   public async checkUser(username: string, password: string): Promise<string> {
     log("Check User...");
-    
+
     // Reset completo dello stato
     await this.resetGunState();
-    
+
     const exists = await this.exists(username);
     if (exists) {
       log("User already exists");
@@ -102,15 +83,18 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
         const handleError = async (error: any) => {
           clearTimeout(timeoutId);
           this.isAuthenticating = false;
-          
-          if (error.message?.includes("User is already being created or authenticated")) {
+
+          if (
+            error.message?.includes(
+              "User is already being created or authenticated"
+            )
+          ) {
             log("User creation in progress, waiting...");
-            await new Promise(r => setTimeout(r, 5000));
-            
+
             try {
               // Reset dello stato prima di verificare
               await this.resetGunState();
-              
+
               // Verifichiamo se l'utente esiste dopo l'attesa
               const userExists = await this.exists(username);
               if (userExists) {
@@ -120,14 +104,14 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
                   return resolve(pub);
                 }
               }
-              
+
               // Se siamo qui e abbiamo ancora tentativi, ritentiamo
               if (retryCount < maxRetries) {
                 retryCount++;
                 log(`Retry attempt ${retryCount}/${maxRetries}`);
                 return resolve(await attemptUserCreation());
               }
-              
+
               log("User creation failed after all retries");
               return reject(new Error("User creation failed"));
             } catch (retryError) {
@@ -142,7 +126,7 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
           try {
             clearTimeout(timeoutId);
             log("User creation callback received:", ack);
-            
+
             if (ack.err) {
               return handleError(new Error(ack.err));
             }
@@ -156,8 +140,7 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
 
             // Attendiamo brevemente per assicurarci che la creazione sia completata
             log("Waiting for user creation to complete...");
-            await new Promise<void>((r) => setTimeout(r, 2000));
-            
+
             if (this.user.is?.pub) {
               log("Public key found in user.is:", this.user.is.pub);
               this.pub = this.user.is.pub;
@@ -181,14 +164,14 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
             } else {
               log("User not found after creation");
             }
-            
+
             // Se siamo qui e abbiamo ancora tentativi, ritentiamo
             if (retryCount < maxRetries) {
               retryCount++;
               log(`Retry attempt ${retryCount}/${maxRetries}`);
               return resolve(await attemptUserCreation());
             }
-            
+
             this.isAuthenticating = false;
             log("User creation failed");
             return reject(new Error("User creation failed"));
@@ -234,7 +217,11 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
 
     while (attempts < MAX_RETRIES) {
       try {
-        console.log(`Tentativo creazione account ${attempts + 1}/${MAX_RETRIES} per: ${alias}`);
+        console.log(
+          `Tentativo creazione account ${
+            attempts + 1
+          }/${MAX_RETRIES} per: ${alias}`
+        );
 
         // Reset completo dello stato prima di ogni tentativo
         await this._hardReset();
@@ -242,9 +229,12 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
         // Verifica esistenza utente con timeout
         const userExists = await Promise.race([
           this.exists(alias),
-          new Promise<boolean>((_, reject) => 
-            setTimeout(() => reject(new Error("Timeout verifica utente")), 10000)
-          )
+          new Promise<boolean>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Timeout verifica utente")),
+              10000
+            )
+          ),
         ]);
 
         if (userExists) {
@@ -258,7 +248,10 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
             this.user.create(alias, passphrase, (ack: any) => {
               if (ack.err) {
                 // Se l'errore indica che l'utente esiste, non ritentiamo
-                if (ack.err.includes("already created") || ack.err.includes("already taken")) {
+                if (
+                  ack.err.includes("already created") ||
+                  ack.err.includes("already taken")
+                ) {
                   return reject(new Error("Username already taken"));
                 }
                 return reject(new Error(ack.err));
@@ -266,15 +259,15 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
               resolve(this.user._.sea);
             });
           }),
-          new Promise<GunKeyPair>((_, reject) =>
-            setTimeout(() => reject(new Error("Timeout creazione account")), 30000)
-          )
         ]);
 
         return result;
       } catch (error) {
         // Se l'errore è "Username already taken", non ritentiamo
-        if (error instanceof Error && error.message === "Username already taken") {
+        if (
+          error instanceof Error &&
+          error.message === "Username already taken"
+        ) {
           throw error;
         }
 
@@ -283,7 +276,7 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
         if (attempts < MAX_RETRIES - 1) {
           const delay = RETRY_DELAYS[attempts];
           console.log(`Nuovo tentativo tra ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
         attempts++;
       }
@@ -294,21 +287,19 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
   private async _hardReset(): Promise<void> {
     try {
       // Modifica qui: usa l'istanza originale invece di gun.back
-      const peers = ['http://localhost:8765/gun'];
-      
+      const peers = ["http://localhost:8765/gun"];
+
       await this._safeLogout();
       this.user.leave();
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
+
       // Ricarica l'istanza GUN con i peer originali
       this.gun = Gun({
         peers: peers, // Usa la lista peers salvata
         localStorage: false,
-        radisk: false
+        radisk: false,
       });
-      
+
       this.user = this.gun.user();
-      await new Promise(resolve => setTimeout(resolve, 3000));
     } catch (error) {
       console.error("Errore durante l'hard reset:", error);
     }
@@ -322,69 +313,52 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    * @returns User's public key.
    * @throws Error on authentication failure or timeout.
    */
-  public async login(alias: string, passphrase: string): Promise<string> {
-    const MAX_RETRIES = 5;
-    let attempts = 0;
-    const RETRY_DELAYS = [5000, 10000, 15000, 20000, 25000];
+  public async login(alias: string, passphrase: string): Promise<string | null> {
+    console.info("*** Login...");
 
-    while (attempts < MAX_RETRIES) {
-      try {
-        console.log(`Tentativo di login ${attempts + 1}/${MAX_RETRIES} per: ${alias}`);
-
-        if (this.user.is?.pub) {
-          await this._safeLogout();
-          await new Promise(r => setTimeout(r, 5000));
-        }
-
-        const result = await Promise.race([
-          this.user.auth(alias, passphrase),
-          new Promise<string>((_, reject) =>
-            setTimeout(() => reject(new Error("Timeout")), 60000)
-          )
-        ]);
-
-        await this.waitUntil(() => !!this.user.is?.pub, 15000);
-        return this.user.is?.pub as string;
-        
-      } catch (error) {
-        console.error(`Errore al tentativo ${attempts + 1}:`, error);
-        
-        if (error instanceof Error && error.message.includes("decrypt")) {
-          throw new Error("Credenziali non valide");
-        }
-
-        if (attempts < MAX_RETRIES - 1) {
-          const delay = RETRY_DELAYS[attempts];
-          console.log(`Nuovo tentativo tra ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-        attempts++;
-      }
+    if (this.user.is?.pub) {
+      console.log(" --- User already authenticated, logging out...");
+      this.logout();
     }
-    throw new Error(`Login fallito dopo ${MAX_RETRIES} tentativi`);
-  }
 
-  /**
-   * Waits for the authentication process to complete.
-   * @param timeout Timeout in milliseconds.
-   */
-  private async waitForAuth(timeout: number = 30000): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const startTime = Date.now();
-      const checkAuth = () => {
-        if (!this.isAuthenticating) return resolve();
-        if (Date.now() - startTime > timeout)
-          return reject(new Error("Timeout waiting for authentication"));
-        setTimeout(checkAuth, 500);
-      };
-      checkAuth();
-    });
+    console.info("*** Authenticating...");
+
+    try {
+      const result = await new Promise<string | null>((resolve, reject) => {
+        this.user.auth(alias, passphrase, (ack: any) => {
+          
+          if (ack.err) {
+            if (ack.err.includes("Wrong user or password")) {
+              console.info("*** Wrong user or password.");
+              reject(new Error(ack.err));
+            } else if (ack.err.includes("User is already being created or authenticated")) {
+              console.info("*** User is already being created or authenticated.");
+              resolve(this.user.is?.pub || null);
+            } else {
+              reject(new Error(ack.err));
+            }
+          } else if (ack.sea) {
+            console.info("*** User authenticated:", this.user.is);
+            resolve(this.user.is?.pub || null);
+          } else {
+            reject(new Error("Unknown authentication response"));
+          }
+        });
+      });
+
+      console.info("*** Login result:", result);
+      return result;
+    } catch (error) {
+      console.error("*** Login error:", error);
+      throw error;
+    }
   }
 
   /**
    * Terminates the current user session.
    */
   public logout(): void {
+    console.log('*** Logout...')
     this.user.leave();
     this.isAuthenticating = false;
   }
@@ -554,36 +528,6 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
   }
 
   /**
-   * Waits for all user operations to complete.
-   * @param timeout Timeout in milliseconds.
-   * @throws Error if timeout is reached before operations complete.
-   */
-  public async join(timeout: number = 0): Promise<void> {
-    let stop = false;
-    const joinPromise = (async () => {
-      while (!stop && this.isAuthenticating) {
-        try {
-          await this.waitForAuth();
-        } catch (error) {
-          // continuiamo ad attendere
-        }
-      }
-    })();
-
-    if (timeout) {
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-          stop = true;
-          reject(new Error("Timeout durante l'attesa delle operazioni utente"));
-        }, timeout);
-      });
-      await Promise.race([joinPromise, timeoutPromise]);
-    } else {
-      await joinPromise;
-    }
-  }
-
-  /**
    * Checks if a user with the specified alias exists.
    * @param alias Username to check.
    * @returns True if the user exists, false otherwise.
@@ -625,7 +569,6 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     return new Promise((resolve) => {
       log("Initializing authentication listener...");
       this.user.on("auth", (pub: any) => {
-        log("Auth callback received, public key:", pub);
         this.pub = pub;
         log("Authentication listener ready");
         resolve();

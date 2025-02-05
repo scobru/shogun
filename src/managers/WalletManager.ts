@@ -29,19 +29,22 @@ export class WalletManager extends BaseManager<WalletData[]> {
 
   /**
    * Creates a new wallet from the Gun user
-   * @returns {Promise<WalletResult>} - The result object of the created wallet
+   * @returns {Promise<WalletData[]>} - The result object of the created wallet
    * @throws {Error} - If the user is not authenticated or if wallet creation fails
    */
   public async createAccount(): Promise<WalletData[]> {
     try {
-      this.checkAuthentication();
       const gunKeyPair = this.user._.sea;
 
-      if (!gunKeyPair.pub) throw new Error("Missing public key");
+      if (!gunKeyPair || !gunKeyPair.pub) {
+        throw new Error("Missing or invalid Gun key pair");
+      }
 
       const salt = `${gunKeyPair.pub}_${Date.now()}_${Math.random()
         .toString(36)
         .substring(2, 15)}`;
+
+      console.log("Creating wallet with salt:", salt);
       const wallet = await this.createWalletFromSalt(gunKeyPair, salt);
 
       if (!wallet || !wallet.address) {
@@ -49,15 +52,25 @@ export class WalletManager extends BaseManager<WalletData[]> {
       }
 
       const walletData: WalletData = {
-        address: wallet.address,
+        address: wallet.address.toLowerCase(),
         privateKey: wallet.privateKey,
         entropy: salt,
         timestamp: Date.now(),
       };
 
+      console.log("Saving wallet with address:", walletData.address);
       await this.saveWallet(new Wallet(walletData.privateKey));
+
+      // Verifichiamo che il wallet sia stato salvato correttamente
+      const savedWallets = await this.getPrivateData("wallets");
+      if (!savedWallets) {
+        throw new Error("Failed to verify wallet was saved");
+      }
+
+      console.log("Wallet saved successfully");
       return [walletData];
     } catch (error: any) {
+      console.error("Error in createAccount:", error);
       throw new Error(`Error creating wallet: ${error.message}`);
     }
   }
@@ -153,56 +166,70 @@ export class WalletManager extends BaseManager<WalletData[]> {
   public async getWallets(): Promise<
     Array<Wallet & { entropy?: string; timestamp?: number }>
   > {
-    const publicKey = this.getCurrentPublicKey();
-    const walletData = await this.getPrivateData(publicKey);
+    try {
+      let walletData: WalletData[] | null = null;
 
-    // If there is no wallet data, return an empty array
-    if (!walletData) return [];
+      walletData = await this.getPrivateData("wallets") as WalletData[];
 
-    // Convert to array if it is a single wallet
-    const walletsArray = Array.isArray(walletData) ? walletData : [walletData];
+      if (!walletData) {
+        console.log("No wallet data found after multiple attempts");
+        return [];
+      }
 
-    // Filter invalid wallets and create Wallet instances with additional information
-    const wallets = walletsArray
-      .filter((w) => w && w.privateKey && w.address)
-      .map((w) => {
-        const wallet = new Wallet(w.privateKey);
+      // Convertiamo in array se necessario
+      const walletsArray = Array.isArray(walletData)
+        ? walletData
+        : [walletData];
+      console.log("Retrieved wallets:", walletsArray.length);
 
-        // Add all additional properties to the wallet
-        if (w.entropy) {
-          Object.defineProperty(wallet, "entropy", {
-            value: w.entropy,
-            writable: true,
-            enumerable: true,
-            configurable: true,
-          });
-        }
+      // Filtriamo e creiamo le istanze
+      const wallets = walletsArray
+        .filter((w: WalletData) => w && w.privateKey  && w.address)
+        .map((w: WalletData) => {
+          try {
+            const wallet = new Wallet(w.privateKey);
 
-        // Add the timestamp
-        if (w.timestamp) {
-          Object.defineProperty(wallet, "timestamp", {
-            value: w.timestamp,
-            writable: true,
-            enumerable: true,
-            configurable: true,
-          });
-        }
+            // Verifichiamo che l'indirizzo corrisponda
+            if (wallet.address.toLowerCase() !== w.address.toLowerCase()) {
+              console.error("Address mismatch for wallet:", w.address);
+              return null;
+            }
 
-        // Ensure the privateKey is accessible
-        Object.defineProperty(wallet, "privateKey", {
-          value: w.privateKey,
-          writable: true,
-          enumerable: true,
-          configurable: true,
-        });
+            // Aggiungiamo le proprietà aggiuntive
+            Object.defineProperties(wallet, {
+              entropy: {
+                value: w.entropy || "",
+                writable: true,
+                enumerable: true,
+              },
+              timestamp: {
+                value: w.timestamp || Date.now(),
+                writable: true,
+                enumerable: true,
+              },
+            });
 
-        return wallet;
-      });
+            return wallet;
+          } catch (error) {
+            console.error("Error creating wallet instance:", error);
+            return null;
+          }
+        })
+        .filter(
+          (w): w is Wallet & { entropy?: string; timestamp?: number } =>
+            w !== null
+        );
 
-    // Sort by timestamp (from oldest to newest)
-    return wallets.sort(
-      (a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0)
-    );
+      console.log("Processed wallets:", wallets.length);
+      return wallets;
+    } catch (error) {
+      console.error("Error retrieving wallets:", error);
+      throw new Error(
+        `Failed to retrieve wallets: ${
+          error instanceof Error ? error.message : "unknown error"
+        }`
+      );
+    }
   }
 
   /**
@@ -222,7 +249,6 @@ export class WalletManager extends BaseManager<WalletData[]> {
   /**
    * Saves a new wallet
    * @param {Wallet} wallet - The wallet to save
-   * @param {string} publicKey - The user's public key
    * @returns {Promise<void>} - A promise that resolves when the wallet is saved
    * @throws {ValidationError} - If the Ethereum address or private key are invalid
    * @throws {Error} - If the user is not authenticated or if wallet saving fails
@@ -237,23 +263,64 @@ export class WalletManager extends BaseManager<WalletData[]> {
       throw new ValidationError("Invalid private key");
     }
 
-    const publicKey = this.getCurrentPublicKey();
-    const existingWallets = (await this.getPrivateData(publicKey)) || [];
-
-    const walletData = {
-      address: wallet.address,
+    const walletData: WalletData = {
+      address: wallet.address.toLowerCase(),
       privateKey: wallet.privateKey,
-      entropy: (wallet as any).entropy,
+      entropy: (wallet as any).entropy || "",
       timestamp: Date.now(),
     };
 
-    // If there are no existing wallets, create a new array
-    const updatedWallets = Array.isArray(existingWallets)
-      ? [...existingWallets, walletData]
-      : [walletData];
+    try {
+      // Recuperiamo i wallet esistenti con retry
+      let existingWallets: WalletData[] = [];
+      let retries = 3;
 
-    await this.savePrivateData(updatedWallets, publicKey);
-    await this.savePublicData({ address: wallet.address }, publicKey);
+      const existingData = await this.getPrivateData("wallets");
+      if (existingData) {
+        if (Array.isArray(existingData)) {
+          existingWallets = existingData;
+        } else if (typeof existingData === "object") {
+          existingWallets = [existingData as WalletData];
+        }
+      }
+
+      // Verifichiamo se il wallet esiste già
+      const walletExists = existingWallets.some(
+        (w) =>
+          w &&
+          w.address &&
+          w.address.toLowerCase() === walletData.address.toLowerCase()
+      );
+
+      if (!walletExists) {
+        existingWallets.push(walletData);
+      }
+
+      // Salviamo i dati con retry
+      retries = 3;
+      let saved = false;
+
+      await this.savePrivateData(existingWallets, "wallets");
+
+      // Verifichiamo il salvataggio
+      const verificationData = await this.getPrivateData("wallets");
+      if (verificationData) {
+        saved = true;
+      }
+
+      if (!saved) {
+        throw new Error(
+          "Failed to verify wallet data was saved after multiple attempts"
+        );
+      }
+    } catch (error) {
+      console.error("Error saving wallet:", error);
+      throw new Error(
+        `Failed to save wallet: ${
+          error instanceof Error ? error.message : "unknown error"
+        }`
+      );
+    }
   }
 
   /**

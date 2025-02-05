@@ -20,3 +20,16 @@ export interface WebAuthnVerifyResult {
   signature?: ArrayBuffer;
   error?: string;
 } 
+
+export interface DeviceCredential {
+  deviceId: string;
+  timestamp: number;
+  name?: string;
+  platform?: string;
+}
+
+export interface WebAuthnCredentials {
+  salt: string;
+  timestamp: number;
+  credentials: { [credentialId: string]: DeviceCredential };
+}

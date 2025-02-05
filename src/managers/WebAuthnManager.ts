@@ -2,46 +2,29 @@ import { IGunInstance, ISEAPair } from "gun";
 import type {
   WebAuthnResult,
   WebAuthnVerifyResult,
+  WebAuthnCredentials,
+  DeviceCredential,
 } from "../interfaces/WebAuthnResult";
 import { BaseManager } from "./BaseManager";
 import jsSha256 from "js-sha256";
 import { GunKeyPair } from "../interfaces/GunKeyPair";
-import Gun from "gun";
 import "gun/sea";
 
 const sha256 = jsSha256.sha256;
 
-// Importiamo crypto solo per Node.js
 let cryptoModule: any;
 try {
   if (typeof window === "undefined") {
-    // Siamo in Node.js
     cryptoModule = require("crypto");
   }
 } catch {
   cryptoModule = null;
 }
 
-// Costanti di sicurezza
 const TIMEOUT_MS = 60000; // 60 secondi
 const MIN_USERNAME_LENGTH = 3;
 const MAX_USERNAME_LENGTH = 64;
 
-// Interfaccia per le credenziali del dispositivo
-interface DeviceCredential {
-  deviceId: string;
-  timestamp: number;
-  name?: string;
-  platform?: string;
-}
-
-interface WebAuthnCredentials {
-  salt: string;
-  timestamp: number;
-  credentials: { [credentialId: string]: DeviceCredential };
-}
-
-// Funzione per generare un ID dispositivo univoco
 const generateDeviceId = (): string => {
   const platform =
     typeof navigator !== "undefined" ? navigator.platform : "unknown";
@@ -177,7 +160,9 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
   /**
    * Recupera i dati privati per un utente WebAuthn
    */
-  private async getWebAuthnPrivateData(username: string): Promise<WebAuthnCredentials | null> {
+  private async getWebAuthnPrivateData(
+    username: string
+  ): Promise<WebAuthnCredentials | null> {
     const data = await this.getPrivateData(username);
     return data as WebAuthnCredentials;
   }
@@ -186,20 +171,18 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
    * Salva i dati privati per un utente WebAuthn
    */
   private async saveWebAuthnPrivateData(
-    username: string,
     data: WebAuthnCredentials
   ): Promise<void> {
-    await this.savePrivateData(data, username);
+    await this.savePrivateData(data, "webauthn");
   }
 
   /**
    * Salva i dati pubblici per un utente WebAuthn
    */
   private async saveWebAuthnPublicData(
-    username: string,
     data: Record<string, any>
   ): Promise<void> {
-    await this.savePublicData(data, username);
+    await this.savePublicData(data, "webauthn");
   }
 
   /**
@@ -217,15 +200,23 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
     isNewDevice: boolean = false,
     deviceName?: string
   ): Promise<Record<string, any>> {
-    const result = await this.generateCredentials(username, isNewDevice, deviceName);
+    const result = await this.generateCredentials(
+      username,
+      isNewDevice,
+      deviceName
+    );
     if (!result.success) {
-      throw new Error(result.error || "Errore durante la creazione dell'account");
+      throw new Error(
+        result.error || "Errore durante la creazione dell'account"
+      );
     }
     return result;
   }
 
   // Recupera le credenziali WebAuthn da Gun
-  private async getWebAuthnCredentials(username: string): Promise<WebAuthnCredentials | null> {
+  private async getWebAuthnCredentials(
+    username: string
+  ): Promise<WebAuthnCredentials | null> {
     const credentials = await this.getWebAuthnPrivateData(username);
     return credentials as WebAuthnCredentials;
   }
@@ -235,7 +226,7 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
     credentials: WebAuthnCredentials
   ): Promise<void> {
     // Salva i dati privati (credenziali complete)
-    await this.saveWebAuthnPrivateData(username, credentials);
+    await this.saveWebAuthnPrivateData(credentials);
 
     // Salva i dati pubblici (solo informazioni non sensibili)
     const publicData = {
@@ -244,8 +235,8 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
       lastUsed: Date.now(),
       deviceCount: Object.keys(credentials.credentials).length,
     };
-    
-    await this.saveWebAuthnPublicData(username, publicData);
+
+    await this.saveWebAuthnPublicData(publicData);
   }
 
   public getAuthenticators(): GunKeyPair[] {
@@ -441,7 +432,7 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
         // Genera le credenziali dal salt salvato
         const { password } = generateCredentialsFromSalt(username, salt);
 
-        await this.saveWebAuthnPublicData(username, {
+        await this.saveWebAuthnPublicData({
           lastUsed: Date.now(),
         });
 
