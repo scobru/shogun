@@ -1,24 +1,26 @@
 import { ethers } from "ethers";
 import Gun from "gun";
-import "gun/sea";
-import { GunAuthManager } from "./GunAuthManager";
+import { BaseManager } from "./BaseManager";
 import type { StealthKeyPair } from "../interfaces/StealthKeyPair";
-// If you have Gun and SEA type definitions, you can import them here.
-// For now, we use `any` to simplify.
+import { IGunInstance, ISEAPair } from "gun";
+
 const SEA = Gun.SEA;
 
 /**
- * Main class for handling stealth logic using Gun and SEA
+ * Gestisce la logica stealth usando Gun e SEA
  */
-export class StealthManager {
-  private gunAuthManager: GunAuthManager;
+export class StealthManager extends BaseManager<StealthKeyPair> {
+  protected storagePrefix = "stealth";
 
-  constructor(gunAuthManager: GunAuthManager) {
-    this.gunAuthManager = gunAuthManager;
+  constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
+    super(gun, APP_KEY_PAIR);
   }
 
   /**
-   * Removes leading tilde (~) from public key if present
+   * Rimuove il tilde (~) iniziale dalla chiave pubblica se presente
+   * @param {string} publicKey - The public key to format
+   * @returns {string} - The formatted public key
+   * @throws {Error} - If the public key is invalid
    */
   private formatPublicKey(publicKey: string): string {
     if (!publicKey) {
@@ -28,10 +30,12 @@ export class StealthManager {
   }
 
   /**
-   * Genera le chiavi stealth se non esistono, altrimenti le restituisce
+   * Genera le chiavi stealth se non esistono, altrimenti restituisce quelle esistenti
+   * @returns {Promise<StealthKeyPair>} - The generated or existing stealth key pair
+   * @throws {Error} - If the generated keys are invalid
    */
-  public async generateStealthKeys(): Promise<StealthKeyPair> {
-    const existingKeys = await this.getStealthKeys();
+  public async createAccount(): Promise<StealthKeyPair> {
+    const existingKeys = await this.getPair();
     if (existingKeys) {
       return existingKeys;
     }
@@ -50,7 +54,7 @@ export class StealthManager {
           epriv: pair.epriv,
         };
 
-        this.saveStealthKeys(stealthKeyPair)
+        this.save(stealthKeyPair)
           .then(() => resolve(stealthKeyPair))
           .catch(reject);
       });
@@ -58,9 +62,12 @@ export class StealthManager {
   }
 
   /**
-   * Genera un indirizzo stealth per la chiave pubblica del destinatario
+   * Generates a stealth address for the recipient's public key
+   * @param {string} recipientPublicKey - The recipient's public key
+   * @returns {Promise<{stealthAddress: string, ephemeralPublicKey: string, recipientPublicKey: string}>} - The generated stealth address and keys
+   * @throws {Error} - If the keys are invalid or missing
    */
-  public async generateStealthAddress(recipientPublicKey: string): Promise<{
+  public async generateStAdd(recipientPublicKey: string): Promise<{
     stealthAddress: string;
     ephemeralPublicKey: string;
     recipientPublicKey: string;
@@ -69,7 +76,7 @@ export class StealthManager {
       throw new Error("Invalid keys: missing or invalid parameters");
     }
 
-    const recipientEpub = await this.getPublicStealthKey(recipientPublicKey);
+    const recipientEpub = await this.getPub(recipientPublicKey);
     if (!recipientEpub) {
       throw new Error("Ephemeral public key not found");
     }
@@ -116,9 +123,13 @@ export class StealthManager {
   }
 
   /**
-   * Apre un indirizzo stealth derivando la chiave privata
+   * Opens a stealth address by deriving the private key
+   * @param {string} stealthAddress - The stealth address to open
+   * @param {string} ephemeralPublicKey - The ephemeral public key
+   * @returns {Promise<ethers.Wallet>} - The derived wallet
+   * @throws {Error} - If the parameters are missing or the keys are invalid
    */
-  public async openStealthAddress(
+  public async openStAdd(
     stealthAddress: string,
     ephemeralPublicKey: string
   ): Promise<ethers.Wallet> {
@@ -128,7 +139,7 @@ export class StealthManager {
       );
     }
 
-    const keys = await this.getStealthKeys();
+    const keys = await this.getPair();
     if (!keys) {
       throw new Error("Stealth keys not found");
     }
@@ -178,27 +189,26 @@ export class StealthManager {
 
   /**
    * Retrieves stealth keys (epub) from public registry if present
+   * @param {string} publicKey - The public key to retrieve stealth keys for
+   * @returns {Promise<string | null>} - The retrieved stealth keys or null if not found
+   * @throws {Error} - If the public key is invalid
    */
-  public async retrieveStealthKeysFromRegistry(
-    publicKey: string
-  ): Promise<string | null> {
+  public async retrieveKeys(publicKey: string): Promise<string | null> {
     if (!publicKey) {
       throw new Error("Invalid public key");
     }
     const formattedPubKey = this.formatPublicKey(publicKey);
-    const data = await this.gunAuthManager.getPublicData(
-      formattedPubKey,
-      "stealthKeys"
-    );
+    const data = await this.getPublicData(formattedPubKey, "keys");
     return data?.epub || null;
   }
 
   /**
    * Retrieves stealth keys for a specific user
+   * @param {string} publicKey - The public key to retrieve stealth keys for
+   * @returns {Promise<StealthKeyPair | null>} - The retrieved stealth key pair or null if not found
+   * @throws {Error} - If the public key is invalid
    */
-  public async retrieveStealthKeysFromUser(
-    publicKey: string
-  ): Promise<StealthKeyPair | null> {
+  public async retrievePair(publicKey: string): Promise<StealthKeyPair | null> {
     if (!publicKey) {
       throw new Error("Invalid public key: missing parameter");
     }
@@ -207,15 +217,13 @@ export class StealthManager {
     console.log("Retrieving stealth keys for:", formattedPubKey);
 
     try {
-      const privateData = await this.gunAuthManager.getPrivateData(
-        "stealthKeys"
-      );
+      const privateData = await this.getPrivateData("keys");
       if (!privateData) {
         console.log("No stealth keys found");
         return null;
       }
 
-      const keys = privateData.stealthKeyPair || privateData;
+      const keys = privateData;
       if (!keys?.pub || !keys?.priv || !keys?.epub || !keys?.epriv) {
         console.error("Invalid stealth keys format:", keys);
         return null;
@@ -234,64 +242,39 @@ export class StealthManager {
   }
 
   /**
-   * Salva le chiavi stealth nel profilo dell'utente
+   * Salva le chiavi stealth nel profilo utente
+   * @param {StealthKeyPair} stealthKeyPair - The stealth key pair to save
+   * @returns {Promise<void>} - A promise that resolves when the keys are saved
+   * @throws {Error} - If the stealth keys are invalid or incomplete
    */
-  public async saveStealthKeys(stealthKeyPair: StealthKeyPair): Promise<void> {
+  public async save(stealthKeyPair: StealthKeyPair): Promise<void> {
     if (!stealthKeyPair || !stealthKeyPair.pub || !stealthKeyPair.epub) {
       throw new Error("Invalid or incomplete stealth keys");
     }
 
-    // Salva le chiavi private nel profilo privato
-    await this.gunAuthManager.savePrivateData(
-      {
-        pub: stealthKeyPair.pub,
-        priv: stealthKeyPair.priv,
-        epub: stealthKeyPair.epub,
-        epriv: stealthKeyPair.epriv,
-      },
-      "stealthKeys"
-    );
-
-    // Salva la chiave pubblica nel profilo pubblico
-    await this.gunAuthManager.savePublicData(
-      {
-        epub: stealthKeyPair.epub,
-      },
-      "stealthKeys"
-    );
+    await this.savePrivateData(stealthKeyPair, "keys");
+    await this.savePublicData({ epub: stealthKeyPair.epub }, "keys");
   }
 
   /**
-   * Recupera le chiavi stealth dal profilo dell'utente
+   * Recupera le chiavi stealth dal profilo utente
    */
-  public async getStealthKeys(): Promise<StealthKeyPair> {
-    const privateData = await this.gunAuthManager.getPrivateData("stealthKeys");
-    if (
-      !privateData ||
-      !privateData.pub ||
-      !privateData.priv ||
-      !privateData.epub ||
-      !privateData.epriv
-    ) {
-      throw new Error("Invalid stealth keys");
+  public async getPair(): Promise<StealthKeyPair> {
+    this.checkAuthentication();
+    const keys = await this.getPrivateData("keys");
+    if (!keys) {
+      throw new Error("Stealth keys not found");
     }
-
-    return {
-      pub: privateData.pub,
-      priv: privateData.priv,
-      epub: privateData.epub,
-      epriv: privateData.epriv,
-    };
+    return keys;
   }
 
   /**
    * Recupera la chiave pubblica stealth di un utente
+   * @param {string} publicKey - The public key to retrieve the stealth key for
+   * @returns {Promise<string | null>} - The retrieved public stealth key or null if not found
    */
-  public async getPublicStealthKey(publicKey: string): Promise<string | null> {
-    const publicData = await this.gunAuthManager.getPublicData(
-      publicKey,
-      "stealthKeys"
-    );
+  public async getPub(publicKey: string): Promise<string | null> {
+    const publicData = await this.getPublicData(publicKey, "keys");
     return publicData?.epub || null;
   }
 }

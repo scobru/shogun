@@ -1,10 +1,14 @@
-// Import sha256 usando require
+import { IGunInstance, ISEAPair } from "gun";
 import type {
   WebAuthnResult,
   WebAuthnVerifyResult,
 } from "../interfaces/WebAuthnResult";
-import { GunAuthManager } from "../managers/GunAuthManager";
+import { BaseManager } from "./BaseManager";
 import jsSha256 from "js-sha256";
+import { GunKeyPair } from "../interfaces/GunKeyPair";
+import Gun from "gun";
+import "gun/sea";
+
 const sha256 = jsSha256.sha256;
 
 // Importiamo crypto solo per Node.js
@@ -144,11 +148,11 @@ const generateCredentialsFromSalt = (
   };
 };
 
-export class WebAuthnService {
-  private gunAuthManager: GunAuthManager;
+export class WebAuthnManager extends BaseManager<Record<string, any>> {
+  protected storagePrefix = "webauthn";
 
-  constructor(gunAuthManager: GunAuthManager, ) {
-    this.gunAuthManager = gunAuthManager;
+  constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
+    super(gun, APP_KEY_PAIR);
   }
 
   private validateUsername(username: string): void {
@@ -170,34 +174,82 @@ export class WebAuthnService {
     }
   }
 
-  // Recupera le credenziali WebAuthn da Gun
-  private async getWebAuthnCredentials(
-    username: string
-  ): Promise<WebAuthnCredentials | null> {
-    return this.gunAuthManager.getPrivateData(`webauthn/${username}`);
+  /**
+   * Recupera i dati privati per un utente WebAuthn
+   */
+  private async getWebAuthnPrivateData(username: string): Promise<WebAuthnCredentials | null> {
+    const data = await this.getPrivateData(username);
+    return data as WebAuthnCredentials;
   }
 
-  // Salva le credenziali WebAuthn su Gun
-  private async saveWebAuthnCredentials(
+  /**
+   * Salva i dati privati per un utente WebAuthn
+   */
+  private async saveWebAuthnPrivateData(
+    username: string,
+    data: WebAuthnCredentials
+  ): Promise<void> {
+    await this.savePrivateData(data, username);
+  }
+
+  /**
+   * Salva i dati pubblici per un utente WebAuthn
+   */
+  private async saveWebAuthnPublicData(
+    username: string,
+    data: Record<string, any>
+  ): Promise<void> {
+    await this.savePublicData(data, username);
+  }
+
+  /**
+   * Ottiene la coppia di chiavi corrente
+   */
+  public getPairFromGun(): GunKeyPair {
+    return this.gun.user()._.sea as GunKeyPair;
+  }
+
+  /**
+   * Implementazione del metodo createAccount richiesto da BaseManager
+   */
+  public async createAccount(
+    username: string,
+    isNewDevice: boolean = false,
+    deviceName?: string
+  ): Promise<Record<string, any>> {
+    const result = await this.generateCredentials(username, isNewDevice, deviceName);
+    if (!result.success) {
+      throw new Error(result.error || "Errore durante la creazione dell'account");
+    }
+    return result;
+  }
+
+  // Recupera le credenziali WebAuthn da Gun
+  private async getWebAuthnCredentials(username: string): Promise<WebAuthnCredentials | null> {
+    const credentials = await this.getWebAuthnPrivateData(username);
+    return credentials as WebAuthnCredentials;
+  }
+
+  private async saveCredentials(
     username: string,
     credentials: WebAuthnCredentials
   ): Promise<void> {
     // Salva i dati privati (credenziali complete)
-    await this.gunAuthManager.savePrivateData(
-      credentials,
-      `webauthn/${username}`
-    );
+    await this.saveWebAuthnPrivateData(username, credentials);
 
     // Salva i dati pubblici (solo informazioni non sensibili)
     const publicData = {
+      username,
       registered: true,
-      lastUsed: credentials.timestamp,
+      lastUsed: Date.now(),
       deviceCount: Object.keys(credentials.credentials).length,
     };
-    await this.gunAuthManager.savePublicData(
-      publicData,
-      `webauthn/${username}`
-    );
+    
+    await this.saveWebAuthnPublicData(username, publicData);
+  }
+
+  public getAuthenticators(): GunKeyPair[] {
+    return [this.getPairFromGun()];
   }
 
   public async generateCredentials(
@@ -302,7 +354,7 @@ export class WebAuthnService {
         };
 
         // Salva le credenziali aggiornate
-        await this.saveWebAuthnCredentials(username, updatedCreds);
+        await this.saveCredentials(username, updatedCreds);
 
         return {
           success: true,
@@ -347,7 +399,7 @@ export class WebAuthnService {
     const updatedCreds = { ...creds };
     delete updatedCreds.credentials[credentialId];
 
-    await this.saveWebAuthnCredentials(username, updatedCreds);
+    await this.saveCredentials(username, updatedCreds);
     return true;
   }
 
@@ -389,12 +441,9 @@ export class WebAuthnService {
         // Genera le credenziali dal salt salvato
         const { password } = generateCredentialsFromSalt(username, salt);
 
-        await this.gunAuthManager.savePublicData(
-          {
-            lastUsed: Date.now(),
-          },
-          `webauthn/${username}`
-        );
+        await this.saveWebAuthnPublicData(username, {
+          lastUsed: Date.now(),
+        });
 
         return {
           success: true,
@@ -472,9 +521,7 @@ export class WebAuthnService {
 
   // Recupera il salt da Gun
   private async getSalt(username: string): Promise<string | null> {
-    const credentials = await this.gunAuthManager.getPrivateData(
-      `webauthn/${username}`
-    );
+    const credentials = await this.getWebAuthnCredentials(username);
     return credentials?.salt || null;
   }
 

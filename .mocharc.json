@@ -1,0 +1,7 @@
+{
+  "extension": ["js"],
+  "spec": "tests/**/*.test.js",
+  "timeout": 30000,
+  "require": ["ts-node/register"],
+  "recursive": true
+} 

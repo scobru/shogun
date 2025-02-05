@@ -2,6 +2,7 @@ export interface WalletData {
   address: string;
   privateKey: string;
   entropy: string;
+  timestamp: number;
 }
 
 export interface WalletResult {

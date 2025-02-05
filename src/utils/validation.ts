@@ -1,4 +1,4 @@
-import { ValidationError } from "./errors";
+import { ValidationError } from "./gun/errors";
 import { ethers } from "ethers";
 
 /**

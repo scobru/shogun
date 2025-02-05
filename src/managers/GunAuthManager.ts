@@ -1,9 +1,7 @@
-import Gun, { IPolicy } from "gun";
-import "gun/sea";
-import { Wallet } from "ethers";
+import Gun, { IGunInstance, IPolicy, ISEAPair } from "gun";
 import type { GunKeyPair } from "../interfaces/GunKeyPair";
-import type { GunAck } from "../interfaces/Gun";
-import type { ActivityPubKeys } from "../interfaces/ActivityPubKeys";
+import { BaseManager } from "./BaseManager";
+import { log } from "../utils/log";
 
 const SEA = Gun.SEA;
 
@@ -12,187 +10,409 @@ interface Policy {
   "+": string;
 }
 
-export class GunAuthManager {
-  private gun: any;
-  private user: any;
+/**
+ * Main authentication manager handling GUN.js user operations and SEA (Security, Encryption, Authorization)
+ * @class
+ * @classdesc Manages decentralized user authentication, data encryption, and secure operations using GUN.js and SEA
+ */
+export class GunAuthManager extends BaseManager<GunKeyPair> {
   private isAuthenticating = false;
-  private APP_KEY_PAIR: { pub: string; priv: string };
-  private readonly DAPP_NAME = "shogun";
+  private pub: string = "";
 
-  constructor(gunOptions: any, APP_KEY_PAIR: { pub: string; priv: string }) {
-    this.gun = Gun(gunOptions);
-    this.APP_KEY_PAIR = APP_KEY_PAIR;
+  constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
+    super(gun, APP_KEY_PAIR);
+    // Utilizziamo la chiave pubblica dell'applicazione come prefisso di storage
+    this.storagePrefix = APP_KEY_PAIR.pub;
+    this.pub = "";
     this.user = this.gun.user();
   }
 
-  private async waitForAuth(): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, 1000));
+  /**
+   * Waits until una condizione è verificata o scade il timeout.
+   * @param condition Funzione che restituisce true se la condizione è verificata.
+   * @param timeout Timeout in millisecondi (default 10000ms).
+   */
+  private async waitUntil(
+    condition: () => boolean,
+    timeout: number = 10000
+  ): Promise<void> {
+    const start = Date.now();
+    while (!condition()) {
+      if (Date.now() - start > timeout) {
+        throw new Error("Timeout waiting for condition");
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
   }
 
+  private async resetGunState(): Promise<void> {
+    // Reset completo dello stato di Gun
+    this.isAuthenticating = false;
+    this.pub = "";
+    this.user.leave();
+    await new Promise(r => setTimeout(r, 2000));
+    
+    // Creiamo una nuova istanza di Gun.user()
+    this.user = this.gun.user();
+    await new Promise(r => setTimeout(r, 1000));
+    
+    // Verifichiamo che lo stato sia effettivamente resettato
+    if (this.user.is) {
+      log("User still authenticated after reset, retrying...");
+      await new Promise(r => setTimeout(r, 2000));
+      this.user = this.gun.user();
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+
+  /**
+   * Checks username availability and creates user if available.
+   * @param username Desired username.
+   * @param password User password.
+   * @returns Public key of created user.
+   * @throws Error if username is already taken or user creation fails.
+   */
   public async checkUser(username: string, password: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      this.gun.get(`~@${username}`).once((user: any) => {
-        if (user) {
-          reject(new Error("Username already taken"));
-        } else {
-          this.user.create(username, password, ({ err, pub }: any) => {
-            if (err) {
-              reject(new Error(err));
-            } else {
-              resolve(pub);
+    log("Check User...");
+    
+    // Reset completo dello stato
+    await this.resetGunState();
+    
+    const exists = await this.exists(username);
+    if (exists) {
+      log("User already exists");
+      throw new Error("Username already taken");
+    }
+    log("User does not exist, proceeding with creation...");
+
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    const attemptUserCreation = async (): Promise<string> => {
+      // Reset dello stato prima di ogni tentativo
+      await this.resetGunState();
+
+      return new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          this.isAuthenticating = false;
+          log("User creation timeout");
+          reject(new Error("User creation timeout"));
+        }, 20000);
+
+        const handleError = async (error: any) => {
+          clearTimeout(timeoutId);
+          this.isAuthenticating = false;
+          
+          if (error.message?.includes("User is already being created or authenticated")) {
+            log("User creation in progress, waiting...");
+            await new Promise(r => setTimeout(r, 5000));
+            
+            try {
+              // Reset dello stato prima di verificare
+              await this.resetGunState();
+              
+              // Verifichiamo se l'utente esiste dopo l'attesa
+              const userExists = await this.exists(username);
+              if (userExists) {
+                const pub = await this.getPubFromAlias(username);
+                if (pub) {
+                  log("User was created successfully, got pub:", pub);
+                  return resolve(pub);
+                }
+              }
+              
+              // Se siamo qui e abbiamo ancora tentativi, ritentiamo
+              if (retryCount < maxRetries) {
+                retryCount++;
+                log(`Retry attempt ${retryCount}/${maxRetries}`);
+                return resolve(await attemptUserCreation());
+              }
+              
+              log("User creation failed after all retries");
+              return reject(new Error("User creation failed"));
+            } catch (retryError) {
+              log("Error during retry:", retryError);
+              return reject(retryError);
             }
-          });
+          }
+          return reject(error);
+        };
+
+        this.user.create(username, password, async (ack: any) => {
+          try {
+            clearTimeout(timeoutId);
+            log("User creation callback received:", ack);
+            
+            if (ack.err) {
+              return handleError(new Error(ack.err));
+            }
+
+            if (ack.ok === 0 && ack.pub) {
+              log("User created successfully with pub:", ack.pub);
+              this.pub = ack.pub;
+              this.isAuthenticating = false;
+              return resolve(ack.pub);
+            }
+
+            // Attendiamo brevemente per assicurarci che la creazione sia completata
+            log("Waiting for user creation to complete...");
+            await new Promise<void>((r) => setTimeout(r, 2000));
+            
+            if (this.user.is?.pub) {
+              log("Public key found in user.is:", this.user.is.pub);
+              this.pub = this.user.is.pub;
+              this.isAuthenticating = false;
+              return resolve(this.user.is.pub);
+            }
+
+            // Verifica se l'utente esiste dopo la creazione
+            log("Checking if user exists after creation...");
+            const userExists = await this.exists(username);
+            if (userExists) {
+              log("User found after creation, getting public key...");
+              const pub = await this.getPubFromAlias(username);
+              if (pub) {
+                log("Public key retrieved:", pub);
+                this.pub = pub;
+                this.isAuthenticating = false;
+                return resolve(pub);
+              }
+              log("Could not retrieve public key");
+            } else {
+              log("User not found after creation");
+            }
+            
+            // Se siamo qui e abbiamo ancora tentativi, ritentiamo
+            if (retryCount < maxRetries) {
+              retryCount++;
+              log(`Retry attempt ${retryCount}/${maxRetries}`);
+              return resolve(await attemptUserCreation());
+            }
+            
+            this.isAuthenticating = false;
+            log("User creation failed");
+            return reject(new Error("User creation failed"));
+          } catch (error) {
+            return handleError(error);
+          }
+        });
+      });
+    };
+
+    return attemptUserCreation();
+  }
+
+  private async getPubFromAlias(alias: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      this.gun.get(`~@${alias}`).once((data: any) => {
+        if (!data) return resolve(null);
+        if ("_" in data) {
+          delete data._;
         }
+        const keys = Object.keys(data);
+        if (keys.length > 0 && keys[0].startsWith("~")) {
+          return resolve(keys[0].substring(1));
+        }
+        return resolve(null);
       });
     });
   }
 
-  public async onCreateSuccess(
-    pub: string,
-    username: string,
-    password: string
-  ): Promise<any> {
-    const policy: Policy[] = [
-      { "*": "public", "+": "*" },
-      { "*": "private", "+": "*" },
-    ];
-
-    const expiresAt = Date.now() + 60 * 60 * 1000 * 2;
-
-    const certificate = await SEA.certify(
-      [pub],
-      policy as IPolicy[],
-      this.APP_KEY_PAIR,
-      () => {},
-      { expiry: expiresAt }
-    );
-
-    await new Promise<void>((resolve, reject) => {
-      this.gun
-        .get(`~${this.APP_KEY_PAIR.pub}`)
-        .get("public")
-        .get(pub)
-        .put(
-          { username },
-          (ack: any) => {
-            if (ack.err) reject(new Error(ack.err));
-            else resolve();
-          },
-          {
-            opt: { cert: certificate },
-          }
-        );
-    });
-
-    await this.login(username, password);
-    return this.user._.sea;
-  }
-
+  /**
+   * Creates a new user account with GUN/SEA.
+   * @param alias User's username.
+   * @param passphrase User's password.
+   * @returns Generated SEA key pair for the user.
+   */
   public async createAccount(
     alias: string,
     passphrase: string
   ): Promise<GunKeyPair> {
-    try {
-      const pub = await this.checkUser(alias, passphrase);
-      if (!pub) {
-        throw new Error("User creation failed");
-      }
+    const MAX_RETRIES = 5;
+    let attempts = 0;
+    const RETRY_DELAYS = [3000, 5000, 10000, 15000, 20000]; // Backoff crescente
 
-      const userPair = await this.onCreateSuccess(pub, alias, passphrase);
-      if (!userPair) {
-        throw new Error("User creation failed");
-      }
+    while (attempts < MAX_RETRIES) {
+      try {
+        console.log(`Tentativo creazione account ${attempts + 1}/${MAX_RETRIES} per: ${alias}`);
 
-      if (!this.user._.sea) {
-        throw new Error("User creation failed - No SEA pair");
-      }
+        // Reset completo dello stato prima di ogni tentativo
+        await this._hardReset();
 
-      this.isAuthenticating = true;
-      return userPair;
-    } catch (error) {
-      this.isAuthenticating = false;
-      throw error;
-    }
-  }
+        // Verifica esistenza utente con timeout
+        const userExists = await Promise.race([
+          this.exists(alias),
+          new Promise<boolean>((_, reject) => 
+            setTimeout(() => reject(new Error("Timeout verifica utente")), 10000)
+          )
+        ]);
 
-  public async login(alias: string, passphrase: string): Promise<string> {
-    try {
-      if (this.isAuthenticating) {
-        await this.waitForAuth();
-        this.user.leave();
-        await this.waitForAuth();
-      }
+        if (userExists) {
+          // Se l'utente esiste, non ritentiamo - è un errore legittimo
+          throw new Error("Username already taken");
+        }
 
-      this.isAuthenticating = true;
-      console.log("Starting login process for:", alias);
-
-      return new Promise<string>((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-          this.isAuthenticating = false;
-          this.user.leave();
-          reject(new Error("Authentication timeout"));
-        }, 30000);
-
-        this.user.auth(alias, passphrase, (ack: any) => {
-          try {
-            if (ack.err) {
-              this.isAuthenticating = false;
-              if (ack.err.includes("being created")) {
-                setTimeout(async () => {
-                  try {
-                    const result = await this.login(alias, passphrase);
-                    resolve(result);
-                  } catch (error) {
-                    reject(error);
-                  }
-                }, 2000);
-                return;
+        // Creazione account con timeout
+        const result = await Promise.race([
+          new Promise<GunKeyPair>((resolve, reject) => {
+            this.user.create(alias, passphrase, (ack: any) => {
+              if (ack.err) {
+                // Se l'errore indica che l'utente esiste, non ritentiamo
+                if (ack.err.includes("already created") || ack.err.includes("already taken")) {
+                  return reject(new Error("Username already taken"));
+                }
+                return reject(new Error(ack.err));
               }
-              reject(new Error(ack.err));
-              return;
-            }
+              resolve(this.user._.sea);
+            });
+          }),
+          new Promise<GunKeyPair>((_, reject) =>
+            setTimeout(() => reject(new Error("Timeout creazione account")), 30000)
+          )
+        ]);
 
-            if (!this.user.is?.pub) {
-              this.isAuthenticating = false;
-              reject(new Error("Login failed: public key not found"));
-              return;
-            }
+        return result;
+      } catch (error) {
+        // Se l'errore è "Username already taken", non ritentiamo
+        if (error instanceof Error && error.message === "Username already taken") {
+          throw error;
+        }
 
-            console.log("Login completed successfully");
-            this.isAuthenticating = false;
-            resolve(this.user.is.pub);
-          } catch (error) {
-            reject(error);
-          } finally {
-            clearTimeout(timeoutId);
-          }
-        });
-      });
-    } catch (error) {
-      this.isAuthenticating = false;
+        console.error(`Errore al tentativo ${attempts + 1}:`, error);
+
+        if (attempts < MAX_RETRIES - 1) {
+          const delay = RETRY_DELAYS[attempts];
+          console.log(`Nuovo tentativo tra ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        attempts++;
+      }
+    }
+    throw new Error(`Creazione account fallita dopo ${MAX_RETRIES} tentativi`);
+  }
+
+  private async _hardReset(): Promise<void> {
+    try {
+      // Modifica qui: usa l'istanza originale invece di gun.back
+      const peers = ['http://localhost:8765/gun'];
+      
+      await this._safeLogout();
       this.user.leave();
-      throw error;
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      // Ricarica l'istanza GUN con i peer originali
+      this.gun = Gun({
+        peers: peers, // Usa la lista peers salvata
+        localStorage: false,
+        radisk: false
+      });
+      
+      this.user = this.gun.user();
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    } catch (error) {
+      console.error("Errore durante l'hard reset:", error);
     }
   }
 
-  public logout(): void {
-    if (this.user.is) {
-      this.user.leave();
+  /**
+   * Authenticates user with provided credentials.
+   * @param alias User's username.
+   * @param passphrase User's password.
+   * @param attempt (Optional) Current attempt number (for retry).
+   * @returns User's public key.
+   * @throws Error on authentication failure or timeout.
+   */
+  public async login(alias: string, passphrase: string): Promise<string> {
+    const MAX_RETRIES = 5;
+    let attempts = 0;
+    const RETRY_DELAYS = [5000, 10000, 15000, 20000, 25000];
+
+    while (attempts < MAX_RETRIES) {
+      try {
+        console.log(`Tentativo di login ${attempts + 1}/${MAX_RETRIES} per: ${alias}`);
+
+        if (this.user.is?.pub) {
+          await this._safeLogout();
+          await new Promise(r => setTimeout(r, 5000));
+        }
+
+        const result = await Promise.race([
+          this.user.auth(alias, passphrase),
+          new Promise<string>((_, reject) =>
+            setTimeout(() => reject(new Error("Timeout")), 60000)
+          )
+        ]);
+
+        await this.waitUntil(() => !!this.user.is?.pub, 15000);
+        return this.user.is?.pub as string;
+        
+      } catch (error) {
+        console.error(`Errore al tentativo ${attempts + 1}:`, error);
+        
+        if (error instanceof Error && error.message.includes("decrypt")) {
+          throw new Error("Credenziali non valide");
+        }
+
+        if (attempts < MAX_RETRIES - 1) {
+          const delay = RETRY_DELAYS[attempts];
+          console.log(`Nuovo tentativo tra ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        attempts++;
+      }
     }
+    throw new Error(`Login fallito dopo ${MAX_RETRIES} tentativi`);
+  }
+
+  /**
+   * Waits for the authentication process to complete.
+   * @param timeout Timeout in milliseconds.
+   */
+  private async waitForAuth(timeout: number = 30000): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const startTime = Date.now();
+      const checkAuth = () => {
+        if (!this.isAuthenticating) return resolve();
+        if (Date.now() - startTime > timeout)
+          return reject(new Error("Timeout waiting for authentication"));
+        setTimeout(checkAuth, 500);
+      };
+      checkAuth();
+    });
+  }
+
+  /**
+   * Terminates the current user session.
+   */
+  public logout(): void {
+    this.user.leave();
     this.isAuthenticating = false;
   }
 
+  /**
+   * Gets current user's public key.
+   * @returns User's public key.
+   * @throws Error if user is not authenticated.
+   */
   public getPublicKey(): string {
-    if (!this.user.is?.pub) {
-      throw new Error("User not authenticated");
+    if (this.pub) return this.pub;
+    if (this.user.is?.pub) {
+      this.pub = this.user.is.pub;
+      return this.pub;
     }
-    return this.user.is.pub;
+    throw new Error("Utente non autenticato");
   }
 
-  public getCurrentUserKeyPair(): GunKeyPair {
-    return this.user._.sea;
+  /**
+   * Gets current user's SEA key pair.
+   */
+  public getPair(): GunKeyPair {
+    return this.user._.sea as GunKeyPair;
   }
 
+  /**
+   * Gets the GUN instance reference.
+   */
   public getGun(): any {
     return this.gun;
   }
@@ -201,6 +421,11 @@ export class GunAuthManager {
     return this.gun.user();
   }
 
+  /**
+   * Exports the current user's key pair as JSON.
+   * @returns Stringified key pair.
+   * @throws Error if user is not authenticated.
+   */
   public async exportGunKeyPair(): Promise<string> {
     if (!this.user._.sea) {
       throw new Error("User not authenticated");
@@ -208,145 +433,63 @@ export class GunAuthManager {
     return JSON.stringify(this.user._.sea);
   }
 
+  /**
+   * Imports and authenticates with a key pair.
+   * @param keyPairJson Stringified key pair.
+   * @returns Public key of authenticated user.
+   * @throws Error if key pair is invalid or authentication fails.
+   */
   public async importGunKeyPair(keyPairJson: string): Promise<string> {
+    let keyPair: any;
     try {
-      const keyPair = JSON.parse(keyPairJson);
+      keyPair = JSON.parse(keyPairJson);
+    } catch (error) {
+      throw new Error("Error parsing key pair JSON");
+    }
 
-      if (!keyPair.pub || !keyPair.priv || !keyPair.epub || !keyPair.epriv) {
-        throw new Error("Invalid key pair");
-      }
+    if (!keyPair.pub || !keyPair.priv || !keyPair.epub || !keyPair.epriv) {
+      throw new Error("Invalid key pair");
+    }
 
-      return new Promise((resolve, reject) => {
-        this.user.auth(keyPair, (ack: any) => {
-          if (ack.err) {
-            reject(new Error(`Authentication error: ${ack.err}`));
-            return;
-          }
-          if (!this.user.is?.pub) {
-            reject(new Error("Authentication failed: public key not found"));
-            return;
-          }
-          resolve(this.user.is.pub);
-        });
-      });
+    try {
+      const pub = await this.user.auth(keyPair);
+      return pub;
     } catch (error) {
       throw new Error(
-        `Error importing key pair: ${
-          error instanceof Error ? error.message : "unknown error"
-        }`
+        error instanceof Error
+          ? error.message
+          : "Unknown error during key pair import"
       );
     }
   }
 
-  public async updateProfile(displayName: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (!this.user.is?.pub) {
-        return reject(new Error("Utente non autenticato"));
-      }
-
-      this.gun
-        .get(`~${this.APP_KEY_PAIR.pub}`)
-        .get("profiles")
-        .get(this.getPublicKey())
-        .put(
-          { displayName },
-          (ack: GunAck) => {
-            if (ack.err) {
-              reject(new Error(`Errore aggiornamento profilo: ${ack.err}`));
-            } else {
-              resolve();
-            }
-          },
-          {
-            opt: {
-              cert: SEA.certify(
-                [this.getPublicKey()],
-                [{ "*": "profiles", "+": "*" }] as IPolicy[],
-                this.APP_KEY_PAIR,
-                () => {},
-                { expiry: Date.now() + 60 * 60 * 1000 * 2 }
-              ),
-            },
-          }
-        );
-    });
-  }
-
-  public async changePassword(
-    oldPassword: string,
-    newPassword: string
-  ): Promise<void> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const username = await this.getUsername();
-
-        await this.login(username, oldPassword);
-
-        this.user.auth(
-          this.user._.sea,
-          (ack: GunAck) => {
-            if (ack.err) {
-              reject(new Error(`Errore cambio password: ${ack.err}`));
-            } else {
-              resolve();
-            }
-          },
-          {
-            change: newPassword,
-          }
-        );
-      } catch (error) {
-        reject(
-          new Error(
-            `Errore durante il cambio password: ${
-              error instanceof Error ? error.message : "Errore sconosciuto"
-            }`
-          )
-        );
-      }
-    });
-  }
-
-  private async getUsername(): Promise<string> {
-    return new Promise((resolve, reject) => {
-      this.user.get("alias").once((username: string) => {
-        username
-          ? resolve(username)
-          : reject(new Error("Username non trovato"));
-      });
-    });
-  }
-
   /**
-   * Salva i dati privati dell'utente
+   * Saves private user data.
+   * @param data Data to store.
+   * @param path Storage path.
+   * @throws Error if user is not authenticated.
    */
   public async savePrivateData(data: any, path: string): Promise<void> {
-    if (!this.user.is) {
-      throw new Error("Utente non autenticato");
-    }
-
+    if (!this.user.is) throw new Error("Utente non autenticato");
     return new Promise((resolve, reject) => {
       this.user
         .get("private")
         .get(path)
         .put(data, (ack: any) => {
-          if (ack.err) {
-            reject(new Error(ack.err));
-            return;
-          }
+          if (ack.err) return reject(new Error(ack.err));
           resolve();
         });
     });
   }
 
   /**
-   * Recupera i dati privati dell'utente
+   * Retrieves private user data.
+   * @param path Storage path.
+   * @returns Stored data.
+   * @throws Error if user is not authenticated.
    */
   public async getPrivateData(path: string): Promise<any> {
-    if (!this.user.is) {
-      throw new Error("Utente non autenticato");
-    }
-
+    if (!this.user._.sea) throw new Error("Utente non autenticato");
     return new Promise((resolve) => {
       this.user
         .get("private")
@@ -358,49 +501,36 @@ export class GunAuthManager {
   }
 
   /**
-   * Salva i dati pubblici dell'utente
+   * Saves public user data for the authenticated user.
+   * @param data Data to store.
+   * @param path Storage path.
+   * @throws Error if user is not authenticated.
    */
   public async savePublicData(data: any, path: string): Promise<void> {
-    if (!this.user.is) {
-      throw new Error("Utente non autenticato");
-    }
-
+    if (!this.user.is) throw new Error("Utente non autenticato");
     return new Promise((resolve, reject) => {
+      const publicKey = this.getPublicKey();
       this.gun
-        .get(`~${this.APP_KEY_PAIR.pub}`)
+        .get(`~${publicKey}`)
         .get("public")
         .get(path)
-        .put(
-          data,
-          (ack: any) => {
-            if (ack.err) {
-              reject(new Error(ack.err));
-              return;
-            }
-            resolve();
-          },
-          {
-            opt: {
-              cert: SEA.certify(
-                [this.getPublicKey()],
-                [{ "*": "public", "+": "*" }] as IPolicy[],
-                this.APP_KEY_PAIR,
-                () => {},
-                { expiry: Date.now() + 60 * 60 * 1000 * 2 }
-              ),
-            },
-          }
-        );
+        .put(data, (ack: any) => {
+          if (ack.err) return reject(new Error(ack.err));
+          resolve();
+        });
     });
   }
 
   /**
-   * Recupera i dati pubblici dell'utente
+   * Retrieves public user data of a given user.
+   * @param publicKey Public key of the user whose data to retrieve.
+   * @param path Storage path.
+   * @returns Stored data.
    */
   public async getPublicData(publicKey: string, path: string): Promise<any> {
     return new Promise((resolve) => {
       this.gun
-        .get(`~${this.APP_KEY_PAIR.pub}`)
+        .get(`~${publicKey}`)
         .get("public")
         .get(path)
         .once((data: any) => {
@@ -409,11 +539,125 @@ export class GunAuthManager {
     });
   }
 
+  /**
+   * Deletes private user data at the specified path.
+   */
   public async deletePrivateData(path: string): Promise<void> {
     await this.savePrivateData(null, path);
   }
 
+  /**
+   * Deletes public user data at the specified path for the authenticated user.
+   */
   public async deletePublicData(path: string): Promise<void> {
     await this.savePublicData(null, path);
+  }
+
+  /**
+   * Waits for all user operations to complete.
+   * @param timeout Timeout in milliseconds.
+   * @throws Error if timeout is reached before operations complete.
+   */
+  public async join(timeout: number = 0): Promise<void> {
+    let stop = false;
+    const joinPromise = (async () => {
+      while (!stop && this.isAuthenticating) {
+        try {
+          await this.waitForAuth();
+        } catch (error) {
+          // continuiamo ad attendere
+        }
+      }
+    })();
+
+    if (timeout) {
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          stop = true;
+          reject(new Error("Timeout durante l'attesa delle operazioni utente"));
+        }, timeout);
+      });
+      await Promise.race([joinPromise, timeoutPromise]);
+    } else {
+      await joinPromise;
+    }
+  }
+
+  /**
+   * Checks if a user with the specified alias exists.
+   * @param alias Username to check.
+   * @returns True if the user exists, false otherwise.
+   */
+  public async exists(alias: string): Promise<boolean> {
+    log(`Checking existence for alias: ${alias}`);
+    if (this.user.is && this.user.is.alias === alias) {
+      log("User is already authenticated with this alias");
+      return true;
+    }
+    return new Promise((resolve) => {
+      this.gun.get(`~@${alias}`).once((data: any) => {
+        if (!data) {
+          log("No data found for alias");
+          return resolve(false);
+        }
+        if (data.put || data.next) {
+          log("User exists (complex response)");
+          return resolve(true);
+        }
+        if ("_" in data) {
+          delete data._;
+        }
+        const keys = Object.keys(data);
+        const exists =
+          keys.length > 0 &&
+          (keys[0].startsWith("~") ||
+            (typeof data[keys[0]] === "object" && data[keys[0]]?.pub));
+        log(`User exists: ${exists}`);
+        return resolve(exists);
+      });
+    });
+  }
+
+  /**
+   * Initializes the authentication listener.
+   */
+  public async authListener(): Promise<void> {
+    return new Promise((resolve) => {
+      log("Initializing authentication listener...");
+      this.user.on("auth", (pub: any) => {
+        log("Auth callback received, public key:", pub);
+        this.pub = pub;
+        log("Authentication listener ready");
+        resolve();
+      });
+      // Se non riceviamo l'evento auth, risolviamo dopo un timeout
+      setTimeout(() => {
+        log("Auth listener timeout, continuing anyway");
+        resolve();
+      }, 2000);
+    });
+  }
+
+  /**
+   * Safely logs out the user ensuring session termination.
+   */
+  private async _safeLogout(): Promise<void> {
+    try {
+      await this.resetGunState();
+    } catch (error) {
+      log("Logout error:", error);
+      // Resettiamo comunque lo stato
+      this.isAuthenticating = false;
+      this.pub = "";
+      this.user = this.gun.user();
+    }
+  }
+
+  /**
+   * Checks if the current user is authenticated.
+   * @returns True if authenticated, false otherwise.
+   */
+  public isAuthenticated(): boolean {
+    return !!this.user.is;
   }
 }

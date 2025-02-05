@@ -3,8 +3,8 @@ import { StealthManager } from "./managers/StealthManager";
 import { EthereumManager } from "./managers/EthereumManager";
 import { GunAuthManager } from "./managers/GunAuthManager";
 import { ActivityPubManager } from "./managers/ActivityPubManager";
-import { WebAuthnService } from "./services/WebAuthn";
-import { EthereumService } from "./services/Ethereum";
+import { WebAuthnManager } from "./managers/WebAuthnManager";
+
 import {
   EthereumProvider,
   StealthKeys,
@@ -26,13 +26,11 @@ import { SEA } from "gun";
 export { Shogun };
 
 // export services
-export { EthereumService, WebAuthnService };
 
 // export managers
-export { EthereumManager, GunAuthManager, ActivityPubManager };
+export { EthereumManager, GunAuthManager, ActivityPubManager, WebAuthnManager, StealthManager };
 
 // export chains
-export { StealthManager };
 
 // export interfaces
 export {
