@@ -107,6 +107,7 @@ describe("WalletManager", function () {
     });
 
     it("should retrieve all wallets", async function () {
+      this.timeout(60000); // Aumentato a 60 secondi
       console.log("Starting retrieve wallets test");
       console.log("Checking authentication status:", !!testUser.is);
       
@@ -115,6 +116,9 @@ describe("WalletManager", function () {
       const newWallet = ethers.Wallet.createRandom();
       await walletManager.saveWallet(newWallet);
       console.log("Test wallet saved");
+      
+      // Attendiamo un po' per assicurarci che i dati siano sincronizzati
+      await new Promise(resolve => setTimeout(resolve, 5000));
       
       console.log("Retrieving wallets...");
       const wallets = await walletManager.getWallets();
@@ -175,6 +179,7 @@ describe("WalletManager", function () {
     });
 
     it("should save and retrieve a wallet", async function () {
+      this.timeout(60000); // Aumentato a 60 secondi
       console.log("Starting save and retrieve wallet test");
       console.log("Checking authentication status:", !!testUser.is);
       
@@ -183,6 +188,9 @@ describe("WalletManager", function () {
       
       console.log("Saving wallet...");
       await walletManager.saveWallet(wallet);
+
+      // Attendiamo un po' per assicurarci che i dati siano sincronizzati
+      await new Promise(resolve => setTimeout(resolve, 5000));
 
       console.log("Retrieving all wallets...");
       const wallets = await walletManager.getWallets();

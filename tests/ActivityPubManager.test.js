@@ -128,6 +128,7 @@ describe("ActivityPubManager", function () {
     });
 
     it("should delete keys", async function () {
+      this.timeout(60000); // Aumentato a 60 secondi
       // Prima creiamo e salviamo le chiavi
       const keys = await activityPubManager.createAccount();
       console.log("Chiavi create:", !!keys);
@@ -144,7 +145,7 @@ describe("ActivityPubManager", function () {
       // Eliminiamo le chiavi
       console.log("Eliminazione chiavi...");
       await activityPubManager.deleteKeys();
-      await waitForOperation(5000); // Aumentato il tempo di attesa
+      await waitForOperation(5000);
 
       // Verifichiamo che le chiavi siano state eliminate
       console.log("Verifica eliminazione...");

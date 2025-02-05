@@ -1,14 +1,8 @@
-import Gun, { IGunInstance, IPolicy, ISEAPair } from "gun";
+import Gun, { IGunInstance, ISEAPair } from "gun";
 import type { GunKeyPair } from "../interfaces/GunKeyPair";
 import { BaseManager } from "./BaseManager";
 import { log } from "../utils/log";
 
-const SEA = Gun.SEA;
-
-interface Policy {
-  "*": string;
-  "+": string;
-}
 
 /**
  * Main authentication manager handling GUN.js user operations and SEA (Security, Encryption, Authorization)
@@ -446,14 +440,16 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
   public async savePrivateData(data: any, path: string): Promise<void> {
     if (!this.user.is) throw new Error("Utente non autenticato");
     return new Promise((resolve, reject) => {
-      this.user
-        .get("private")
-        .get(path)
-        .put(data, (ack: any) => {
-          if (ack.err) return reject(new Error(ack.err));
-          resolve();
-        });
+      this.savePrivateData(data, path).then(() => {
+        resolve(data);
+      }).catch((error) => {
+        reject(error);
+      });
     });
+
+
+
+
   }
 
   /**
@@ -464,14 +460,16 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    */
   public async getPrivateData(path: string): Promise<any> {
     if (!this.user._.sea) throw new Error("Utente non autenticato");
-    return new Promise((resolve) => {
-      this.user
-        .get("private")
-        .get(path)
-        .once((data: any) => {
-          resolve(data);
-        });
+    return new Promise((resolve, reject) => {
+      this.getPrivateData(path).then((data) => {
+        resolve(data);
+      }).catch((error) => {
+        reject(error);
+      });
     });
+
+
+
   }
 
   /**
@@ -484,16 +482,14 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     if (!this.user.is) throw new Error("Utente non autenticato");
     return new Promise((resolve, reject) => {
       const publicKey = this.getPublicKey();
-      this.gun
-        .get(`~${publicKey}`)
-        .get("public")
-        .get(path)
-        .put(data, (ack: any) => {
-          if (ack.err) return reject(new Error(ack.err));
-          resolve();
-        });
+      this.savePublicData(data, path).then(() => {
+        resolve();
+      }).catch((error) => {
+        reject(error);
+      });
     });
   }
+
 
   /**
    * Retrieves public user data of a given user.
@@ -502,30 +498,46 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    * @returns Stored data.
    */
   public async getPublicData(publicKey: string, path: string): Promise<any> {
-    return new Promise((resolve) => {
-      this.gun
-        .get(`~${publicKey}`)
-        .get("public")
-        .get(path)
-        .once((data: any) => {
-          resolve(data);
-        });
+    return new Promise((resolve, reject) => {
+      this.getPublicData(publicKey, path).then((data) => {
+        resolve(data);
+      }).catch((error) => {
+        reject(error);
+      });
     });
   }
+
 
   /**
    * Deletes private user data at the specified path.
    */
   public async deletePrivateData(path: string): Promise<void> {
-    await this.savePrivateData(null, path);
+    return new Promise((resolve, reject) => {
+      this.savePrivateData(null, path).then(() => {
+        resolve();
+      }).catch((error) => {
+        reject(error);
+      });
+    });
   }
+
+
 
   /**
    * Deletes public user data at the specified path for the authenticated user.
    */
   public async deletePublicData(path: string): Promise<void> {
-    await this.savePublicData(null, path);
+    return new Promise((resolve, reject) => {
+      this.savePublicData(null, path).then(() => {
+        resolve(void 0);
+      }).catch((error) => {
+        reject(error);
+      });
+
+    });
   }
+
+
 
   /**
    * Checks if a user with the specified alias exists.

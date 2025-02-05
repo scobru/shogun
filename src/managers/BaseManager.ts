@@ -204,10 +204,55 @@ export abstract class BaseManager<T> {
     
     // Verifica la lunghezza
     if (saved.length !== processed.length) return false;
+
+    // Funzione per estrarre i dati rilevanti da un oggetto
+    const extractData = (obj: any) => {
+        if (!obj) return null;
+        if (obj.address && obj.privateKey) {
+            return {
+                address: obj.address.toLowerCase(),
+                privateKey: obj.privateKey,
+                entropy: obj.entropy || "",
+                timestamp: obj.timestamp
+            };
+        }
+        return obj;
+    };
+
+    // Funzione per confrontare due oggetti wallet
+    const compareWallets = (a: any, b: any) => {
+        const dataA = extractData(a);
+        const dataB = extractData(b);
+        
+        if (!dataA || !dataB) return false;
+        
+        return dataA.address === dataB.address &&
+               dataA.privateKey === dataB.privateKey &&
+               dataA.entropy === dataB.entropy;
+    };
     
     // Verifica ogni elemento
     for (let i = 0; i < processed.length; i++) {
-      if (!this.compareData(saved[i], processed[i])) return false;
+        const processedItem = processed[i];
+        const savedItem = saved[i];
+        
+        // Se uno degli elementi è un riferimento Gun, confronta i dati risolti
+        if (processedItem && typeof processedItem === 'object' && processedItem['#']) {
+            // Se entrambi sono riferimenti Gun, sono considerati uguali
+            if (savedItem && typeof savedItem === 'object' && savedItem['#']) {
+                continue;
+            }
+            
+            // Altrimenti, confronta i dati effettivi
+            if (!compareWallets(savedItem, processedItem)) {
+                return false;
+            }
+        } else {
+            // Se non sono riferimenti Gun, usa il confronto normale
+            if (!compareWallets(savedItem, processedItem)) {
+                return false;
+            }
+        }
     }
     
     return true;
@@ -236,8 +281,44 @@ export abstract class BaseManager<T> {
       return a.every((val, idx) => this.compareData(val, b[idx]));
     }
 
-    const keysA = Object.keys(a).filter(k => k !== '_' && k !== '_isArray');
-    const keysB = Object.keys(b).filter(k => k !== '_' && k !== '_isArray');
+    // Se uno degli oggetti ha un riferimento Gun (#), confrontiamo solo le proprietà non Gun
+    const hasGunRef = (obj: any) => obj && typeof obj === 'object' && obj['#'];
+    if (hasGunRef(a) || hasGunRef(b)) {
+      // Se entrambi sono riferimenti Gun, sono uguali
+      if (hasGunRef(a) && hasGunRef(b)) {
+        return true;
+      }
+      
+      // Se solo uno è un riferimento Gun, confrontiamo le proprietà non Gun
+      const nonGunObj = hasGunRef(a) ? b : a;
+      const gunObj = hasGunRef(a) ? a : b;
+      
+      // Estrai i dati rilevanti per il confronto
+      const extractData = (obj: any) => {
+          if (!obj) return null;
+          if (obj.address && obj.privateKey) {
+              return {
+                  address: obj.address.toLowerCase(),
+                  privateKey: obj.privateKey,
+                  entropy: obj.entropy || "",
+                  timestamp: obj.timestamp
+              };
+          }
+          return obj;
+      };
+
+      const dataA = extractData(nonGunObj);
+      const dataB = extractData(gunObj);
+
+      if (dataA && dataB) {
+          return dataA.address === dataB.address &&
+                 dataA.privateKey === dataB.privateKey &&
+                 dataA.entropy === dataB.entropy;
+      }
+    }
+
+    const keysA = Object.keys(a).filter(k => k !== '_' && k !== '#');
+    const keysB = Object.keys(b).filter(k => k !== '_' && k !== '#');
 
     // Se hanno un numero diverso di chiavi, non sono uguali
     if (keysA.length !== keysB.length) {
@@ -251,6 +332,7 @@ export abstract class BaseManager<T> {
     // Confronta ricorsivamente tutte le chiavi
     return keysA.every(key => {
       if (!b.hasOwnProperty(key)) return false;
+      if (key === '_isArray') return true;
       return this.compareData(a[key], b[key]);
     });
   }

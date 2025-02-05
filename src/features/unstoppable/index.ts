@@ -10,43 +10,46 @@ import { EventEmitter } from 'events';
 
 (Gun as any).SEA = Sea;
 
-interface Admin {
+export interface Admin {
   pubKey: string;
   name: string;
 }
 
-interface Contact {
+export interface Contact {
   pubKey: string;
   alias: string;
   name: string;
   notifCount?: number;
 }
 
-interface Peer {
+
+export interface Peer {
   disabled?: boolean;
   joined?: boolean;
   alias: string;
   pubKey?: string;
   name?: string;
+
 }
 
-interface Peers {
+export interface Peers {
   [pubKey: string]: Peer;
 }
 
-interface Announcement extends Channel {
+export interface Announcement extends Channel {
   admins: { [pubKey: string]: Admin | 'disabled' };
   owner: string;
   rssLink?: string;
 }
 
-interface Channel {
+export interface Channel {
   key: string;
   name: string;
   userCount: number;
   latestMsg: null | string;
   peers: Peers;
   pair: unknown;
+
   notifCount?: number;
   isPrivate?: boolean;
   hash?: string;
@@ -55,21 +58,23 @@ interface Channel {
   kind?: string;
 }
 
-interface Message {
+export interface Message {
   time?: number;
   msg: any;
   owner?: string;
   userPub?: string;
   peerInfo?: string;
   link?: string;
+
 }
 
-interface Events {
+export interface Events {
   channels: Channel[];
   channelInvites: Channel[];
   channelMessages: Message[];
   contacts: Contact[];
   contactInvites: Contact[];
+
   contactMessages: Message[];
   announcements: Announcement[];
   announcementInvites: Announcement[];
@@ -78,10 +83,11 @@ interface Events {
   publicAnnouncements: Announcement[];
 }
 
-interface TypedEventEmitter<T> {
+export interface TypedEventEmitter<T> {
   on<K extends keyof T>(s: K, listener: (v: T[K]) => void);
   emit<K extends keyof T>(s: K, param: T[K]);
 }
+
 
 export default class UnstoppableChat {
   gun: any;
