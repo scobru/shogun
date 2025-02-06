@@ -3,7 +3,6 @@ import type { GunKeyPair } from "../interfaces/GunKeyPair";
 import { BaseManager } from "./BaseManager";
 import { log } from "../utils/log";
 
-
 /**
  * Main authentication manager handling GUN.js user operations and SEA (Security, Encryption, Authorization)
  * @class
@@ -307,7 +306,10 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    * @returns User's public key.
    * @throws Error on authentication failure or timeout.
    */
-  public async login(alias: string, passphrase: string): Promise<string | null> {
+  public async login(
+    alias: string,
+    passphrase: string
+  ): Promise<string | null> {
     console.info("*** Login...");
 
     if (this.user.is?.pub) {
@@ -320,13 +322,16 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     try {
       const result = await new Promise<string | null>((resolve, reject) => {
         this.user.auth(alias, passphrase, (ack: any) => {
-          
           if (ack.err) {
             if (ack.err.includes("Wrong user or password")) {
               console.info("*** Wrong user or password.");
               reject(new Error(ack.err));
-            } else if (ack.err.includes("User is already being created or authenticated")) {
-              console.info("*** User is already being created or authenticated.");
+            } else if (
+              ack.err.includes("User is already being created or authenticated")
+            ) {
+              console.info(
+                "*** User is already being created or authenticated."
+              );
               resolve(this.user.is?.pub || null);
             } else {
               reject(new Error(ack.err));
@@ -352,7 +357,7 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    * Terminates the current user session.
    */
   public logout(): void {
-    console.log('*** Logout...')
+    console.log("*** Logout...");
     this.user.leave();
     this.isAuthenticating = false;
   }
@@ -439,17 +444,7 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    */
   public async savePrivateData(data: any, path: string): Promise<void> {
     if (!this.user.is) throw new Error("Utente non autenticato");
-    return new Promise((resolve, reject) => {
-      this.savePrivateData(data, path).then(() => {
-        resolve(data);
-      }).catch((error) => {
-        reject(error);
-      });
-    });
-
-
-
-
+    await this.savePrivateData(data, path);
   }
 
   /**
@@ -460,16 +455,7 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    */
   public async getPrivateData(path: string): Promise<any> {
     if (!this.user._.sea) throw new Error("Utente non autenticato");
-    return new Promise((resolve, reject) => {
-      this.getPrivateData(path).then((data) => {
-        resolve(data);
-      }).catch((error) => {
-        reject(error);
-      });
-    });
-
-
-
+    await this.getPrivateData(path);
   }
 
   /**
@@ -480,16 +466,8 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    */
   public async savePublicData(data: any, path: string): Promise<void> {
     if (!this.user.is) throw new Error("Utente non autenticato");
-    return new Promise((resolve, reject) => {
-      const publicKey = this.getPublicKey();
-      this.savePublicData(data, path).then(() => {
-        resolve();
-      }).catch((error) => {
-        reject(error);
-      });
-    });
+    await this.savePublicData(data, path);
   }
-
 
   /**
    * Retrieves public user data of a given user.
@@ -498,13 +476,7 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    * @returns Stored data.
    */
   public async getPublicData(publicKey: string, path: string): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.getPublicData(publicKey, path).then((data) => {
-        resolve(data);
-      }).catch((error) => {
-        reject(error);
-      });
-    });
+    await this.getPublicData(publicKey, path);
   }
 
 
@@ -512,13 +484,7 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    * Deletes private user data at the specified path.
    */
   public async deletePrivateData(path: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.savePrivateData(null, path).then(() => {
-        resolve();
-      }).catch((error) => {
-        reject(error);
-      });
-    });
+    await this.savePrivateData(null, path);
   }
 
 
@@ -527,16 +493,8 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    * Deletes public user data at the specified path for the authenticated user.
    */
   public async deletePublicData(path: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.savePublicData(null, path).then(() => {
-        resolve(void 0);
-      }).catch((error) => {
-        reject(error);
-      });
-
-    });
+    await this.savePublicData(null, path);
   }
-
 
 
   /**
