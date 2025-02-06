@@ -23,25 +23,28 @@ export abstract class BaseManager<T> {
   /**
    * Salva i dati in modo privato
    */
-  protected async savePrivateData(data: T, path: string = ""): Promise<void> {
+  protected async savePrivateData(
+    data: T,
+    path: string = ""
+  ): Promise<boolean> {
     await this.ensureAuthenticated();
 
-    const processedData = Array.isArray(data) 
-      ? { 
+    const processedData = Array.isArray(data)
+      ? {
           _isArray: true,
           length: data.length,
           ...data.reduce((acc: any, item: any, index: number) => {
             acc[index] = item;
             return acc;
-          }, {})
+          }, {}),
         }
       : data;
 
     const maxRetries = 3;
     let currentRetry = 0;
 
-    const saveWithRetry = async (): Promise<void> => {
-      return new Promise<void>((resolve, reject) => {
+    const saveWithRetry = async (): Promise<boolean> => {
+      return new Promise<boolean>((resolve, reject) => {
         let resolved = false;
         let verifyAttempts = 0;
         const maxVerifyAttempts = 5;
@@ -59,10 +62,7 @@ export abstract class BaseManager<T> {
           }
         }, 30000);
 
-        const node = this.user
-          .get("private")
-          .get(this.storagePrefix)
-          .get(path);
+        const node = this.user.get("private").get(this.storagePrefix).get(path);
 
         const verifyData = () => {
           if (resolved) return;
@@ -80,17 +80,17 @@ export abstract class BaseManager<T> {
           // Funzione per caricare tutti i riferimenti in un oggetto
           const loadAllReferences = async (obj: any): Promise<any> => {
             if (!obj) return obj;
-            if (typeof obj !== 'object') return obj;
+            if (typeof obj !== "object") return obj;
 
             const result: any = Array.isArray(obj) ? [] : {};
             const promises: Promise<any>[] = [];
 
             for (const key in obj) {
-              if (key === '_' || key === '#') continue;
-              
-              if (obj[key] && typeof obj[key] === 'object' && obj[key]['#']) {
+              if (key === "_" || key === "#") continue;
+
+              if (obj[key] && typeof obj[key] === "object" && obj[key]["#"]) {
                 promises.push(
-                  loadReferencedData(obj[key]['#']).then(data => {
+                  loadReferencedData(obj[key]["#"]).then((data) => {
                     result[key] = data;
                   })
                 );
@@ -109,7 +109,7 @@ export abstract class BaseManager<T> {
             try {
               const cleanedData = this.cleanGunMetadata(savedData);
               const resolvedData = await loadAllReferences(cleanedData);
-              
+
               console.log("Verifying data:", {
                 attempt: verifyAttempts,
                 isNull: processedData === null,
@@ -118,29 +118,32 @@ export abstract class BaseManager<T> {
                 cleanedData: JSON.stringify(cleanedData),
                 resolvedData: JSON.stringify(resolvedData),
                 processedData: JSON.stringify(processedData),
-                matches: this.compareData(resolvedData, processedData)
+                matches: this.compareData(resolvedData, processedData),
               });
 
               if (processedData === null) {
                 if (this.isNullOrEmpty(resolvedData)) {
                   cleanup();
                   resolved = true;
-                  resolve();
+                  resolve(true);
                   return;
                 }
               } else if (savedData) {
                 if (processedData._isArray) {
-                  const isValid = this.compareArrayData(resolvedData, processedData);
+                  const isValid = this.compareArrayData(
+                    resolvedData,
+                    processedData
+                  );
                   if (isValid) {
                     cleanup();
                     resolved = true;
-                    resolve();
+                    resolve(true);
                     return;
                   }
                 } else if (this.compareData(resolvedData, processedData)) {
                   cleanup();
                   resolved = true;
-                  resolve();
+                  resolve(true);
                   return;
                 }
               }
@@ -180,81 +183,94 @@ export abstract class BaseManager<T> {
 
     while (currentRetry < maxRetries) {
       try {
-        await saveWithRetry();
-        return;
+        const result = await saveWithRetry();
+        if (result) {
+          return true;
+        }
       } catch (error) {
         currentRetry++;
         console.error(`Save attempt ${currentRetry} failed:`, error);
         await this.ensureAuthenticated();
-        
+
         if (currentRetry === maxRetries) {
           throw error;
         }
-        
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, currentRetry) * 3000));
+
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.pow(2, currentRetry) * 3000)
+        );
       }
     }
+
+    return false;
   }
 
   private compareArrayData(saved: any, processed: any): boolean {
     if (!saved || !processed || !processed._isArray) return false;
-    
+
     // Verifica che sia un array
-    if (!processed._isArray || typeof processed.length !== 'number') return false;
-    
+    if (!processed._isArray || typeof processed.length !== "number")
+      return false;
+
     // Verifica la lunghezza
     if (saved.length !== processed.length) return false;
 
     // Funzione per estrarre i dati rilevanti da un oggetto
     const extractData = (obj: any) => {
-        if (!obj) return null;
-        if (obj.address && obj.privateKey) {
-            return {
-                address: obj.address.toLowerCase(),
-                privateKey: obj.privateKey,
-                entropy: obj.entropy || "",
-                timestamp: obj.timestamp
-            };
-        }
-        return obj;
+      if (!obj) return null;
+      if (obj.address && obj.privateKey) {
+        return {
+          address: obj.address.toLowerCase(),
+          privateKey: obj.privateKey,
+          entropy: obj.entropy || "",
+          timestamp: obj.timestamp,
+        };
+      }
+      return obj;
     };
 
     // Funzione per confrontare due oggetti wallet
     const compareWallets = (a: any, b: any) => {
-        const dataA = extractData(a);
-        const dataB = extractData(b);
-        
-        if (!dataA || !dataB) return false;
-        
-        return dataA.address === dataB.address &&
-               dataA.privateKey === dataB.privateKey &&
-               dataA.entropy === dataB.entropy;
+      const dataA = extractData(a);
+      const dataB = extractData(b);
+
+      if (!dataA || !dataB) return false;
+
+      return (
+        dataA.address === dataB.address &&
+        dataA.privateKey === dataB.privateKey &&
+        dataA.entropy === dataB.entropy
+      );
     };
-    
+
     // Verifica ogni elemento
     for (let i = 0; i < processed.length; i++) {
-        const processedItem = processed[i];
-        const savedItem = saved[i];
-        
-        // Se uno degli elementi è un riferimento Gun, confronta i dati risolti
-        if (processedItem && typeof processedItem === 'object' && processedItem['#']) {
-            // Se entrambi sono riferimenti Gun, sono considerati uguali
-            if (savedItem && typeof savedItem === 'object' && savedItem['#']) {
-                continue;
-            }
-            
-            // Altrimenti, confronta i dati effettivi
-            if (!compareWallets(savedItem, processedItem)) {
-                return false;
-            }
-        } else {
-            // Se non sono riferimenti Gun, usa il confronto normale
-            if (!compareWallets(savedItem, processedItem)) {
-                return false;
-            }
+      const processedItem = processed[i];
+      const savedItem = saved[i];
+
+      // Se uno degli elementi è un riferimento Gun, confronta i dati risolti
+      if (
+        processedItem &&
+        typeof processedItem === "object" &&
+        processedItem["#"]
+      ) {
+        // Se entrambi sono riferimenti Gun, sono considerati uguali
+        if (savedItem && typeof savedItem === "object" && savedItem["#"]) {
+          continue;
         }
+
+        // Altrimenti, confronta i dati effettivi
+        if (!compareWallets(savedItem, processedItem)) {
+          return false;
+        }
+      } else {
+        // Se non sono riferimenti Gun, usa il confronto normale
+        if (!compareWallets(savedItem, processedItem)) {
+          return false;
+        }
+      }
     }
-    
+
     return true;
   }
 
@@ -262,10 +278,12 @@ export abstract class BaseManager<T> {
     // Gestione speciale per null/undefined
     if (a === null || a === undefined) return b === null || b === undefined;
     if (b === null || b === undefined) return false;
-    
+
     // Se uno dei due è null e l'altro è un oggetto vuoto, consideriamoli uguali
-    if ((a === null && Object.keys(b).length === 0) || 
-        (b === null && Object.keys(a).length === 0)) {
+    if (
+      (a === null && Object.keys(b).length === 0) ||
+      (b === null && Object.keys(a).length === 0)
+    ) {
       return true;
     }
 
@@ -273,7 +291,7 @@ export abstract class BaseManager<T> {
     if (typeof a !== typeof b) return false;
 
     // Per i tipi primitivi, confronto diretto
-    if (typeof a !== 'object') return a === b;
+    if (typeof a !== "object") return a === b;
 
     // Gestione speciale per array
     if (Array.isArray(a) && Array.isArray(b)) {
@@ -282,43 +300,45 @@ export abstract class BaseManager<T> {
     }
 
     // Se uno degli oggetti ha un riferimento Gun (#), confrontiamo solo le proprietà non Gun
-    const hasGunRef = (obj: any) => obj && typeof obj === 'object' && obj['#'];
+    const hasGunRef = (obj: any) => obj && typeof obj === "object" && obj["#"];
     if (hasGunRef(a) || hasGunRef(b)) {
       // Se entrambi sono riferimenti Gun, sono uguali
       if (hasGunRef(a) && hasGunRef(b)) {
         return true;
       }
-      
+
       // Se solo uno è un riferimento Gun, confrontiamo le proprietà non Gun
       const nonGunObj = hasGunRef(a) ? b : a;
       const gunObj = hasGunRef(a) ? a : b;
-      
+
       // Estrai i dati rilevanti per il confronto
       const extractData = (obj: any) => {
-          if (!obj) return null;
-          if (obj.address && obj.privateKey) {
-              return {
-                  address: obj.address.toLowerCase(),
-                  privateKey: obj.privateKey,
-                  entropy: obj.entropy || "",
-                  timestamp: obj.timestamp
-              };
-          }
-          return obj;
+        if (!obj) return null;
+        if (obj.address && obj.privateKey) {
+          return {
+            address: obj.address.toLowerCase(),
+            privateKey: obj.privateKey,
+            entropy: obj.entropy || "",
+            timestamp: obj.timestamp,
+          };
+        }
+        return obj;
       };
 
       const dataA = extractData(nonGunObj);
       const dataB = extractData(gunObj);
 
       if (dataA && dataB) {
-          return dataA.address === dataB.address &&
-                 dataA.privateKey === dataB.privateKey &&
-                 dataA.entropy === dataB.entropy;
+        return (
+          dataA.address === dataB.address &&
+          dataA.privateKey === dataB.privateKey &&
+          dataA.entropy === dataB.entropy
+        );
       }
     }
 
-    const keysA = Object.keys(a).filter(k => k !== '_' && k !== '#');
-    const keysB = Object.keys(b).filter(k => k !== '_' && k !== '#');
+    const keysA = Object.keys(a).filter((k) => k !== "_" && k !== "#");
+    const keysB = Object.keys(b).filter((k) => k !== "_" && k !== "#");
 
     // Se hanno un numero diverso di chiavi, non sono uguali
     if (keysA.length !== keysB.length) {
@@ -330,9 +350,9 @@ export abstract class BaseManager<T> {
     }
 
     // Confronta ricorsivamente tutte le chiavi
-    return keysA.every(key => {
+    return keysA.every((key) => {
       if (!b.hasOwnProperty(key)) return false;
-      if (key === '_isArray') return true;
+      if (key === "_isArray") return true;
       return this.compareData(a[key], b[key]);
     });
   }
@@ -340,7 +360,10 @@ export abstract class BaseManager<T> {
   /**
    * Salva i dati in modo pubblico
    */
-  protected async savePublicData(data: any, path: string = ""): Promise<void> {
+  protected async savePublicData(
+    data: any,
+    path: string = ""
+  ): Promise<boolean> {
     if (!this.user.is) {
       throw new Error("User not authenticated");
     }
@@ -361,7 +384,7 @@ export abstract class BaseManager<T> {
           if (resolved) return;
           resolved = true;
           if (ack.err) reject(new Error(ack.err));
-          else resolve();
+          else resolve(true);
         });
 
       // Timeout di sicurezza
@@ -379,14 +402,14 @@ export abstract class BaseManager<T> {
    */
   protected cleanGunMetadata<T>(data: any): T {
     if (!data) return data;
-    
+
     // Se è un oggetto, rimuovi i metadati di Gun
-    if (typeof data === 'object') {
+    if (typeof data === "object") {
       const cleaned = { ...data };
       delete cleaned._;
       return cleaned;
     }
-    
+
     return data;
   }
 
@@ -419,10 +442,7 @@ export abstract class BaseManager<T> {
           }
         }, 20000);
 
-        const node = this.user
-          .get("private")
-          .get(this.storagePrefix)
-          .get(path);
+        const node = this.user.get("private").get(this.storagePrefix).get(path);
 
         const attemptGet = () => {
           if (resolved) return;
@@ -435,7 +455,7 @@ export abstract class BaseManager<T> {
               cleanup();
               resolved = true;
 
-              if (data._isArray && typeof data.length === 'number') {
+              if (data._isArray && typeof data.length === "number") {
                 const arr = [];
                 for (let i = 0; i < data.length; i++) {
                   if (data[i] !== undefined) {
@@ -469,11 +489,10 @@ export abstract class BaseManager<T> {
 
         // Riautentichiamo l'utente se necessario
         await this.ensureAuthenticated();
-
       } catch (error) {
         console.error(`Get attempt ${currentRetry + 1} failed:`, error);
         currentRetry++;
-        
+
         // Riautentichiamo l'utente se necessario
         await this.ensureAuthenticated();
       }
@@ -482,7 +501,9 @@ export abstract class BaseManager<T> {
         return null;
       }
 
-      await new Promise(resolve => setTimeout(resolve, Math.pow(2, currentRetry) * 1000));
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.pow(2, currentRetry) * 1000)
+      );
     }
 
     return null;
@@ -491,7 +512,10 @@ export abstract class BaseManager<T> {
   /**
    * Recupera i dati pubblici
    */
-  protected async getPublicData(publicKey: string, path: string = ""): Promise<any> {
+  protected async getPublicData(
+    publicKey: string,
+    path: string = ""
+  ): Promise<any> {
     return new Promise((resolve) => {
       let resolved = false;
       this.gun
@@ -518,15 +542,15 @@ export abstract class BaseManager<T> {
   /**
    * Elimina i dati privati
    */
-  protected async deletePrivateData(path: string = ""): Promise<void> {
+  protected async deletePrivateData(path: string = ""): Promise<boolean> {
     // Verifichiamo l'autenticazione
     await this.ensureAuthenticated();
 
     const maxRetries = 3;
     let currentRetry = 0;
 
-    const deleteWithRetry = async (): Promise<void> => {
-      return new Promise<void>((resolve, reject) => {
+    const deleteWithRetry = async (): Promise<boolean> => {
+      return new Promise<boolean>((resolve, reject) => {
         let resolved = false;
         let verifyAttempts = 0;
         const maxVerifyAttempts = 5;
@@ -544,10 +568,7 @@ export abstract class BaseManager<T> {
           }
         }, 30000);
 
-        const node = this.user
-          .get("private")
-          .get(this.storagePrefix)
-          .get(path);
+        const node = this.user.get("private").get(this.storagePrefix).get(path);
 
         // Funzione per verificare l'eliminazione
         const verifyDelete = () => {
@@ -560,14 +581,17 @@ export abstract class BaseManager<T> {
             console.log("Verifying deletion:", {
               attempt: verifyAttempts,
               hasData: !!data,
-              path: path
+              path: path,
             });
 
             // Se i dati sono null o undefined, l'eliminazione è riuscita
-            if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
+            if (
+              !data ||
+              (typeof data === "object" && Object.keys(data).length === 0)
+            ) {
               cleanup();
               resolved = true;
-              resolve();
+              resolve(true);
               return;
             }
 
@@ -601,29 +625,33 @@ export abstract class BaseManager<T> {
 
     while (currentRetry < maxRetries) {
       try {
-        await deleteWithRetry();
-        return;
+        const result = await deleteWithRetry();
+        return result;
       } catch (error) {
         currentRetry++;
+
         console.error(`Delete attempt ${currentRetry} failed:`, error);
-        
+
         // Riautentichiamo l'utente se necessario
         await this.ensureAuthenticated();
-        
+
         if (currentRetry === maxRetries) {
           throw error;
         }
-        
+
         // Attesa esponenziale tra i tentativi
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, currentRetry) * 2000));
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.pow(2, currentRetry) * 2000)
+        );
       }
     }
+    return false;
   }
 
   /**
    * Elimina i dati pubblici
    */
-  protected async deletePublicData(path: string = ""): Promise<void> {
+  protected async deletePublicData(path: string = ""): Promise<boolean> {
     if (!this.user.is) {
       throw new Error("User not authenticated");
     }
@@ -668,14 +696,17 @@ export abstract class BaseManager<T> {
           console.log("Verifying public data deletion:", {
             attempt: verifyAttempts,
             hasData: !!data,
-            path: path
+            path: path,
           });
 
           // Se i dati sono null o undefined, l'eliminazione è riuscita
-          if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
+          if (
+            !data ||
+            (typeof data === "object" && Object.keys(data).length === 0)
+          ) {
             cleanup();
             resolved = true;
-            resolve();
+            resolve(true);
             return;
           }
 
@@ -693,7 +724,7 @@ export abstract class BaseManager<T> {
       // Eliminazione dati
       node.put(null, (ack: any) => {
         if (resolved) return;
-        
+
         if (ack && (ack as any).err) {
           cleanup();
           resolved = true;
@@ -748,10 +779,10 @@ export abstract class BaseManager<T> {
   private async ensureAuthenticated(): Promise<void> {
     if (!this.user.is || !this.user._.sea) {
       console.log("User not authenticated, attempting to re-authenticate...");
-      
+
       // Attendiamo un momento prima di tentare la riautenticazione
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
       if (!this.user.is || !this.user._.sea) {
         throw new Error("User not authenticated and re-authentication failed");
       }
@@ -760,7 +791,11 @@ export abstract class BaseManager<T> {
 
   protected isNullOrEmpty(data: any): boolean {
     if (data === null || data === undefined) return true;
-    if (typeof data === 'object' && Object.keys(data).filter(k => k !== '_').length === 0) return true;
+    if (
+      typeof data === "object" &&
+      Object.keys(data).filter((k) => k !== "_").length === 0
+    )
+      return true;
     return false;
   }
 }

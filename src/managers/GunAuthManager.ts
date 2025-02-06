@@ -442,10 +442,15 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    * @param path Storage path.
    * @throws Error if user is not authenticated.
    */
-  public async savePrivateData(data: any, path: string): Promise<void> {
+  public async savePrivateData(data: any, path: string): Promise<boolean> {
     if (!this.user.is) throw new Error("Utente non autenticato");
-    return await this.savePrivateData(data, path);
+    const result = await this.savePrivateData(data, path);
+    if (result) {
+      return true;
+    }
+    return false;
   }
+
 
   /**
    * Retrieves private user data.
@@ -464,10 +469,16 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    * @param path Storage path.
    * @throws Error if user is not authenticated.
    */
-  public async savePublicData(data: any, path: string): Promise<void> {
+  public async savePublicData(data: any, path: string): Promise<boolean> {
     if (!this.user.is) throw new Error("Utente non autenticato");
-    return await this.savePublicData(data, path);
+    const result = await this.savePublicData(data, path);
+    if (result) {
+      return true;
+    }
+    return false;
   }
+
+
 
 
   /**
@@ -486,10 +497,14 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
   /**
    * Deletes private user data at the specified path.
    */
-  public async deletePrivateData(path: string): Promise<void> {
-    if (!this.user.is) throw new Error("Utente non autenticato");
-    return await this.savePrivateData(null, path);
+  public async deletePrivateData(path: string): Promise<boolean> {
+    const result = await this.savePrivateData(null, path);
+    if (result) {
+      return true;
+    }
+    return false;
   }
+
 
 
 
@@ -497,9 +512,14 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
   /**
    * Deletes public user data at the specified path for the authenticated user.
    */
-  public async deletePublicData(path: string): Promise<void> {
-    return await this.savePublicData(null, path);
+  public async deletePublicData(path: string): Promise<boolean> {
+    const result = await this.savePublicData(null, path);
+    if (result) {
+      return true;
+    }
+    return false;
   }
+
 
 
   /**

@@ -36,8 +36,6 @@ describe("GunAuthManager", function () {
       // Inizializza GunAuthManager
       gunAuthManager = new GunAuthManager(gun, APP_KEY_PAIR);
 
-      // Attendi che il server sia pronto
-
       // Inizializza il listener di autenticazione
       await gunAuthManager.authListener();
 
@@ -273,8 +271,11 @@ describe("GunAuthManager", function () {
       const data = { secret: "This is private data" };
       const path = "secrets/data1";
 
-      await gunAuthManager.savePrivateData(data, path);
+      const result = await gunAuthManager.savePrivateData(data, path);
+      expect(result).to.be.true;
+
       const retrievedData = await gunAuthManager.getPrivateData(path);
+      expect(retrievedData).to.be.an("object");
 
       // Verifica solo il contenuto effettivo ignorando i metadati GUN
       expect(retrievedData).to.have.nested.property("secret", data.secret);
