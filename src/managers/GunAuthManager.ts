@@ -459,7 +459,20 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    */
   public async getPrivateData(path: string): Promise<any> {
     if (!this.user._.sea) throw new Error("Utente non autenticato");
-    return await this.getPrivateData(path);
+    const user = this.gun.user();
+    return new Promise((resolve, reject) => {
+      user.get('private').get(this.storagePrefix).get(path).once((data: any) => {
+        if (data === undefined) {
+          resolve(null);
+        } else {
+          // Rimuoviamo i metadati di Gun e processiamo i dati
+          const cleanedData = this.cleanGunMetadata(data);
+          const processedData = this.processRetrievedData(cleanedData);
+          // Se i dati sono nulli dopo il processing, restituiamo un oggetto vuoto
+          resolve(processedData || {});
+        }
+      });
+    });
   }
 
   /**

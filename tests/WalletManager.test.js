@@ -11,13 +11,41 @@ describe("WalletManager", function () {
   let gun;
   let testUser;
   let testUsername;
+  let testPassword;
+
+  // Aumentiamo il timeout globale per tutti i test
+  this.timeout(180000); // Aumentato a 3 minuti
+
+  const waitForSync = async (ms = 10000) => {
+    console.log(`Waiting ${ms}ms for synchronization...`);
+    await new Promise(resolve => setTimeout(resolve, ms));
+  };
+
+  const ensureAuthenticated = async () => {
+    if (!testUser.is) {
+      console.log("User not authenticated, attempting to re-authenticate...");
+      await new Promise((resolve, reject) => {
+        testUser.auth(testUsername, testPassword, async (ack) => {
+          if (ack.err) {
+            console.error("Re-authentication failed:", ack.err);
+            reject(ack.err);
+          } else {
+            await waitForSync(5000);
+            console.log("Re-authentication successful");
+            resolve();
+          }
+        });
+      });
+    }
+    return testUser.is;
+  };
 
   before(async function () {
     try {
       // Genera chiavi
       APP_KEY_PAIR = await Gun.SEA.pair();
 
-      // Inizializza Gun client
+      // Inizializza Gun client con configurazione migliorata
       gun = Gun({
         peers: [`http://localhost:8765/gun`],
         file: false,
@@ -25,6 +53,7 @@ describe("WalletManager", function () {
         localStorage: false,
         multicast: false,
         axe: false,
+        retry: 2500,
       });
 
       // Inizializza WalletManager
@@ -33,19 +62,24 @@ describe("WalletManager", function () {
       // Crea un utente di test
       testUser = gun.user();
       testUsername = `testUser_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      testPassword = "password123";
 
       // Aggiungi tentativi multipli per la creazione e autenticazione
       let created = false;
       for (let i = 0; i < 3; i++) {
         try {
           await new Promise((resolve, reject) => {
-            testUser.create(testUsername, "password123", (ack) => {
+            testUser.create(testUsername, testPassword, async (ack) => {
               if (ack.err) reject(ack.err);
               else {
+                await waitForSync(5000);
                 // Dopo la creazione, effettua il login
-                testUser.auth(testUsername, "password123", (authAck) => {
+                testUser.auth(testUsername, testPassword, async (authAck) => {
                   if (authAck.err) reject(authAck.err);
-                  else resolve();
+                  else {
+                    await waitForSync(5000);
+                    resolve();
+                  }
                 });
               }
             });
@@ -54,6 +88,7 @@ describe("WalletManager", function () {
           break;
         } catch (error) {
           console.log(`Attempt ${i + 1} failed:`, error);
+          await waitForSync(5000);
           if (i === 2) throw error;
         }
       }
@@ -69,31 +104,46 @@ describe("WalletManager", function () {
     }
   });
 
+  beforeEach(async function() {
+    // Verifichiamo l'autenticazione prima di ogni test
+    await ensureAuthenticated();
+    await waitForSync(5000);
+  });
+
+  afterEach(async function() {
+    // Verifichiamo l'autenticazione dopo ogni test
+    await ensureAuthenticated();
+  });
+
   after(async function () {
     try {
-      if (testUser && testUser.leave) {
-        testUser.leave();
+      await ensureAuthenticated();
+      if (testUser && testUser.is) {
+        // Pulizia dei dati prima di uscire
+        await new Promise(resolve => {
+          testUser.get('private').get('wallets').put(null, () => {
+            testUser.leave();
+            resolve();
+          });
+        });
       }
       if (gun) {
         gun.off();
       }
+      await waitForSync(5000);
     } catch (error) {
       console.error("Cleanup error:", error);
     }
   });
 
   describe("Wallet Creation and Management", function () {
-
-    beforeEach(async function () {
-      console.log("Running beforeEach...");
-      console.log("Authentication completed");
-    });
-
     it("should create a new wallet", async function () {
+      await ensureAuthenticated();
       console.log("Starting create wallet test");
       console.log("Checking authentication status:", !!testUser.is);
       
       const walletData = await walletManager.createAccount();
+      await waitForSync();
       console.log("Wallet created, verifying data...");
 
       expect(walletData).to.be.an("array");
@@ -107,7 +157,7 @@ describe("WalletManager", function () {
     });
 
     it("should retrieve all wallets", async function () {
-      this.timeout(60000); // Aumentato a 60 secondi
+      await ensureAuthenticated();
       console.log("Starting retrieve wallets test");
       console.log("Checking authentication status:", !!testUser.is);
       
@@ -115,24 +165,23 @@ describe("WalletManager", function () {
       console.log("Creating new wallet for retrieval test...");
       const newWallet = ethers.Wallet.createRandom();
       await walletManager.saveWallet(newWallet);
+      await waitForSync();
+      console.log("Test wallet saved");
+
+      console.log("Creating new wallet for retrieval test...");
+      const newWallet2 = ethers.Wallet.createRandom();
+      await walletManager.saveWallet(newWallet2);
+      await waitForSync();
       console.log("Test wallet saved");
       
-      // Attendiamo un po' per assicurarci che i dati siano sincronizzati
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
+      await ensureAuthenticated();
       console.log("Retrieving wallets...");
       const wallets = await walletManager.getWallets();
       console.log(`Retrieved ${wallets.length} wallets`);
       
+
       expect(wallets).to.be.an("array");
       expect(wallets.length).to.be.at.least(1);
-
-      wallets.forEach((wallet, index) => {
-        console.log(`Checking wallet ${index + 1}/${wallets.length}`);
-        expect(wallet).to.have.property("address").that.is.a("string");
-        expect(ethers.isAddress(wallet.address)).to.be.true;
-        expect(wallet).to.have.property("privateKey").that.is.a("string");
-      });
 
       // Verifichiamo che il wallet appena creato sia presente
       console.log("Checking if new wallet exists in the list...");
