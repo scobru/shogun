@@ -94,11 +94,6 @@ export abstract class BaseManager<T> {
         .once((data: any) => {
           resolve(this.cleanGunMetadata(data));
         });
-
-
-      setTimeout(() => {
-        reject(new Error("Operation timed out"));
-      }, 5000);
     });
   }
 
