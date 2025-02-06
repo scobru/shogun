@@ -444,7 +444,7 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    */
   public async savePrivateData(data: any, path: string): Promise<void> {
     if (!this.user.is) throw new Error("Utente non autenticato");
-    await this.savePrivateData(data, path);
+    return await this.savePrivateData(data, path);
   }
 
   /**
@@ -455,7 +455,7 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    */
   public async getPrivateData(path: string): Promise<any> {
     if (!this.user._.sea) throw new Error("Utente non autenticato");
-    await this.getPrivateData(path);
+    return await this.getPrivateData(path);
   }
 
   /**
@@ -466,8 +466,9 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    */
   public async savePublicData(data: any, path: string): Promise<void> {
     if (!this.user.is) throw new Error("Utente non autenticato");
-    await this.savePublicData(data, path);
+    return await this.savePublicData(data, path);
   }
+
 
   /**
    * Retrieves public user data of a given user.
@@ -476,16 +477,20 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    * @returns Stored data.
    */
   public async getPublicData(publicKey: string, path: string): Promise<any> {
-    await this.getPublicData(publicKey, path);
+    if (!this.user.is) throw new Error("Utente non autenticato");
+    return await this.getPublicData(publicKey, path);
   }
+
 
 
   /**
    * Deletes private user data at the specified path.
    */
   public async deletePrivateData(path: string): Promise<void> {
-    await this.savePrivateData(null, path);
+    if (!this.user.is) throw new Error("Utente non autenticato");
+    return await this.savePrivateData(null, path);
   }
+
 
 
 
@@ -493,7 +498,7 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    * Deletes public user data at the specified path for the authenticated user.
    */
   public async deletePublicData(path: string): Promise<void> {
-    await this.savePublicData(null, path);
+    return await this.savePublicData(null, path);
   }
 
 
