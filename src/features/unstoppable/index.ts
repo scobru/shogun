@@ -88,7 +88,6 @@ export interface TypedEventEmitter<T> {
   emit<K extends keyof T>(s: K, param: T[K]);
 }
 
-
 export default class UnstoppableChat {
   gun: any;
   publicName: string | null;
