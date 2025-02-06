@@ -254,7 +254,6 @@ export class WalletManager extends BaseManager<WalletData[]> {
    * @throws {Error} - If the user is not authenticated or if wallet saving fails
    */
   public async saveWallet(wallet: Wallet): Promise<void> {
-    this.checkAuthentication();
 
     if (!validateEthereumAddress(wallet.address)) {
       throw new ValidationError("Invalid Ethereum address");

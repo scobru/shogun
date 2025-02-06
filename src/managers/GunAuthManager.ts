@@ -444,13 +444,12 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    */
   public async savePrivateData(data: any, path: string): Promise<boolean> {
     if (!this.user.is) throw new Error("Utente non autenticato");
-    const result = await this.savePrivateData(data, path);
+    const result = await super.savePrivateData(data, path);
     if (result) {
       return true;
     }
     return false;
   }
-
 
   /**
    * Retrieves private user data.
@@ -478,9 +477,6 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     return false;
   }
 
-
-
-
   /**
    * Retrieves public user data of a given user.
    * @param publicKey Public key of the user whose data to retrieve.
@@ -491,8 +487,6 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     if (!this.user.is) throw new Error("Utente non autenticato");
     return await this.getPublicData(publicKey, path);
   }
-
-
 
   /**
    * Deletes private user data at the specified path.
@@ -505,10 +499,6 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     return false;
   }
 
-
-
-
-
   /**
    * Deletes public user data at the specified path for the authenticated user.
    */
@@ -519,8 +509,6 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     }
     return false;
   }
-
-
 
   /**
    * Checks if a user with the specified alias exists.
