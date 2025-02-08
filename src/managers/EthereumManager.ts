@@ -12,6 +12,7 @@ export class EthereumManager extends BaseManager<GunKeyPair> {
   private customProvider: ethers.JsonRpcProvider | null = null;
   private customWallet: ethers.Wallet | null = null;
   private MESSAGE_TO_SIGN = "I Love Shogun!";
+  private readonly OPERATION_TIMEOUT = 60000; // 60 secondi
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
     super(gun, APP_KEY_PAIR);
@@ -66,21 +67,26 @@ export class EthereumManager extends BaseManager<GunKeyPair> {
    * Crea un nuovo account Ethereum
    */
   public async createAccount(): Promise<GunKeyPair> {
-    try {
-      const signer = await this.getSigner();
-      const address = await signer.getAddress();
+    return new Promise(async (resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error("Operation timed out"));
+      }, this.OPERATION_TIMEOUT);
 
-      if (!address || !address.startsWith("0x")) {
-        throw new ValidationError("Indirizzo Ethereum non valido");
-      }
+      try {
+        const signer = await this.getSigner();
+        const address = await signer.getAddress();
 
-      const signature = await signer.signMessage(this.MESSAGE_TO_SIGN);
-      const password = await this.generatePassword(signature);
+        if (!address || !address.startsWith("0x")) {
+          throw new Error("Invalid Ethereum address");
+        }
 
-      const username = address.toLowerCase();
+        const signature = await signer.signMessage(this.MESSAGE_TO_SIGN);
+        const password = await this.generatePassword(signature);
+        const username = address.toLowerCase();
 
-      return new Promise((resolve, reject) => {
         this.user.create(username, password, async (ack: any) => {
+          clearTimeout(timeoutId);
+          
           if (ack.err) {
             reject(new Error(ack.err));
             return;
@@ -95,19 +101,12 @@ export class EthereumManager extends BaseManager<GunKeyPair> {
           } catch (error) {
             reject(error);
           }
-
         });
-      });
-    } catch (error) {
-      if (error instanceof AuthenticationError || error instanceof ValidationError) {
-        throw error;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        reject(error);
       }
-      throw new AuthenticationError(
-        `Errore durante la creazione dell'account Ethereum: ${
-          error instanceof Error ? error.message : "Errore sconosciuto"
-        }`
-      );
-    }
+    });
   }
 
   /**

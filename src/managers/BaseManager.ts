@@ -223,15 +223,141 @@ export abstract class BaseManager<T> {
   /**
    * Elimina i dati privati
    */
-  protected async deletePrivateData(path: string = ""): Promise<boolean> {
-    return this.savePrivateData(null as any, path);
+  protected async deletePrivateData(path?: string): Promise<void> {
+    if (!this.user.is) {
+      throw new Error("User not authenticated");
+    }
+
+    const publicKey = this.user.is.pub;
+    if (!publicKey) {
+      throw new Error("Public key not found");
+    }
+
+    return new Promise((resolve, reject) => {
+      let resolved = false;
+      let verifyAttempts = 0;
+      const maxVerifyAttempts = 5;
+      let verifyInterval: NodeJS.Timeout;
+
+      const cleanup = () => {
+        clearTimeout(timeoutId);
+        clearInterval(verifyInterval);
+      };
+
+      const timeoutId = setTimeout(() => {
+        if (!resolved) {
+          cleanup();
+          resolved = true;
+          reject(new Error("Delete operation timed out"));
+        }
+      }, 30000);
+
+      const node = this.gun
+        .get(`~${publicKey}`)
+        .get("private")
+        .get(this.storagePrefix)
+        .get(path || "");
+
+      node.put(null, (ack: any) => {
+        if (ack.err) {
+          cleanup();
+          reject(new Error(ack.err));
+        } else {
+          // Verifica che i dati siano stati effettivamente eliminati
+          verifyInterval = setInterval(async () => {
+            verifyAttempts++;
+            if (verifyAttempts > maxVerifyAttempts) {
+              cleanup();
+              reject(new Error("Data verification failed - max attempts reached"));
+              return;
+            }
+
+            node.once((data: any) => {
+              if (data === null) {
+                // I dati sono stati eliminati con successo
+                cleanup();
+                if (!resolved) {
+                  resolved = true;
+                  resolve();
+                }
+              } else {
+                console.warn(`Attempt ${verifyAttempts}: Data still exists, waiting...`);
+              }
+            });
+          }, 2000); // Verifica ogni 2 secondi
+        }
+      });
+    });
   }
 
   /**
    * Elimina i dati pubblici
    */
-  protected async deletePublicData(path: string = ""): Promise<boolean> {
-    return this.savePublicData(null, path);
+  protected async deletePublicData(path?: string): Promise<void> {
+    if (!this.user.is) {
+      throw new Error("User not authenticated");
+    }
+
+    const publicKey = this.user.is.pub;
+    if (!publicKey) {
+      throw new Error("Public key not found");
+    }
+
+    return new Promise((resolve, reject) => {
+      let resolved = false;
+      let verifyAttempts = 0;
+      const maxVerifyAttempts = 5;
+      let verifyInterval: NodeJS.Timeout;
+
+      const cleanup = () => {
+        clearTimeout(timeoutId);
+        clearInterval(verifyInterval);
+      };
+
+      const timeoutId = setTimeout(() => {
+        if (!resolved) {
+          cleanup();
+          resolved = true;
+          reject(new Error("Delete operation timed out"));
+        }
+      }, 30000);
+
+      const node = this.gun
+        .get(`~${publicKey}`)
+        .get("public")
+        .get(this.storagePrefix)
+        .get(path || "");
+
+      node.put(null, (ack: any) => {
+        if (ack.err) {
+          cleanup();
+          reject(new Error(ack.err));
+        } else {
+          // Verifica che i dati siano stati effettivamente eliminati
+          verifyInterval = setInterval(async () => {
+            verifyAttempts++;
+            if (verifyAttempts > maxVerifyAttempts) {
+              cleanup();
+              reject(new Error("Data verification failed - max attempts reached"));
+              return;
+            }
+
+            node.once((data: any) => {
+              if (data === null) {
+                // I dati sono stati eliminati con successo
+                cleanup();
+                if (!resolved) {
+                  resolved = true;
+                  resolve();
+                }
+              } else {
+                console.warn(`Attempt ${verifyAttempts}: Data still exists, waiting...`);
+              }
+            });
+          }, 2000); // Verifica ogni 2 secondi
+        }
+      });
+    });
   }
 
   protected isNullOrEmpty(data: any): boolean {

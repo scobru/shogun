@@ -160,34 +160,34 @@ describe("WalletManager", function () {
       await ensureAuthenticated();
       console.log("Starting retrieve wallets test");
       console.log("Checking authentication status:", !!testUser.is);
-      
+
       // Prima creiamo un nuovo wallet
       console.log("Creating new wallet for retrieval test...");
       const newWallet = ethers.Wallet.createRandom();
       await walletManager.saveWallet(newWallet);
       await waitForSync();
-      console.log("Test wallet saved");
+      console.log("Test wallet saved with address:", newWallet.address.toLowerCase());
 
       console.log("Creating new wallet for retrieval test...");
       const newWallet2 = ethers.Wallet.createRandom();
       await walletManager.saveWallet(newWallet2);
       await waitForSync();
-      console.log("Test wallet saved");
-      
+      console.log("Test wallet saved with address:", newWallet2.address.toLowerCase());
+
       await ensureAuthenticated();
       console.log("Retrieving wallets...");
       const wallets = await walletManager.getWallets();
       console.log(`Retrieved ${wallets.length} wallets`);
-      
 
       expect(wallets).to.be.an("array");
       expect(wallets.length).to.be.at.least(1);
 
       // Verifichiamo che il wallet appena creato sia presente
       console.log("Checking if new wallet exists in the list...");
-      const foundWallet = wallets.find(w => 
+      const foundWallet = wallets.find(w =>
         w.address.toLowerCase() === newWallet.address.toLowerCase()
       );
+      console.log("Found wallet:", foundWallet);
       expect(foundWallet, "New wallet not found in the list").to.not.be.undefined;
       console.log("Wallet retrieval test completed successfully");
     });

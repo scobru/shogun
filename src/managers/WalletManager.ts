@@ -20,6 +20,18 @@ try {
   cryptoModule = null;
 }
 
+// Aggiungiamo alcune interfacce di supporto
+interface WalletDataArray {
+  _isArray: boolean;
+  length: number;
+  [index: number]: WalletData;
+}
+
+interface ExtendedWallet extends Wallet {
+  entropy: string;
+  timestamp: number;
+}
+
 export class WalletManager extends BaseManager<WalletData[]> {
   protected storagePrefix = "wallets";
 
@@ -59,12 +71,24 @@ export class WalletManager extends BaseManager<WalletData[]> {
       };
 
       console.log("Saving wallet with address:", walletData.address);
-      await this.saveWallet(new Wallet(walletData.privateKey));
+      
+      // Salva il wallet con retry
+      let retryCount = 0;
+      const maxRetries = 3;
+      let saveSuccess = false;
 
-      // Verifichiamo che il wallet sia stato salvato correttamente
-      const savedWallets = await this.getPrivateData("wallets");
-      if (!savedWallets) {
-        throw new Error("Failed to verify wallet was saved");
+      while (retryCount < maxRetries && !saveSuccess) {
+        try {
+          await this.saveWallet(new Wallet(walletData.privateKey));
+          saveSuccess = true;
+        } catch (error) {
+          console.warn(`Retry ${retryCount + 1} failed:`, error);
+          retryCount++;
+          if (retryCount === maxRetries) {
+            throw error;
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
 
       console.log("Wallet saved successfully");
@@ -163,9 +187,7 @@ export class WalletManager extends BaseManager<WalletData[]> {
    * @returns {Promise<Array<Wallet & { entropy?: string; timestamp?: number }>>} - An array of wallets with additional information
    * @throws {Error} - If wallet data retrieval fails
    */
-  public async getWallets(): Promise<
-    Array<Wallet & { entropy?: string; timestamp?: number }>
-  > {
+  public async getWallets(): Promise<ExtendedWallet[]> {
     try {
       const walletData = await this.getPrivateData("wallets");
 
@@ -174,57 +196,62 @@ export class WalletManager extends BaseManager<WalletData[]> {
         return [];
       }
 
-      // Convertiamo i dati in array con type guard
+      // Miglioriamo la gestione dell'array/oggetto
       let walletsArray: WalletData[] = [];
-      if (typeof walletData === 'object') {
-        const entries = Object.entries(walletData)
-          .filter(([key]) => key !== 'length' && !isNaN(Number(key)));
-        
-        walletsArray = entries
-          .map(([_, value]) => value)
-          .filter((v): v is WalletData => {
-            return v !== null && 
-                   typeof v === 'object' && 
-                   'address' in v && 
-                   'privateKey' in v;
-          });
+      
+      if (Array.isArray(walletData)) {
+        walletsArray = walletData;
+      } else if (
+        typeof walletData === 'object' && 
+        walletData !== null && 
+        'length' in walletData && 
+        '_isArray' in walletData
+      ) {
+        // Se è un oggetto array-like, convertiamo in array
+        const arrayData = walletData as WalletDataArray;
+        const length = arrayData.length || 0;
+        for (let i = 0; i < length; i++) {
+          if (arrayData[i]) {
+            walletsArray.push(arrayData[i]);
+          }
+        }
       }
 
-      console.log("Retrieved wallets data:", walletsArray);
-
-      // Creiamo le istanze dei wallet
+      // Filtriamo e mappiamo i wallet validi
       const wallets = walletsArray
-        .filter((w: WalletData) => {
-          if (!w || !w.privateKey || !w.address) {
-            console.log("Invalid wallet data:", w);
-            return false;
-          }
-          return true;
+        .filter((w): w is WalletData => {
+          return w && typeof w === 'object' && 
+                 'privateKey' in w && 
+                 'address' in w &&
+                 typeof w.privateKey === 'string' &&
+                 typeof w.address === 'string';
         })
-        .map((w: WalletData) => {
+        .map(w => {
           try {
             const wallet = new Wallet(w.privateKey);
             if (wallet.address.toLowerCase() !== w.address.toLowerCase()) {
               console.error("Address mismatch for wallet:", w.address);
               return null;
             }
-
-            (wallet as any).entropy = w.entropy || "";
-            (wallet as any).timestamp = w.timestamp || Date.now();
-
-            return wallet as Wallet & { entropy?: string; timestamp?: number };
+            
+            // Creiamo un wallet esteso con proprietà richieste
+            const extendedWallet: ExtendedWallet = Object.assign(wallet, {
+              entropy: w.entropy || "",
+              timestamp: w.timestamp || Date.now()
+            });
+            
+            return extendedWallet;
           } catch (error) {
             console.error("Error creating wallet instance:", error);
             return null;
           }
         })
-        .filter((w): w is Wallet & { entropy?: string; timestamp?: number } => w !== null);
+        .filter((w): w is ExtendedWallet => w !== null);
 
-      console.log("Processed wallets:", wallets.length);
       return wallets;
     } catch (error) {
       console.error("Error retrieving wallets:", error);
-      throw new Error(`Failed to retrieve wallets: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
     }
   }
 
@@ -250,44 +277,41 @@ export class WalletManager extends BaseManager<WalletData[]> {
    * @throws {Error} - If the user is not authenticated or if wallet saving fails
    */
   public async saveWallet(wallet: Wallet): Promise<void> {
-    if (!validateEthereumAddress(wallet.address)) {
-      throw new Error("Invalid Ethereum address");
-    }
-    if (!validatePrivateKey(wallet.privateKey)) {
-      throw new Error("Invalid private key");
+    if (!wallet.address || !wallet.privateKey) {
+      throw new Error("Invalid wallet data");
     }
 
     const walletData: WalletData = {
       address: wallet.address.toLowerCase(),
       privateKey: wallet.privateKey,
-      entropy: (wallet as any).entropy || "",
-      timestamp: Date.now(),
+      entropy: (wallet as ExtendedWallet).entropy || "",
+      timestamp: (wallet as ExtendedWallet).timestamp || Date.now()
     };
 
     try {
       await this.ensureAuthenticated();
-      
+
+      // Recupera i wallet esistenti o inizializza un array vuoto
       let existingWallets: WalletData[] = [];
       const existingData = await this.getPrivateData("wallets");
       
       if (existingData) {
         if (Array.isArray(existingData)) {
-          existingWallets = existingData.filter(w => w && w.address && w.privateKey);
-        } else if (typeof existingData === 'object') {
-          // Correggiamo il tipo con type guard
-          const values = Object.values(existingData)
-            .filter((v): v is WalletData => {
-              return v !== null && 
-                     typeof v === 'object' && 
-                     'address' in v && 
-                     'privateKey' in v;
-            });
-          existingWallets = values;
+          existingWallets = existingData;
+        } else if (typeof existingData === 'object' && existingData !== null) {
+          // Gestisce il caso di oggetto array-like
+          const length = (existingData as WalletDataArray).length || 0;
+          for (let i = 0; i < length; i++) {
+            if (existingData[i]) {
+              existingWallets.push(existingData[i]);
+            }
+          }
         }
       }
 
-      const existingIndex = existingWallets.findIndex(
-        (w) => w.address.toLowerCase() === walletData.address.toLowerCase()
+      // Aggiungi o aggiorna il wallet
+      const existingIndex = existingWallets.findIndex(w => 
+        w.address.toLowerCase() === walletData.address.toLowerCase()
       );
 
       if (existingIndex === -1) {
@@ -296,27 +320,51 @@ export class WalletManager extends BaseManager<WalletData[]> {
         existingWallets[existingIndex] = walletData;
       }
 
-      // Convertiamo l'array in un oggetto mantenendo la struttura array-like
-      const walletObject = {
-        ...existingWallets.reduce((acc, wallet, index) => {
-          acc[index] = wallet;
-          return acc;
-        }, {} as Record<number, WalletData>),
-        length: existingWallets.length,
-        _isArray: true
-      };
+      // Salva l'array aggiornato
+      await this.savePrivateData(existingWallets, "wallets");
 
-      console.log("Saving wallet data:", walletObject);
-      // Ora passiamo l'array originale invece dell'oggetto
-      const saveResult = await this.savePrivateData(existingWallets, "wallets");
-      if (!saveResult) {
-        throw new Error("Failed to save wallet data");
+      // Verifica il salvataggio con retry
+      let retryCount = 0;
+      const maxRetries = 3;
+      let walletSaved = false;
+
+      while (retryCount < maxRetries && !walletSaved) {
+        try {
+          // Attendi un po' per permettere la propagazione dei dati
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          const savedWallets = await this.getPrivateData("wallets");
+          if (!savedWallets) {
+            console.warn(`Retry ${retryCount + 1}: No wallets found`);
+            retryCount++;
+            continue;
+          }
+
+          const savedWalletsArray = Array.isArray(savedWallets) ? savedWallets : [savedWallets];
+          walletSaved = savedWalletsArray.some(w => 
+            w && w.address && w.address.toLowerCase() === walletData.address.toLowerCase()
+          );
+
+          if (walletSaved) {
+            console.log("Wallet verified successfully");
+            break;
+          }
+
+          console.warn(`Retry ${retryCount + 1}: Wallet not found in saved data`);
+          retryCount++;
+        } catch (error) {
+          console.error(`Retry ${retryCount + 1} failed:`, error);
+          retryCount++;
+        }
       }
 
-      console.log("Wallet saved successfully");
+      if (!walletSaved) {
+        throw new Error("Failed to verify wallet was saved after multiple attempts");
+      }
+
     } catch (error) {
       console.error("Error saving wallet:", error);
-      throw new Error(`Failed to save wallet: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
     }
   }
 

@@ -502,25 +502,17 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
   }
 
   /**
-   * Deletes private user data at the specified path.
+   * Elimina i dati privati
    */
-  public async deletePrivateData(path: string): Promise<boolean> {
-    const result = await this.savePrivateData(null, path);
-    if (result) {
-      return true;
-    }
-    return false;
+  public async deletePrivateData(path: string): Promise<void> {
+    await super.deletePrivateData(path);
   }
 
   /**
-   * Deletes public user data at the specified path for the authenticated user.
+   * Elimina i dati pubblici
    */
-  public async deletePublicData(path: string): Promise<boolean> {
-    const result = await this.savePublicData(null, path);
-    if (result) {
-      return true;
-    }
-    return false;
+  public async deletePublicData(path: string): Promise<void> {
+    await super.deletePublicData(path);
   }
 
   /**
