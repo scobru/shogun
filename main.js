@@ -8,6 +8,10 @@ const client = new WebTorrent();
 
 let mainWindow;
 
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-gpu-compositing');
+app.commandLine.appendSwitch('disk-cache-size', '0');
+
 app.whenReady().then(() => {
     mainWindow = new BrowserWindow({
         width: 800,
