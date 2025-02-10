@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P File Sharing</title>
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        function searchFiles() {
+            ipcRenderer.send('search-files');
+        }
+
+        function seedFile() {
+            const filePath = document.getElementById('fileInput').files[0].path;
+            ipcRenderer.send('seed-file', filePath);
+        }
+
+        function downloadFile() {
+            const magnetURI = document.getElementById('magnetInput').value;
+            ipcRenderer.send('download-file', magnetURI);
+        }
+
+        ipcRenderer.on('file-found', (event, file) => {
+            const list = document.getElementById('fileList');
+            const item = document.createElement('li');
+            item.textContent = `${file.name} - ${file.magnet}`;
+            list.appendChild(item);
+        });
+    </script>
+</head>
+<body>
+    <h1>P2P File Sharing</h1>
+    <button onclick="searchFiles()">Cerca File</button>
+    <input type="file" id="fileInput">
+    <button onclick="seedFile()">Carica File</button>
+    <input type="text" id="magnetInput" placeholder="Inserisci Magnet Link">
+    <button onclick="downloadFile()">Scarica</button>
+    <ul id="fileList"></ul>
+</body>
+</html>

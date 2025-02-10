@@ -15,6 +15,7 @@ import { WalletManager } from "./managers/WalletManager";
 import { UserKeys } from "./interfaces/UserKeys";
 import { Wallet } from "ethers";
 import { StealthKeyPair } from "./interfaces/StealthKeyPair";
+import { Bullet } from "./wrapper/Bullet";
 
 // Extend Gun type definitions
 declare module "gun" {
@@ -28,7 +29,7 @@ const SEA = Gun.SEA;
 /**
  * Main class for managing wallet and related functionality
  */
-export class Shogun {
+export class Shogun extends Bullet {
   private gunAuthManager: GunAuthManager;
   private ethereumManager: EthereumManager;
   private stealthManager: StealthManager;
@@ -37,6 +38,8 @@ export class Shogun {
   private webAuthnManager: WebAuthnManager;
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: any) {
+    super(gun);
+    
     this.gunAuthManager = new GunAuthManager(gun, APP_KEY_PAIR);
     this.ethereumManager = new EthereumManager(gun, APP_KEY_PAIR);
     this.stealthManager = new StealthManager(gun, APP_KEY_PAIR);
