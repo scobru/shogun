@@ -1,4 +1,5 @@
-import { IGunInstance, IGunUserInstance, ISEAPair } from "gun";
+import { IGunChain, IGunInstance, IGunUserInstance, ISEAPair } from "gun";
+import { IGunStaticNode } from "gun-util";
 
 /**
  * Classe base astratta per i manager che utilizzano Gun
@@ -8,6 +9,7 @@ export abstract class BaseManager<T> {
   protected user: IGunUserInstance;
   protected abstract storagePrefix: string;
   protected APP_KEY_PAIR: ISEAPair;
+  protected nodesPath: { private: string; public: string } = { private: '', public: '' };
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
     this.gun = gun;
@@ -41,7 +43,7 @@ export abstract class BaseManager<T> {
       : data;
 
     return new Promise<boolean>((resolve, reject) => {
-      const node = this.user.get("private").get(this.storagePrefix).get(path);
+      const node = this.getPrivateNode(path);
       
       // Prima puliamo i dati esistenti
       node.put(null, (ack: any) => {
@@ -93,18 +95,14 @@ export abstract class BaseManager<T> {
     }
 
     return new Promise((resolve, reject) => {
-      this.gun
-        .get(`~${publicKey}`)
-        .get("public")
-        .get(this.storagePrefix)
-        .get(path)
-        .put(data, (ack: any) => {
-          if (ack.err) {
-            reject(new Error(ack.err));
-          } else {
-            resolve(true);
-          }
-        });
+      const node = this.getPublicNode(path);
+      node.put(data, (ack: any) => {
+        if (ack.err) {
+          reject(new Error(ack.err));
+        } else {
+          resolve(true);
+        }
+      });
     });
   }
 
@@ -396,5 +394,37 @@ export abstract class BaseManager<T> {
     if (this.user) {
       this.user.leave();
     }
+  }
+
+  /**
+   * Imposta il percorso del nodo privato
+   */
+  protected setPrivateNodePath(path: string): void {
+    this.nodesPath.private = `private/${this.storagePrefix}/${path}`.replace(/\/+/g, '/');
+  }
+
+  /**
+   * Imposta il percorso del nodo pubblico
+   */
+  protected setPublicNodePath(path: string): void {
+    this.nodesPath.public = `public/${this.storagePrefix}/${path}`.replace(/\/+/g, '/');
+  }
+
+  /**
+   * Ottiene il nodo Gun per il percorso privato specificato
+   */
+  protected getPrivateNode(path: string = ''): IGunChain<any, any, IGunInstance, string> {
+    this.setPrivateNodePath(path);
+    return this.user.get('private').get(this.storagePrefix).get(path);
+  }
+
+  /**
+   * Ottiene il nodo Gun per il percorso pubblico specificato
+   */
+  protected getPublicNode(path: string = ''): IGunChain<any, any, IGunInstance, string> {
+    this.setPublicNodePath(path);
+    const publicKey = this.user.is?.pub;
+    if (!publicKey) throw new Error('Public key not found');
+    return this.gun.get(`~${publicKey}`).get('public').get(this.storagePrefix).get(path);
   }
 }

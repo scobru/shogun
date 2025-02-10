@@ -1,5 +1,5 @@
 import { IGunInstance, ISEAPair, SEA } from "gun";
-import { GunKeyPair, WalletResult } from "../interfaces";
+import { GunKeyPair } from "../interfaces";
 import { WalletData } from "../interfaces/WalletResult";
 import { Wallet } from "ethers";
 import { ValidationError } from "../utils/gun/errors";

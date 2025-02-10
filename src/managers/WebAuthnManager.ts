@@ -15,6 +15,7 @@ const sha256 = jsSha256.sha256;
 let cryptoModule: any;
 try {
   if (typeof window === "undefined") {
+    // Siamo in Node.js
     cryptoModule = require("crypto");
   }
 } catch {
