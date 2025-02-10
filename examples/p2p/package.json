@@ -1,0 +1,15 @@
+
+{
+  "name": "p2p-file-sharing",
+  "version": "1.0.0",
+  "description": "Un'app P2P decentralizzata per la condivisione di file",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron": "^26.0.0",
+    "gun": "^0.2023.723",
+    "webtorrent": "^1.8.0"
+  }
+}

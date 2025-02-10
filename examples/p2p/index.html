@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P File Sharing</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        .log {
+            background-color: #f9f9f9;
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 150px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .file-list {
+            margin-top: 20px;
+        }
+        .file-list ul {
+            list-style: none;
+            padding: 0;
+        }
+        .file-list li {
+            margin-bottom: 10px;
+        }
+        .downloaded-files {
+            margin-top: 20px;
+        }
+        .auth {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+        }
+    </style>
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        function registerUser() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            ipcRenderer.send('register-user', { username, password });
+        }
+
+        function loginUser() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            ipcRenderer.send('login-user', { username, password });
+        }
+
+        function searchFiles() {
+            ipcRenderer.send('search-files');
+        }
+
+        function seedFile() {
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput.files.length > 0) {
+                const filePath = fileInput.files[0].path;
+                ipcRenderer.send('seed-file', filePath);
+                addLog(`🚀 Caricamento file iniziato: ${fileInput.files[0].name}`);
+            }
+        }
+
+        function downloadFile() {
+            const magnetURI = document.getElementById('magnetInput').value;
+            ipcRenderer.send('download-file', magnetURI);
+            addLog(`⬇️ Download iniziato: ${magnetURI}`);
+        }
+
+        function copyMagnetLink(magnetURI) {
+            ipcRenderer.send('copy-to-clipboard', magnetURI);
+            alert('Magnet link copiato negli appunti!');
+        }
+
+        function addLog(message) {
+            const log = document.getElementById('log');
+            const logItem = document.createElement('div');
+            logItem.textContent = message;
+            log.appendChild(logItem);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function updateDownloadedFiles(files) {
+            const downloadedList = document.getElementById('downloadedFiles');
+            downloadedList.innerHTML = '';
+            files.forEach(file => {
+                const item = document.createElement('li');
+                item.innerHTML = `${file.name} - <button onclick="openFile('${file.path}')">Apri</button>`;
+                downloadedList.appendChild(item);
+            });
+        }
+
+        function openFile(filePath) {
+            ipcRenderer.send('open-file', filePath);
+        }
+
+        ipcRenderer.on('file-found', (event, file) => {
+            const list = document.getElementById('fileList');
+            const item = document.createElement('li');
+            item.innerHTML = `
+                ${file.name} - 
+                <a href="${file.magnet}" target="_blank">Magnet Link</a>
+                <button onclick="copyMagnetLink('${file.magnet}')">Copia</button>
+            `;
+            list.appendChild(item);
+        });
+
+        ipcRenderer.on('file-downloaded', (event, file) => {
+            addLog(`✅ File scaricato: ${file.path}`);
+            updateDownloadedFiles([file]);
+        });
+
+        ipcRenderer.on('log-message', (event, message) => {
+            addLog(message);
+        });
+
+        ipcRenderer.on('downloaded-files', (event, files) => {
+            updateDownloadedFiles(files);
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            ipcRenderer.send('get-downloaded-files');
+        });
+    </script>
+</head>
+<body>
+    <h1>P2P File Sharing</h1>
+
+    <div class="auth">
+        <strong>Account</strong><br>
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="registerUser()">Registrati</button>
+        <button onclick="loginUser()">Login</button>
+    </div>
+
+    <div>
+        <button onclick="searchFiles()">Cerca File</button>
+        <input type="file" id="fileInput">
+        <button onclick="seedFile()">Carica File</button>
+        <input type="text" id="magnetInput" placeholder="Inserisci Magnet Link">
+        <button onclick="downloadFile()">Scarica</button>
+    </div>
+
+    <div class="log" id="log">
+        <strong>Log:</strong>
+    </div>
+
+    <div class="file-list">
+        <strong>Risultati della ricerca:</strong>
+        <ul id="fileList"></ul>
+    </div>
+
+    <div class="downloaded-files">
+        <strong>File scaricati:</strong>
+        <ul id="downloadedFiles"></ul>
+    </div>
+</body>
+</html>
