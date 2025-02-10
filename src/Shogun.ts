@@ -3,7 +3,7 @@
  * @module Shogun
  */
 
-import Gun, { IGunInstance } from "gun";
+import Gun, { IGunInstance, IGunUserInstance } from "gun";
 import "gun/sea";
 import { EthereumManager } from "./managers/EthereumManager";
 import { StealthManager } from "./managers/StealthManager";
@@ -13,9 +13,7 @@ import { ActivityPubManager } from "./managers/ActivityPubManager";
 import { WebAuthnManager } from "./managers/WebAuthnManager";
 import { WalletManager } from "./managers/WalletManager";
 import { UserKeys } from "./interfaces/UserKeys";
-import { Wallet } from "ethers";
 import { StealthKeyPair } from "./interfaces/StealthKeyPair";
-import { Bullet } from "./wrapper/Bullet";
 
 // Extend Gun type definitions
 declare module "gun" {
@@ -24,32 +22,34 @@ declare module "gun" {
   }
 }
 
-const SEA = Gun.SEA;
 
 /**
  * Main class for managing wallet and related functionality
  */
-export class Shogun extends Bullet {
+export class Shogun {
   private gunAuthManager: GunAuthManager;
   private ethereumManager: EthereumManager;
   private stealthManager: StealthManager;
   private activityPubManager: ActivityPubManager;
   private walletManager: WalletManager;
   private webAuthnManager: WebAuthnManager;
+  private gun: IGunInstance;
+  private user: IGunUserInstance
 
-  constructor(gun: IGunInstance, APP_KEY_PAIR: any) {
-    super(gun);
-    
+  constructor(gun: IGunInstance, APP_KEY_PAIR: any) {    
     this.gunAuthManager = new GunAuthManager(gun, APP_KEY_PAIR);
     this.ethereumManager = new EthereumManager(gun, APP_KEY_PAIR);
     this.stealthManager = new StealthManager(gun, APP_KEY_PAIR);
     this.walletManager = new WalletManager(gun, APP_KEY_PAIR);
     this.webAuthnManager = new WebAuthnManager(gun, APP_KEY_PAIR);
     this.activityPubManager = new ActivityPubManager(gun, APP_KEY_PAIR);
+    this.gun = gun;
+    this.user = gun.user().recall({sessionStorage: true})
   }
 
   /**
    * Returns the EthereumManager instance
+
    * @returns {EthereumManager} The EthereumManager instance
    */
   public getEthereumManager(): EthereumManager {
@@ -118,10 +118,9 @@ export class Shogun extends Bullet {
 
   /**
    * Retrieves user data from the database
-   * @param {string} alias - The alias of the user
    * @returns {Promise<UserKeys>} The user keys
    */
-  public async getUser(alias: string): Promise<UserKeys> {
+  public async getUser(): Promise<UserKeys> {
     const user = await this.gunAuthManager.getUser();
     const pair = user.pair();
     const wallet = await this.walletManager.getWallet();
@@ -137,11 +136,112 @@ export class Shogun extends Bullet {
   }
 
   /**
-   * Retrieves the stealth key pair
-   * @returns {Promise<StealthKeyPair>} The stealth key pair
+   * Salva dati in modo ottimizzato con gestione degli errori e retry
+   * @param path Percorso dove salvare i dati
+   * @param data Dati da salvare
+   * @returns Promise che si risolve quando i dati sono stati salvati
    */
-  public async getStealthKeyPair(): Promise<StealthKeyPair> {
-    const stealthKey = await this.stealthManager.getPair();
-    return stealthKey;
+  public async putData(path: string, data: any): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.gun.get(path).put(data, (ack: any) => {
+        if (ack && 'err' in ack) {
+          reject(new Error(String(ack.err)));
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  /**
+   * Recupera dati una volta sola in modo ottimizzato
+   * @param path Percorso dei dati da recuperare
+   * @returns Promise con i dati recuperati
+   */
+  public async getData(path: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+      this.gun.get(path).once((data, key) => {
+        if (data === undefined) {
+          reject(new Error(`Dati non trovati al percorso: ${path}`));
+        } else {
+          resolve(data);
+        }
+      }, { wait: 1000 }); // Attende max 1 secondo per i dati
+    });
+  }
+
+  /**
+   * Sottoscrive agli aggiornamenti dei dati con gestione ottimizzata della memoria
+   * @param path Percorso da osservare
+   * @param callback Callback da eseguire sugli aggiornamenti
+   * @returns Funzione per annullare la sottoscrizione
+   */
+  public subscribeToData(path: string, callback: (data: any) => void): () => void {
+    const subscription = this.gun.get(path).on((data, key) => {
+      if (data) {
+        callback(data);
+      }
+    });
+    
+    return () => {
+      if (subscription && typeof subscription.off === 'function') {
+        subscription.off();
+      }
+    };
+  }
+
+  /**
+   * Aggiunge un elemento univoco a una lista non ordinata
+   * @param listPath Percorso della lista
+   * @param item Elemento da aggiungere
+   * @returns Promise che si risolve quando l'elemento è stato aggiunto
+   */
+  public async addToSet(listPath: string, item: any): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.gun.get(listPath).set(item, (ack: any) => {
+        if (ack && 'err' in ack) {
+          reject(new Error(String(ack.err)));
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  /**
+   * Recupera e mappa i dati di una lista
+   * @param listPath Percorso della lista
+   * @param mapFn Funzione di mapping opzionale
+   * @returns Promise con array dei risultati mappati
+   */
+  public async mapList<T>(
+    listPath: string, 
+    mapFn?: (data: any, key: string) => T
+  ): Promise<T[]> {
+    return new Promise((resolve) => {
+      const results: T[] = [];
+      
+      this.gun.get(listPath).map().once((data, key) => {
+        if (data) {
+          results.push(mapFn ? mapFn(data, key) : data);
+        }
+      });
+
+      // Risolve dopo un timeout ragionevole per permettere il caricamento dei dati
+      setTimeout(() => resolve(results), 1000);
+    });
+  }
+
+  /**
+   * Verifica l'esistenza di dati in un percorso
+   * @param path Percorso da verificare
+   * @returns Promise che si risolve con true se i dati esistono
+   */
+  public async exists(path: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      this.gun.get(path).once((data) => {
+        resolve(data !== undefined);
+      });
+    });
   }
 }

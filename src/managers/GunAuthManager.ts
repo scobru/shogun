@@ -204,77 +204,54 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     alias: string,
     passphrase: string
   ): Promise<GunKeyPair> {
-    const MAX_RETRIES = 5;
-    let attempts = 0;
-    const RETRY_DELAYS = [3000, 5000, 10000, 15000, 20000]; // Backoff crescente
+    try {
+      // Reset completo dello stato prima di ogni tentativo
+      await this._hardReset();
 
-    while (attempts < MAX_RETRIES) {
-      try {
-        console.log(
-          `Tentativo creazione account ${
-            attempts + 1
-          }/${MAX_RETRIES} per: ${alias}`
-        );
+      // Verifica esistenza utente con timeout
+      const userExists = await Promise.race([
+        this.exists(alias),
+        new Promise<boolean>((_, reject) =>
+          setTimeout(() => reject(new Error("Timeout verifica utente")), 5000)
+        ),
+      ]);
 
-        // Reset completo dello stato prima di ogni tentativo
-        await this._hardReset();
+      if (userExists) {
+        // Se l'utente esiste, non ritentiamo - è un errore legittimo
+        throw new Error("Username already taken");
+      }
 
-        // Verifica esistenza utente con timeout
-        const userExists = await Promise.race([
-          this.exists(alias),
-          new Promise<boolean>((_, reject) =>
-            setTimeout(
-              () => reject(new Error("Timeout verifica utente")),
-              10000
-            )
-          ),
-        ]);
-
-        if (userExists) {
-          // Se l'utente esiste, non ritentiamo - è un errore legittimo
-          throw new Error("Username already taken");
-        }
-
-        // Creazione account con timeout
-        const result = await Promise.race([
-          new Promise<GunKeyPair>((resolve, reject) => {
-            this.user.create(alias, passphrase, (ack: any) => {
-              if (ack.err) {
-                // Se l'errore indica che l'utente esiste, non ritentiamo
-                if (
-                  ack.err.includes("already created") ||
-                  ack.err.includes("already taken")
-                ) {
-                  return reject(new Error("Username already taken"));
-                }
-                return reject(new Error(ack.err));
+      // Creazione account con timeout
+      const result = await Promise.race([
+        new Promise<GunKeyPair>((resolve, reject) => {
+          this.user.create(alias, passphrase, (ack: any) => {
+            if (ack.err) {
+              // Se l'errore indica che l'utente esiste, non ritentiamo
+              if (
+                ack.err.includes("already created") ||
+                ack.err.includes("already taken")
+              ) {
+                return reject(new Error("Username already taken"));
               }
-              resolve(this.user._.sea);
-            });
-          }),
-        ]);
+              return reject(new Error(ack.err));
+            }
+            resolve(this.user._.sea);
+          });
+        }),
+      ]);
 
-        return result;
-      } catch (error) {
-        // Se l'errore è "Username already taken", non ritentiamo
-        if (
-          error instanceof Error &&
-          error.message === "Username already taken"
-        ) {
-          throw error;
-        }
-
-        console.error(`Errore al tentativo ${attempts + 1}:`, error);
-
-        if (attempts < MAX_RETRIES - 1) {
-          const delay = RETRY_DELAYS[attempts];
-          console.log(`Nuovo tentativo tra ${delay}ms...`);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        }
-        attempts++;
+      return result;
+    } catch (error) {
+      // Se l'errore è "Username already taken", non ritentiamo
+      if (
+        error instanceof Error &&
+        error.message === "Username already taken"
+      ) {
+        throw error;
       }
     }
-    throw new Error(`Creazione account fallita dopo ${MAX_RETRIES} tentativi`);
+
+    throw new Error(`Creazione account fallita`);
   }
 
   private async _hardReset(): Promise<void> {
@@ -461,17 +438,21 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     if (!this.user._.sea) throw new Error("Utente non autenticato");
     const user = this.gun.user();
     return new Promise((resolve, reject) => {
-      user.get('private').get(this.storagePrefix).get(path).once((data: any) => {
-        if (data === undefined) {
-          resolve(null);
-        } else {
-          // Rimuoviamo i metadati di Gun e processiamo i dati
-          const cleanedData = this.cleanGunMetadata(data);
-          const processedData = this.processRetrievedData(cleanedData);
-          // Se i dati sono nulli dopo il processing, restituiamo un oggetto vuoto
-          resolve(processedData || {});
-        }
-      });
+      user
+        .get("private")
+        .get(this.storagePrefix)
+        .get(path)
+        .once((data: any) => {
+          if (data === undefined) {
+            resolve(null);
+          } else {
+            // Rimuoviamo i metadati di Gun e processiamo i dati
+            const cleanedData = this.cleanGunMetadata(data);
+            const processedData = this.processRetrievedData(cleanedData);
+            // Se i dati sono nulli dopo il processing, restituiamo un oggetto vuoto
+            resolve(processedData || {});
+          }
+        });
     });
   }
 
