@@ -3,8 +3,7 @@
  * @module Shogun
  */
 
-import Gun, { IGunInstance, IGunUserInstance } from "gun";
-import "gun/sea";
+import { IGunInstance, IGunUserInstance } from "gun";
 import { EthereumManager } from "./managers/EthereumManager";
 import { StealthManager } from "./managers/StealthManager";
 import type { GunKeyPair } from "./interfaces/GunKeyPair";
@@ -13,7 +12,6 @@ import { ActivityPubManager } from "./managers/ActivityPubManager";
 import { WebAuthnManager } from "./managers/WebAuthnManager";
 import { WalletManager } from "./managers/WalletManager";
 import { UserKeys } from "./interfaces/UserKeys";
-import { StealthKeyPair } from "./interfaces/StealthKeyPair";
 
 // Extend Gun type definitions
 declare module "gun" {

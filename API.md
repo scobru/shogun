@@ -1,274 +1,191 @@
-# SHOGUN API Reference
+# 🏰 SHOGUN API Reference
 
-## 🏰 Shogun Core
+## Core
 
-### Constructor
+### Shogun
+
+La classe principale che gestisce tutte le funzionalità del wallet.
 
 ```typescript
-constructor(gunOptions: any, APP_KEY_PAIR: any)
+constructor(gun: IGunInstance, APP_KEY_PAIR: any)
 ```
-Creates a new Shogun instance. Initializes Gun, and all required managers and services.
 
-**Parameters:**
-- `gunOptions`: Gun configuration object
-  - `peers`: Array of Gun peer URLs
-  - `localStorage`: Enable/disable localStorage
-  - `radisk`: Enable/disable radisk storage
-  - `multicast`: Enable/disable multicast
-- `APP_KEY_PAIR`: Application key pair for Gun authentication
+Crea una nuova istanza di Shogun. Inizializza Gun e tutti i manager necessari.
 
-### Core Methods
+#### Metodi Core
+
+```typescript
+async createUser(alias: string, password: string): Promise<UserKeys>
+```
+Crea un nuovo utente con account Gun, wallet Ethereum, chiavi stealth e ActivityPub.
+Restituisce un oggetto `UserKeys` contenente tutte le chiavi generate.
+
+```typescript
+async getUser(): Promise<UserKeys>
+```
+Recupera i dati dell'utente corrente dal database.
+
+#### Gestione Dati
+
+```typescript
+async putData(path: string, data: any): Promise<void>
+```
+Salva dati in modo ottimizzato con gestione degli errori e retry.
+
+```typescript
+async getData(path: string): Promise<any>
+```
+Recupera dati una volta sola in modo ottimizzato.
+
+```typescript
+subscribeToData(path: string, callback: (data: any) => void): () => void
+```
+Sottoscrive agli aggiornamenti dei dati con gestione ottimizzata della memoria.
+
+```typescript
+async addToSet(listPath: string, item: any): Promise<void>
+```
+Aggiunge un elemento univoco a una lista non ordinata.
+
+```typescript
+async mapList<T>(listPath: string, mapFn?: (data: any, key: string) => T): Promise<T[]>
+```
+Recupera e mappa i dati di una lista.
+
+### Manager Disponibili
 
 ```typescript
 getWalletManager(): WalletManager
-```
-Returns the WalletManager instance for wallet operations.
-
-```typescript
-getWebAuthnService(): WebAuthnService
-```
-Returns the WebAuthnService instance for biometric authentication.
-
-```typescript
+getWebAuthnManager(): WebAuthnManager 
 getActivityPubManager(): ActivityPubManager
-```
-Returns the ActivityPubManager instance for ActivityPub operations.
-
-```typescript
 getEthereumManager(): EthereumManager
-```
-Returns the EthereumManager instance for Ethereum operations.
-
-```typescript
-getStealthChain(): StealthChain
-```
-Returns the StealthChain instance for stealth address operations.
-
-```typescript
+getStealthChain(): StealthManager
 getGunAuthManager(): GunAuthManager
 ```
-Returns the GunAuthManager instance for Gun.js authentication.
-
-### Data Management
-
-```typescript
-async exportAllData(): Promise<string>
-```
-Exports all user data as JSON, including:
-- Wallet data
-- Stealth keys
-- Gun key pair
-- Timestamp
-- Version
-Throws error if user not authenticated
-
-```typescript
-async importAllData(jsonData: string): Promise<void>
-```
-Imports user data from JSON export:
-- Validates data format and version
-- Imports Gun pair
-- Imports wallet data
-- Imports stealth keys
-Throws error if import fails
-
-### Key Management
-
-```typescript
-async exportGunKeyPair(): Promise<string>
-```
-Exports current user's Gun key pair.
-
-```typescript
-async importGunKeyPair(keyPairJson: string): Promise<string>
-```
-Imports a Gun key pair.
 
 ## 🔑 WalletManager
 
-### Constructor
+Gestisce la creazione e gestione dei wallet Ethereum.
 
 ```typescript
-constructor(gunOptions: any, APP_KEY_PAIR: any)
+async createAccount(): Promise<WalletData[]>
 ```
-Creates a new WalletManager instance. Initializes Gun, user authentication, and various managers.
-
-**Parameters:**
-- `gunOptions`: Gun configuration object
-  - `peers`: Array of Gun peer URLs
-  - `localStorage`: Enable/disable localStorage
-  - `radisk`: Enable/disable radisk storage
-  - `multicast`: Enable/disable multicast
-- `APP_KEY_PAIR`: Application key pair for Gun authentication
-
-### Core Methods
-
-#### Account Management
+Crea un nuovo wallet derivato dalle chiavi Gun.
 
 ```typescript
-async createAccount(alias: string, passphrase: string): Promise<void>
+async getWallets(): Promise<ExtendedWallet[]>
 ```
-Creates a new account with the specified credentials.
-- `alias`: Username (must be valid)
-- `passphrase`: Account password
-- Throws `ValidationError` if alias is invalid
-
-```typescript
-async login(alias: string, passphrase: string): Promise<string>
-```
-Performs login with specified credentials.
-- `alias`: Username
-- `passphrase`: Account password
-- Returns: Public key of authenticated user
-- Throws `ValidationError` if alias is invalid
-
-```typescript
-logout(): void
-```
-Logs out the current user.
-
-#### Wallet Operations
-
-```typescript
-static async createWalletObj(gunKeyPair: GunKeyPair): Promise<WalletResult>
-```
-Creates a new wallet from a Gun key pair.
-- `gunKeyPair`: Gun key pair with public key
-- Returns: Object containing wallet data and entropy
-- Throws error if wallet creation fails
-
-```typescript
-static async createWalletFromSalt(gunKeyPair: GunKeyPair, salt: string): Promise<Wallet>
-```
-Creates a deterministic wallet from salt and Gun key pair.
-- `gunKeyPair`: Gun key pair
-- `salt`: Salt for wallet derivation
-- Returns: Ethereum wallet instance
-- Throws error if wallet creation fails
+Recupera tutti i wallet dell'utente.
 
 ```typescript
 async saveWallet(wallet: Wallet): Promise<void>
 ```
-Saves a wallet to Gun storage.
-- `wallet`: Ethereum wallet to save
-- Validates Ethereum address and private key
-- Throws `ValidationError` if validation fails
+Salva un nuovo wallet.
 
 ```typescript
-async getWallet(): Promise<Wallet | null>
+async createWalletFromSalt(gunKeyPair: GunKeyPair, salt: string): Promise<Wallet>
 ```
-Retrieves the stored wallet.
-- Returns: Ethereum wallet or null if not found
+Crea un wallet deterministico da un salt e una coppia di chiavi Gun.
 
-### Data Management
+## 🔐 GunAuthManager 
+
+Gestisce l'autenticazione decentralizzata con Gun.
 
 ```typescript
-async exportAllData(): Promise<string>
+async createAccount(alias: string, passphrase: string): Promise<GunKeyPair>
 ```
-Exports all user data as JSON.
-- Returns: JSON string containing:
-  - Wallet data
-  - Stealth keys
-  - Gun key pair
-  - Timestamp
-  - Version
-- Throws error if user not authenticated
+Crea un nuovo account Gun.
 
 ```typescript
-async importAllData(jsonData: string): Promise<void>
+async login(alias: string, passphrase: string): Promise<string>
 ```
-Imports user data from JSON export.
-- `jsonData`: Previously exported JSON data
-- Validates data format and version
-- Imports Gun pair, wallet, and stealth keys
-- Throws error if import fails
-
-### WebAuthn Integration
+Effettua il login con le credenziali specificate.
 
 ```typescript
-async createAccountWithWebAuthn(alias: string): Promise<WalletResult>
+async checkUser(username: string, password: string): Promise<string>
 ```
-Creates an account using WebAuthn authentication.
-- `alias`: Username
-- Returns: Wallet result object
-- Throws `WebAuthnError` if WebAuthn not supported
-- Throws `NetworkError` for other failures
-
-### ActivityPub Integration
+Verifica la disponibilità di un username e crea l'utente se disponibile.
 
 ```typescript
-async getPrivateKey(username: string): Promise<string>
+logout(): void
 ```
-Retrieves ActivityPub private key for a user.
-- `username`: User to get key for
-- Returns: Private key string
+Termina la sessione corrente.
+
+## 🌐 ActivityPubManager
+
+Gestisce le chiavi e le operazioni ActivityPub.
 
 ```typescript
-async saveActivityPubKeys(keys: ActivityPubKeys): Promise<void>
+async createAccount(): Promise<ActivityPubKeys>
 ```
-Saves ActivityPub key pair.
-- `keys`: ActivityPub key pair to save
+Genera una nuova coppia di chiavi RSA per ActivityPub.
 
 ```typescript
-async getActivityPubKeys(): Promise<ActivityPubKeys | null>
+async sign(stringToSign: string, username: string): Promise<{ signature: string; signatureHeader: string }>
 ```
-Retrieves stored ActivityPub keys.
-- Returns: ActivityPub keys or null if not found
+Firma dati per ActivityPub.
 
 ```typescript
-async deleteActivityPubKeys(): Promise<void>
+async saveKeys(keys: ActivityPubKeys): Promise<void>
 ```
-Deletes stored ActivityPub keys.
+Salva le chiavi ActivityPub.
 
 ```typescript
-async signActivityPubData(stringToSign: string, username: string): Promise<{ signature: string; signatureHeader: string }>
+async getKeys(): Promise<ActivityPubKeys>
 ```
-Signs data for ActivityPub.
-- `stringToSign`: Data to sign
-- `username`: User performing signing
-- Returns: Signature and signature header
+Recupera le chiavi ActivityPub salvate.
 
-### Key Management
+## 🔒 StealthManager
+
+Gestisce gli indirizzi stealth per maggiore privacy.
 
 ```typescript
-async exportGunKeyPair(): Promise<string>
+async createAccount(): Promise<StealthKeyPair>
 ```
-Exports current user's Gun key pair.
-- Returns: JSON string of key pair
+Genera una nuova coppia di chiavi stealth.
 
 ```typescript
-async importGunKeyPair(keyPairJson: string): Promise<string>
+async generateStAdd(recipientPublicKey: string): Promise<{
+  stealthAddress: string;
+  ephemeralPublicKey: string;
+  recipientPublicKey: string;
+}>
 ```
-Imports a Gun key pair.
-- `keyPairJson`: JSON string of key pair
-- Returns: Public key of imported pair
-
-### Profile Management
-
-```typescript
-async updateProfile(displayName: string): Promise<void>
-```
-Updates user profile.
-- `displayName`: New display name to set
+Genera un indirizzo stealth per il destinatario.
 
 ```typescript
-async changePassword(oldPassword: string, newPassword: string): Promise<void>
+async openStAdd(stealthAddress: string, ephemeralPublicKey: string): Promise<Wallet>
 ```
-Changes user password.
-- `oldPassword`: Current password
-- `newPassword`: New password to set
+Apre un indirizzo stealth derivando la chiave privata.
+
+## 🌐 WebAuthnManager
+
+Gestisce l'autenticazione biometrica/hardware.
+
+```typescript
+async generateCredentials(username: string, isNewDevice?: boolean, deviceName?: string): Promise<WebAuthnResult>
+```
+Genera credenziali WebAuthn per un utente.
+
+```typescript
+async authenticateUser(username: string): Promise<WebAuthnResult>
+```
+Autentica un utente usando WebAuthn.
+
+```typescript
+async verifyCredential(credentialId: string): Promise<WebAuthnVerifyResult>
+```
+Verifica una credenziale WebAuthn esistente.
 
 ## 📦 Interfaces
 
-### WalletResult
+### UserKeys
 ```typescript
-interface WalletResult {
-  walletObj: {
-    address: string;
-    privateKey: string;
-    entropy: string;
-  };
-  entropy: string;
+interface UserKeys {
+  pair: GunKeyPair;
+  wallet: Wallet;
+  stealthKey: StealthKeyPair;
+  activityPubKey: ActivityPubKeys;
 }
 ```
 
@@ -277,73 +194,229 @@ interface WalletResult {
 interface ActivityPubKeys {
   publicKey: string;
   privateKey: string;
+  createdAt: number;
 }
 ```
 
-### GunKeyPair
+### StealthKeyPair
 ```typescript
-interface GunKeyPair {
+interface StealthKeyPair {
   pub: string;
   priv: string;
-  epub?: string;
-  epriv?: string;
+  epub: string;
+  epriv: string;
 }
 ```
 
-## 🔒 Error Types
-
-- `ValidationError`: Input validation failures
-- `WebAuthnError`: WebAuthn-specific errors
-- `NetworkError`: Network and communication errors
-- `AuthenticationError`: Authentication-related failures
-
-## 🔐 Security Notes
-
-1. Private keys are never stored in plain text
-2. Entropy is used for deterministic wallet derivation
-3. Web Crypto API used in browser, Node crypto in Node.js
-4. Comprehensive validation for addresses and keys
-5. Secure password change mechanism
-
-## 🌐 Gun Data Structure
-
-### Wallets
-```
-gun/
-└── users/
-    └── [publicKey]/
-        └── wallet/
-            ├── address
-            ├── privateKey (encrypted)
-            └── entropy
+### WebAuthnResult
+```typescript
+interface WebAuthnResult {
+  success: boolean;
+  username?: string;
+  password?: string;
+  credentialId?: string;
+  error?: string;
+  deviceInfo?: DeviceInfo;
+}
 ```
 
-### ActivityPub Keys
-```
-gun/
-└── users/
-    └── [publicKey]/
-        └── activityPubKeys/
-            ├── publicKey
-            └── privateKey (encrypted)
+## 🔐 Best Practices
+
+1. Utilizzare sempre `waitForOperation()` dopo operazioni asincrone per garantire la sincronizzazione
+2. Verificare lo stato di autenticazione prima delle operazioni sensibili
+3. Implementare retry e gestione degli errori per le operazioni di rete
+4. Utilizzare timeout appropriati per le operazioni asincrone
+5. Pulire le sottoscrizioni quando non più necessarie
+6. Validare input e output delle operazioni critiche
+7. Utilizzare le interfacce TypeScript per type safety
+8. Implementare meccanismi di recovery per le chiavi 
+
+## 💬 UnstoppableChat
+
+Sistema di chat decentralizzato basato su Gun.
+
+```typescript
+constructor(superpeers: any)
 ```
 
-### Profiles
+### Metodi Principali
+
+```typescript
+async join(username: string, password: string, publicName: string)
 ```
-gun/
-└── users/
-    └── [publicKey]/
-        └── profile/
-            └── displayName
+Entra nella chat con le credenziali specificate.
+
+```typescript
+async reset()
+```
+Resetta tutti i dati della chat.
+
+```typescript
+async logout()
+```
+Effettua il logout dalla chat.
+
+### Gestione Contatti
+
+```typescript
+async addContact(username: string, pubKey: string, publicName: string)
+```
+Aggiunge un nuovo contatto.
+
+```typescript
+removeContact(pubKey: string)
+```
+Rimuove un contatto.
+
+```typescript
+async loadContacts(): Promise<{ on: (cb: (param: Events['contacts']) => void) => void }>
+```
+Carica la lista dei contatti.
+
+```typescript
+async loadContactInvites()
+```
+Carica gli inviti dei contatti.
+
+```typescript
+async sendMessageToContact(pubKey: string, msg: string)
+```
+Invia un messaggio a un contatto.
+
+### Gestione Canali
+
+```typescript
+async createChannel(channelName: string, isPrivate: boolean): Promise<Channel>
+```
+Crea un nuovo canale.
+
+```typescript
+leaveChannel(channel: Channel)
+```
+Abbandona un canale.
+
+```typescript
+async loadChannels()
+```
+Carica la lista dei canali.
+
+```typescript
+async loadPublicChannels()
+```
+Carica i canali pubblici.
+
+```typescript
+async sendMessageToChannel(channel: Channel, msg: string, peerInfo: any)
+```
+Invia un messaggio a un canale.
+
+### Gestione Annunci
+
+```typescript
+async createAnnouncement(announcementName: string, isPrivate: boolean, rssLink?: string)
+```
+Crea un nuovo annuncio.
+
+```typescript
+async loadAnnouncements()
+```
+Carica la lista degli annunci.
+
+```typescript
+async sendMessageToAnnouncement(announcement: Announcement, msg: string, peerInfo: any)
+```
+Invia un messaggio a un annuncio.
+
+## 💸 Layer3 - Micropagamenti
+
+Sistema di micropagamenti off-chain con riconciliazione on-chain.
+
+### MicropaymentAPI
+
+```typescript
+constructor(relayUrl: string, providerUrl: string, contractAddress: string, contractABI: any[])
 ```
 
-## 🔄 Best Practices
+#### Metodi Principali
 
-1. Always validate input data
-2. Handle all async operations with try-catch
-3. Clean up sensitive data after use
-4. Use appropriate error types
-5. Verify authentication state before operations
-6. Implement proper error handling
-7. Use secure key storage methods
-8. Regular data backups using export/import 
+```typescript
+setSigner(signer: Signer, seaPair: SEAKeyPair): void
+```
+Imposta il signer per le operazioni on-chain e il key pair SEA per le firme off-chain.
+
+```typescript
+async openOffChainChannel(channelId: string, initialState: State): Promise<StatePackage>
+```
+Apre un canale off-chain e registra lo stato iniziale.
+
+```typescript
+async updateOffChainChannel(channelId: string, newState: State): Promise<StatePackage>
+```
+Aggiorna lo stato del canale off-chain.
+
+```typescript
+subscribeToChannel(channelId: string, callback: (state: any) => void): void
+```
+Sottoscrive agli aggiornamenti del canale.
+
+```typescript
+async signState(state: State): Promise<string>
+```
+Firma lo stato del canale per la riconciliazione on-chain.
+
+```typescript
+async finalizeChannel(state: State, clientSignature: string, relaySignature: string)
+```
+Finalizza il canale on-chain.
+
+### PaymentChannel (Smart Contract)
+
+```solidity
+contract PaymentChannel {
+    constructor(address _relay, uint256 _challengePeriod) payable
+```
+
+#### Funzioni Principali
+
+```solidity
+function closeChannel(
+    uint256 clientBalance,
+    uint256 relayBalance,
+    uint256 nonce,
+    bytes memory clientSig,
+    bytes memory relaySig
+) external
+```
+Avvia la chiusura del canale fornendo uno stato off-chain firmato.
+
+```solidity
+function updateState(
+    uint256 clientBalance,
+    uint256 relayBalance,
+    uint256 nonce,
+    bytes memory clientSig,
+    bytes memory relaySig
+) external
+```
+Aggiorna lo stato del canale durante il challenge period.
+
+```solidity
+function finalizeChannel() external
+```
+Finalizza il canale dopo il challenge period e distribuisce i fondi.
+
+### Interfaces Layer3
+
+```typescript
+interface State {
+    nonce: number;
+    clientBalance: string;
+    relayBalance: string;
+    pubKey?: string;
+}
+
+interface StatePackage {
+    data: State;
+    signature: string;
+}
+``` 

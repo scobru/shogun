@@ -1,379 +1,143 @@
-# SHOGUN - Decentralized Wallet Manager
+# 🏰 SHOGUN
 
-A decentralized wallet manager that uses Gun.js to handle wallets and private keys directly in the browser. It provides a complete authentication and key management system with support for stealth addresses and ActivityPub integration.
+> Un'alternativa a Metamask che permette di costruire UX decentralizzate con gestione wallet basata su Gun.js
 
-## ✨ Key Features
+[![Version](https://img.shields.io/badge/version-0.0.16b-blue.svg)](https://www.npmjs.com/package/@scobru/shogun)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node](https://img.shields.io/badge/node-%3E%3D16.0.0-green.svg)](https://nodejs.org)
 
-- 🔐 **Advanced Security**
-  - Secure private key management with Web Crypto API
-  - Stealth address support
-  - End-to-end encryption
-  - Secure entropy management
-  - ActivityPub key management
-
-- 🌐 **Decentralization**
-  - Distributed storage with Gun.js
-  - P2P synchronization
-  - No central server
-  - ActivityPub federation support
-
-- 🔄 **Portability**
-  - Complete data import/export
-  - Encrypted backups
-  - Multi-device support
-  - Cross-platform compatibility
-
-## 🛠️ Requirements
-
-- Node.js >= 16.0.0
-- npm >= 7.0.0
-- Modern browser with Web Crypto API support
-- For Node.js: crypto module support
-
-## 🚀 Installation
+## 📦 Installazione
 
 ```bash
 npm install @scobru/shogun
 ```
 
-## 📚 Quick Start
+## ✨ Caratteristiche
 
-### Basic Usage
+- 🔐 **Gestione Wallet Decentralizzata**
+  - Creazione e gestione wallet Ethereum
+  - Supporto indirizzi stealth
+  - Crittografia end-to-end
+  - Gestione chiavi con Web Crypto API
+
+- 🌐 **Storage Distribuito**
+  - Basato su Gun.js
+  - Sincronizzazione P2P
+  - Nessun server centrale
+  - Supporto ActivityPub
+
+- 💬 **UnstoppableChat**
+  - Chat P2P crittografata
+  - Canali pubblici/privati
+  - Sistema di annunci con RSS
+  - Gestione contatti
+
+- 💸 **Layer3 Micropagamenti**
+  - Canali di pagamento off-chain
+  - Smart contract per settlement
+  - Sistema di challenge period
+  - Relay per scalabilità
+
+## 🚀 Utilizzo
+
+### Core Wallet
 
 ```typescript
 import { Shogun } from '@scobru/shogun'
 
-// Initialize Shogun with Gun configuration
+// Inizializza
 const shogun = new Shogun({
-  peers: ['https://your-gun-peer.com/gun'],
-  localStorage: false,
-  radisk: false,
-  multicast: false
+  peers: ['https://your-gun-peer.com/gun']
 }, APP_KEY_PAIR);
 
-// Get required managers and services
+// Gestione Wallet
 const walletManager = shogun.getWalletManager();
-const webAuthnService = shogun.getWebAuthnService();
-const activityPubManager = shogun.getActivityPubManager();
+const wallet = await walletManager.createAccount();
 
-// Create account
-try {
-  await walletManager.createAccount('username', 'password');
-} catch (error) {
-  console.error('Account creation failed:', error);
-}
+// Autenticazione
+const authManager = shogun.getGunAuthManager();
+await authManager.createAccount('username', 'password');
+```
+
+### UnstoppableChat
+
+```typescript
+import { UnstoppableChat } from '@scobru/shogun'
+
+const chat = new UnstoppableChat(['https://your-gun-peer.com/gun']);
 
 // Login
-const pubKey = await walletManager.login('username', 'password');
+await chat.join('username', 'password', 'displayName');
 
-// Create wallet
-const gunKeyPair = walletManager.getCurrentUserKeyPair();
-const { walletObj, entropy } = await WalletManager.createWalletObj(gunKeyPair);
-
-console.log('Address:', walletObj.address);
-console.log('Private Key:', walletObj.privateKey);
-console.log('Entropy:', entropy);
-
-// Save wallet
-await walletManager.saveWallet(walletObj);
-
-// Retrieve wallet
-const wallet = await walletManager.getWallet();
-
-// Export all data
-const backup = await shogun.exportAllData();
-
-// Import data
-await shogun.importAllData(backup);
+// Canali
+const channel = await chat.createChannel('myChannel', true);
+await chat.sendMessageToChannel(channel, 'Hello!', {
+  pubKey: chat.gun.user().is.pub,
+  name: 'displayName'
+});
 ```
 
-### ActivityPub Integration
+### Layer3 Micropagamenti
 
 ```typescript
-// Get ActivityPub manager
-const activityPubManager = shogun.getActivityPubManager();
+import { MicropaymentAPI } from '@scobru/shogun'
 
-// Generate and save ActivityPub keys
-const keys = {
-  publicKey: 'public_key_data',
-  privateKey: 'private_key_data'
-};
-await activityPubManager.saveActivityPubKeys(keys);
-
-// Retrieve keys
-const storedKeys = await activityPubManager.getActivityPubKeys();
-
-// Sign ActivityPub data
-const { signature, signatureHeader } = await activityPubManager.signActivityPubData(
-  stringToSign,
-  username
+const payments = new MicropaymentAPI(
+  'http://localhost:8080/gun',
+  'http://localhost:8545',
+  contractAddress,
+  contractABI
 );
-```
 
-### Error Handling
-
-```typescript
-try {
-  const walletManager = shogun.getWalletManager();
-  
-  // Create account
-  await walletManager.createAccount('username', 'password');
-  
-  // Login
-  const pubKey = await walletManager.login('username', 'password');
-  
-  // Create and save wallet
-  const { walletObj } = await WalletManager.createWalletObj(walletManager.getCurrentUserKeyPair());
-  await walletManager.saveWallet(walletObj);
-  
-} catch (error) {
-  if (error instanceof ValidationError) {
-    console.error('Validation error:', error);
-  } else if (error instanceof WebAuthnError) {
-    console.error('WebAuthn error:', error);
-  } else if (error instanceof NetworkError) {
-    console.error('Network error:', error);
-  } else {
-    console.error('Unknown error:', error);
-  }
-}
-```
-
-### Wallet Management with Entropy
-
-```typescript
-// Create wallet from specific salt
-const salt = 'my_custom_salt';
-const wallet = await WalletManager.createWalletFromSalt(gunKeyPair, salt);
-
-console.log('Address:', wallet.address);
-console.log('Entropy:', wallet.entropy);
-
-// Verify different wallets are created from different salts
-const wallet1 = await WalletManager.createWalletFromSalt(gunKeyPair, 'salt1');
-const wallet2 = await WalletManager.createWalletFromSalt(gunKeyPair, 'salt2');
-console.log(wallet1.address !== wallet2.address); // true
-```
-
-### Import/Export
-
-```typescript
-// Export all data
-const backup = await manager.exportAllData();
-
-// Import data
-await manager.importAllData(backup);
-
-// Export Gun keypair
-const keypair = await manager.exportGunKeyPair();
-
-// Import Gun keypair
-const pubKey = await manager.importGunKeyPair(keypairJson);
-```
-
-### WebAuthn Authentication
-
-```typescript
-// Initialize WalletManager
-const manager = new WalletManager(gunOptions, APP_KEY_PAIR);
-
-// Check if WebAuthn is supported
-if (manager.webAuthnService.isSupported()) {
-  // Create account with WebAuthn
-  try {
-    const result = await manager.createAccountWithWebAuthn('username');
-    console.log('Account created:', result);
-  } catch (error) {
-    console.error('Error:', error);
-  }
-}
-```
-
-WebAuthn provides:
-- 🔐 Biometric authentication
-- 🔑 Platform-specific secure key storage
-- 🌐 Passwordless authentication
-- 🔒 Enhanced phishing protection
-- ⚡ Seamless user experience
-
-## 🔒 Security
-
-### Key Management
-
-- Private keys are never stored in plain text
-- Entropy is used for deterministic wallet derivation
-- Web Crypto API used in browser
-- Node crypto used in Node.js
-- Private key and address validation
-
-### Secure Storage
-
-```typescript
-// Example of secure storage
-const walletData = {
-  address: wallet.address,
-  entropy: wallet.entropy  // Private key is derived when needed
+// Apri canale
+const state = {
+  nonce: 0,
+  clientBalance: ethers.parseEther("1.0"),
+  relayBalance: "0"
 };
-
-// Data is stored encrypted
-await manager.saveWallet(wallet);
-```
-
-## 🐛 Debugging
-
-For debugging purposes:
-
-1. Enable Gun.js debug logs:
-```bash
-GUN_ENV=debug
-```
-
-2. Use browser developer tools to inspect:
-   - Gun data synchronization
-   - Network requests
-
-3. Monitor Gun events:
-```typescript
-const gun = manager.gunAuthManager.getGun();
-
-gun.on('out', data => {
-  console.log('Gun out:', data);
-});
-
-gun.on('in', data => {
-  console.log('Gun in:', data);
-});
-```
-
-## 📦 Interfaces
-
-```typescript
-interface WalletResult {
-  walletObj: {
-    address: string;
-    privateKey: string;
-    entropy: string;
-  };
-  entropy: string;
-}
-
-interface ActivityPubKeys {
-  publicKey: string;
-  privateKey: string;
-}
-
-interface GunKeyPair {
-  pub: string;
-  priv: string;
-  epub?: string;
-  epriv?: string;
-}
+await payments.openOffChainChannel(channelId, state);
 ```
 
 ## 🧪 Testing
 
 ```bash
-# Run tests
+# Avvia server Gun
+npm run test:server
+
+# Esegui test
 npm test
 
-# Run specific test
-npm test -- -g "Wallet Creation"
+# Watch mode
+npm run test:watch
 ```
 
-## 💻 Compatibility
+## 📚 Documentazione
 
-- **Browser**: 
-  - Chrome >= 80
-  - Firefox >= 78
-  - Safari >= 14
-  - Edge >= 80
-  - Web Crypto API support required
+Per la documentazione completa dell'API consulta [API.md](API.md)
 
-- **Node.js**:
-  - Version >= 16.0.0
-  - crypto module support
+## 🔧 Scripts
+
+- `build`: Compila il progetto TypeScript
+- `lint`: Esegue il linting del codice
+- `test`: Esegue i test
+- `test:watch`: Esegue i test in watch mode
+- `test:server`: Avvia il server Gun per i test
+
+## 💻 Requisiti
+
+- Node.js >= 16.0.0
+- Browser moderno con supporto Web Crypto API
 
 ## 🤝 Contributing
 
-Pull requests are welcome! For major changes:
-
-1. 🍴 Fork the repository
-2. 🔧 Create a branch
-3. 💾 Commit changes
-4. 🚀 Push branch
-5. 📝 Open a Pull Request
+Le pull request sono benvenute! Per modifiche importanti, apri prima una issue per discutere i cambiamenti.
 
 ## 📄 License
 
-[MIT](LICENSE)
+MIT © [Scobru](https://github.com/scobru)
 
-## 🗺️ Roadmap
+## 🔗 Links
 
-- [ ] Enhanced ActivityPub integration
-- [ ] Improved WebAuthn support
-- [ ] Additional wallet types support
-
-## 🏗️ Project Structure
-
-### Core Components
-
-```typescript
-Shogun (Main Class)
-├── WalletManager
-│   └── Wallet operations and management
-├── WebAuthnService
-│   └── Biometric authentication
-├── ActivityPubManager
-│   └── ActivityPub integration
-├── EthereumManager
-│   └── Ethereum operations
-├── StealthChain
-│   └── Stealth address operations
-└── GunAuthManager
-    └── Gun.js authentication
-
-```
-
-### Key Features by Component
-
-#### 🏰 Shogun
-- Central orchestrator
-- Manages all components
-- Handles data import/export
-- Provides access to all services
-
-#### 🔑 WalletManager
-- Account creation and login
-- Wallet creation and storage
-- Key pair management
-- Secure storage
-
-#### 🔐 WebAuthnService
-- Biometric authentication
-- Platform authenticator support
-- Passwordless login
-- Security key support
-
-#### 🌐 ActivityPubManager
-- Federation support
-- Key management
-- Data signing
-- Protocol integration
-
-#### ⛓️ EthereumManager
-- Ethereum wallet operations
-- Transaction management
-- Smart contract interaction
-- Network configuration
-
-#### 🕶️ StealthChain
-- Stealth address generation
-- Private transactions
-- Key management
-- Privacy features
-
-#### 🔫 GunAuthManager
-- Gun.js integration
-- P2P data sync
-- User authentication
-- Secure storage
+- [Repository](https://github.com/scobru/hugo)
+- [Bug Reports](https://github.com/scobru/hugo/issues)
+- [Author](https://github.com/scobru)

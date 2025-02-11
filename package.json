@@ -1,6 +1,6 @@
 {
   "name": "@scobru/shogun",
-  "version": "0.0.15g",
+  "version": "0.0.16b",
   "description": "A Metamask alternative that empowers you to build good UX with decentralized wallet management using Gun.js",
   "browser": {
     "node-localstorage": false

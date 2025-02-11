@@ -24,11 +24,10 @@ import {
   StealthAddressResult,
   StealthKeyPairWrapper,
 } from "./interfaces";
+
 import { SEA } from "gun";
 
 export { Shogun };
-
-// export services
 
 // export managers
 export {
