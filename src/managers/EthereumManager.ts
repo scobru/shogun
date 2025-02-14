@@ -8,7 +8,7 @@ import { FiregunUser } from "../db/common";
 /**
  * Gestisce le operazioni Ethereum inclusa la creazione dell'account e il login
  */
-export class EthereumManager extends BaseManager<any> {
+export class EthereumManager extends BaseManager<Record<string, any>> {
   protected storagePrefix = "ethereum";
   private customProvider: ethers.JsonRpcProvider | null = null;
   private customWallet: ethers.Wallet | null = null;
@@ -122,13 +122,13 @@ export class EthereumManager extends BaseManager<any> {
         const password = await this.generatePassword(signature);
         const username = address.toLowerCase();
 
-        const result = await this.user.auth(username, password);
-        if (result.err) {
+        const result = await this.firegun.userLogin(username, password);
+        if ('err' in result) {
           throw new Error(result.err);
         }
 
-        const user = result as FiregunUser;
-        const internalWalletAddress = this.convertToEthPk(user.pair.priv);
+        this.user = result;
+        const internalWalletAddress = this.convertToEthPk(this.user.pair.priv);
 
         // Salviamo sia le chiavi private che pubbliche
         await this.saveKeys('ethereum', {
@@ -138,7 +138,7 @@ export class EthereumManager extends BaseManager<any> {
         });
 
         clearTimeout(timeoutId);
-        resolve(user.pair);
+        resolve(this.user.pair);
       } catch (error) {
         clearTimeout(timeoutId);
         reject(error);
@@ -149,34 +149,17 @@ export class EthereumManager extends BaseManager<any> {
   /**
    * Effettua il login con un account Ethereum
    */
-  public async login(): Promise<string> {
+  public async login(username: string, password: string): Promise<string> {
     try {
-      const signer = await this.getSigner();
-      const address = await signer.getAddress();
-
-      if (!address || !address.startsWith("0x")) {
-        throw new ValidationError("Indirizzo Ethereum non valido");
+      const result = await this.firegun.userLogin(username, password);
+      if ('err' in result) {
+        throw new Error(result.err);
       }
-
-      const signature = await signer.signMessage(this.MESSAGE_TO_SIGN);
-      const password = await this.generatePassword(signature);
-      const username = address.toLowerCase();
-      
-      const user = await this.user.auth(username, password);
-
-      return user._.sea.pub;
+      this.user = result;
+      return result.pair.pub;
     } catch (error) {
-      if (
-        error instanceof AuthenticationError ||
-        error instanceof ValidationError
-      ) {
-        throw error;
-      }
-      throw new AuthenticationError(
-        `Errore durante il login con Ethereum: ${
-          error instanceof Error ? error.message : "Errore sconosciuto"
-        }`
-      );
+      console.error("Login error:", error);
+      throw error;
     }
   }
 

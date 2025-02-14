@@ -190,7 +190,7 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
    * Ottiene la coppia di chiavi corrente
    */
   public getPairFromGun(): GunKeyPair {
-    return this.user._.sea as GunKeyPair;
+    return this.user.pair as GunKeyPair;
   }
 
   /**

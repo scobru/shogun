@@ -441,16 +441,27 @@ export default class Firegun {
      * @returns
      */
     async userPut (path: string,data: (string | {[key:string] : {}}),async=false, prefix=this.prefix): Promise<{data : Ack[],error : Ack[]}> {
-        return new Promise(async (resolve, reject) => {
-            if (this.user.alias) {
-                path = `~${this.user.pair.pub}/${path}`
-                resolve (await this.Put(path,data,async, prefix));
-             } else {
-                reject (<Ack>{err : new Error("User Belum Login") , ok : undefined});
-             }     
-        });
+        console.log("userPut", path, data, async, prefix);
+
+        if(!this.user.alias) {
+            throw new Error("User not logged in");
+        }
+
+        path = `~${this.user.pair.pub}/${path}`
+        return (await this.Put(path,data,async, prefix));
     }
 
+
+    async userSet (path: string,data: (string | {[key:string] : {}}),async=false, prefix=this.prefix): Promise<{data : Ack[],error : Ack[]}> {  
+        console.log("userSet", path, data, async, prefix);
+
+        if(!this.user.alias) {
+            throw new Error("User not logged in");
+        }
+
+        path = `~${this.user.pair.pub}/${path}`
+        return (await this.Set(path,data as any,async, prefix));
+    }
 
     /**
      * Insert new Data into a node with a random key

@@ -120,7 +120,7 @@ export class Shogun {
    */
   public async getUser(): Promise<UserKeys> {
     const user = await this.gunAuthManager.getUser();
-    const pair = user._.sea;
+    const pair = user.pair;
     const wallet = await this.walletManager.getWallet();
     const stealthKey = await this.stealthManager.getPair();
     const activityPubKey = await this.activityPubManager.getKeys();

@@ -98,21 +98,20 @@ export interface Keys {
 /**
  * Classe base astratta per i manager che utilizzano Gun
  */
-export abstract class BaseManager<T> {
+export abstract class BaseManager<T extends Record<string, any>> {
   protected gun: IGunInstance;
-  protected user: IGunUserInstance;
+  protected firegun: Firegun;
+  protected user: FiregunUser;
   protected storagePrefix: string;
   protected APP_KEY_PAIR: ISEAPair;
-  protected nodesPath: { private: string; public: string } = {
-    private: "",
-    public: "",
-  };
-  protected keys: Keys = {};
-  protected publicKeys: PublicKeys = {};
+  protected nodesPath: { private: string; public: string };
+  protected keys: Keys;
+  protected publicKeys: PublicKeys;
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
     this.gun = gun;
-    this.user = this.gun.user();
+    this.firegun = new Firegun({ gunInstance: gun });
+    this.user = this.firegun.user;
     this.APP_KEY_PAIR = APP_KEY_PAIR;
     this.storagePrefix = APP_KEY_PAIR.pub;
 
@@ -125,6 +124,11 @@ export abstract class BaseManager<T> {
       private: `${this.storagePrefix}/keys`,
       public: `${this.storagePrefix}/public`,
     };
+
+    // Ascolta gli eventi di autenticazione
+    this.firegun.On("auth", () => {
+      this.user = this.firegun.user;
+    });
   }
 
   /**
@@ -233,31 +237,17 @@ export abstract class BaseManager<T> {
   /**
    * Salva i dati in modo privato
    */
-  protected async savePrivateData(
-    data: T,
-    path: string = ""
-  ): Promise<IGunChain<any, any, any, string>> {
+  protected async savePrivateData(data: T, path: string = ""): Promise<any> {
     this.checkAuthentication();
 
     try {
-      if (!this.user.is) {
+      if (!this.user.alias) {
         throw new Error("User not properly initialized");
       }
 
       console.log("Saving private data at path:", path);
-      if (typeof data === "object") {
-        return new Promise((resolve) => {
-          this.user.get(path).set(data as any, (ack: GunMessagePut | GunCallbackPut) => {
-            resolve(ack as unknown as IGunChain<any, any, any, string>);
-          });
-        });
-      } else {
-        return new Promise((resolve) => {
-          this.user.get(path).put(data as any, (ack: GunMessagePut | GunCallbackPut) => {
-            resolve(ack as unknown as IGunChain<any, any, any, string>);
-          });
-        });
-      }
+      
+      return await this.firegun.userSet(path, data);
     } catch (error) {
       console.error("Error saving private data:", error);
       throw error;
@@ -267,26 +257,15 @@ export abstract class BaseManager<T> {
   /**
    * Salva i dati in modo pubblico
    */
-  protected async savePublicData(
-    data: any,
-    path: string = ""
-  ): Promise<IGunChain<any, any, any, string>> {
+  protected async savePublicData(data: any, path: string = ""): Promise<any> {
     this.checkAuthentication();
 
     try {
       console.log("Saving public data at path:", path);
       if (typeof data === "object") {
-        return new Promise((resolve) => {
-          this.gun.get(path).set(data, (ack) => {
-            resolve(ack as unknown as IGunChain<any, any, any, string>);
-          });
-        });
+        return await this.firegun.Set(path, data);
       } else {
-        return new Promise((resolve) => {
-          this.gun.get(path).put(data, (ack) => {
-            resolve(ack as unknown as IGunChain<any, any, any, string>);
-          });
-        });
+        return await this.firegun.Put(path, data);
       }
     } catch (error) {
       console.error("Error saving public data:", error);
@@ -302,17 +281,12 @@ export abstract class BaseManager<T> {
 
     try {
       console.log("Getting private data from path:", path);
-
-      return new Promise((resolve, reject) => {
-        this.user.get(path, (data: any) => {
-          if (!data) {
-            console.log("Data not found at path:", path);
-            reject(null);
-          } else {
-            resolve(this.processRetrievedData(data));
-          }
-        });
-      });
+      const data = await this.firegun.Get(path);
+      if (!data) {
+        console.log("Data not found at path:", path);
+        return null;
+      }
+      return this.processRetrievedData(data);
     } catch (error) {
       console.error("Error in getPrivateData:", error);
       return null;
@@ -369,29 +343,103 @@ export abstract class BaseManager<T> {
    * Recupera i dati pubblici
    */
   protected async getPublicData(path: string = ""): Promise<any> {
-    const getResult = this.gun.get(path);
-
-    if (getResult === undefined) {
-      return null;
-    }
-
-    return this.processRetrievedData(getResult);
+    const data = await this.firegun.Get(path);
+    if (!data) return null;
+    return this.processRetrievedData(data);
   }
 
   /**
    * Elimina i dati privati
    */
-  protected async deletePrivateData(path?: string): Promise<IGunChain<any, any, any, string>> {
+  protected async deletePrivateData(path?: string): Promise<void> {
     this.checkAuthentication();
-    return this.user.get(path || "").put(null);
+    
+    try {
+      // Prima otteniamo i dati per verificare che esistano
+      const existingData = await this.getPrivateData(path || "");
+      if (!existingData) {
+        console.log("No data to delete");
+        return;
+      }
+
+      // Eliminiamo i dati
+      await this.firegun.userDel(path || "");
+      console.log("Data deletion command sent");
+
+      // Aspettiamo un po' per la propagazione
+      await this.waitForOperation(2000);
+
+      // Verifichiamo che i dati siano stati eliminati
+      try {
+        const checkData = await this.getPrivateData(path || "");
+        if (checkData) {
+          throw new Error("Data was not properly deleted");
+        }
+        console.log("Data deletion verified");
+      } catch (error) {
+        // Se getPrivateData lancia un errore, significa che i dati non esistono più
+        console.log("Data deletion completed");
+      }
+    } catch (error) {
+      if (error.message === "Data was not properly deleted") {
+        throw error;
+      }
+      // Ignoriamo gli errori di "notfound" perché significano che i dati sono stati eliminati
+      if (error?.err === "notfound") {
+        console.log("Data deletion completed (not found)");
+        return;
+      }
+      throw error;
+    }
+  }
+
+  protected async waitForOperation(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
    * Elimina i dati pubblici
    */
-  protected async deletePublicData(path?: string): Promise<IGunChain<any, any, any, string>> {
+  protected async deletePublicData(path?: string): Promise<void> {
     this.checkAuthentication();
-    return this.gun.get(path || "").put(null);
+    
+    try {
+      // Prima verifichiamo che i dati esistano
+      const existingData = await this.getPublicData(path || "");
+      if (!existingData) {
+        console.log("No public data to delete");
+        return;
+      }
+
+      // Eliminiamo i dati
+      await this.firegun.Del(path || "");
+      console.log("Public data deletion command sent");
+
+      // Aspettiamo un po' per la propagazione
+      await this.waitForOperation(2000);
+
+      // Verifichiamo che i dati siano stati eliminati
+      try {
+        const checkData = await this.getPublicData(path || "");
+        if (checkData) {
+          throw new Error("Public data was not properly deleted");
+        }
+        console.log("Public data deletion verified");
+      } catch (error) {
+        // Se getPublicData lancia un errore, significa che i dati non esistono più
+        console.log("Public data deletion completed");
+      }
+    } catch (error) {
+      if (error.message === "Public data was not properly deleted") {
+        throw error;
+      }
+      // Ignoriamo gli errori di "notfound" perché significano che i dati sono stati eliminati
+      if (error?.err === "notfound") {
+        console.log("Public data deletion completed (not found)");
+        return;
+      }
+      throw error;
+    }
   }
 
   protected isNullOrEmpty(data: any): boolean {
@@ -407,8 +455,8 @@ export abstract class BaseManager<T> {
   /**
    * Verifica se l'utente è autenticato
    */
-  protected isAuthenticated(): boolean {
-    return !!(this.user && this.user.is && this.user.is.pub);
+  public isAuthenticated(): boolean {
+    return !!(this.user && this.user.alias && this.user.pair && this.user.pair.pub);
   }
 
   /**
@@ -418,7 +466,7 @@ export abstract class BaseManager<T> {
     if (!this.isAuthenticated()) {
       throw new Error("User not authenticated");
     }
-    return this.user.is?.pub || "";
+    return this.user.alias || "";
   }
 
   /**
@@ -432,7 +480,7 @@ export abstract class BaseManager<T> {
 
   public cleanup(): void {
     if (this.isAuthenticated()) {
-      this.user.leave();
+      this.firegun.userLogout();
     }
   }
 
@@ -453,8 +501,13 @@ export abstract class BaseManager<T> {
       const privateData = { [type]: data };
       await this.savePrivateData(privateData as T, "keys");
 
+      console.log("Saving keys:", privateData);
+
       // Estraiamo e salviamo i dati pubblici
-      const publicData = this.extractPublicData(type, data);
+      const publicData = await this.extractPublicData(type, data);
+
+      console.log("Saving public keys:", publicData);
+
       if (publicData) {
         const publicPath = `~${this.getCurrentPublicKey()}`;
         await this.savePublicData({ [type]: publicData }, publicPath);
@@ -475,9 +528,36 @@ export abstract class BaseManager<T> {
           publicKey: data.publicKey,
           createdAt: data.createdAt,
         };
-      // ... altri casi per altri tipi di chiavi
+      case "gun":
+        return {
+          pub: data.pub,
+          epub: data.epub,
+          alias: data.alias,
+          lastSeen: data.lastSeen,
+        };
+      case "ethereum":
+        return {
+          address: data.address,
+          timestamp: data.timestamp,
+        };
+      case "stealth":
+        return {
+          pub: data.pub,
+          epub: data.epub,
+        };
+      case "webAuthn":
+        return {
+          credentialId: data.credentialId,
+          lastUsed: data.lastUsed,
+          deviceInfo: data.deviceInfo,
+        };
       default:
         return null;
     }
+  }
+
+  protected setUser(user: FiregunUser): void {
+    this.user = user;
+    this.firegun.user = user;
   }
 }

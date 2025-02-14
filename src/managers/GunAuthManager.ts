@@ -1,107 +1,45 @@
-import { IGunInstance, IGunUserInstance, ISEAPair } from "gun";
-import type { GunKeyPair } from "../interfaces/GunKeyPair";
+import { IGunInstance, ISEAPair } from "gun";
+import type { FiregunUser, GunKeyPair } from "../db/common";
 import { BaseManager } from "./BaseManager";
 import { log } from "../utils/log";
-import { FiregunUser } from "../db/common";
-import { Keys } from "./BaseManager";
-
-interface IGunUser extends IGunUserInstance {
-  _: {
-    sea: GunKeyPair;
-    alias?: string;
-    $: any;
-    opt: any;
-    on: any;
-  };
-  is?: {
-    alias: string | ISEAPair;
-    pub: string;
-    epub: string;
-  };
-}
+import Firegun from "../db/Firegun2";
 
 /**
  * Main authentication manager handling GUN.js user operations and SEA (Security, Encryption, Authorization)
  * @class
  * @classdesc Manages decentralized user authentication, data encryption, and secure operations using GUN.js and SEA
  */
-export class GunAuthManager extends BaseManager<any> {
+export class GunAuthManager extends BaseManager<Record<string, any>> {
   private isAuthenticating = false;
-  protected pub: string = "";
-  protected alias: string = "";
   protected storagePrefix = "auth";
-  declare protected user: IGunUser;
+  private currentPub: string = "";
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
     super(gun, APP_KEY_PAIR);
   }
 
   private async resetGunState(): Promise<void> {
-    // Reset completo dello stato di Gun
     this.isAuthenticating = false;
-    this.pub = "";
     await this.logout();
     await new Promise((r) => setTimeout(r, 2000));
-
-    // Creiamo una nuova istanza di Gun.user()
-    this.user = this.gun.user() as IGunUser;
-    await new Promise((r) => setTimeout(r, 1000));
-
-    // Verifichiamo che lo stato sia effettivamente resettato
-    if (this.isAuthenticated()) {
-      log("User still authenticated after reset, retrying...");
-      await new Promise((r) => setTimeout(r, 2000));
-      this.user = this.gun.user() as IGunUser;
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-  }
-
-  /**
-   * Crea un nuovo utente
-   */
-  public async createUser(
-    username: string,
-    password: string
-  ): Promise<string> {
-    return new Promise((resolve, reject) => {
-      this.gun.user().create(username, password, (ack: any) => {
-        if (ack.err) {
-          reject(new Error(ack.err));
-        } else {
-          // Login dopo la creazione
-          this.login(username, password)
-            .then((pub) => resolve(pub))
-            .catch(reject);
-        }
-      });
-    });
+    this.user = this.firegun.user;
   }
 
   /**
    * Effettua il login di un utente
    */
   public async login(username: string, password: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      this.user.auth(username, password, (ack: any) => {
-        if (ack.err) {
-          reject(new Error(ack.err));
-        } else {
-          // Attendi che l'utente sia completamente autenticato
-          let attempts = 0;
-          const checkAuth = () => {
-            if (this.user._.sea?.pub) {
-              this.pub = this.user._.sea.pub;
-              resolve(this.pub);
-            } else if (attempts++ < 10) {
-              setTimeout(checkAuth, 500);
-            } else {
-              reject(new Error("Authentication timeout"));
-            }
-          };
-          checkAuth();
-        }
-      });
-    });
+    try {
+      const result = await this.firegun.userLogin(username, password);
+      if ('err' in result) {
+        throw new Error(result.err);
+      }
+      this.user = result;
+      return result.pair.pub;
+    } catch (error) {
+      console.error("Login error:", error);
+      throw error;
+    }
   }
 
   /**
@@ -109,7 +47,7 @@ export class GunAuthManager extends BaseManager<any> {
    */
   public async checkAlias(alias: string): Promise<boolean> {
     return new Promise((resolve) => {
-      this.gun.get(`~@${alias}`).once((data: any) => {
+      this.firegun.Get(`~@${alias}`).then((data: any) => {
         resolve(!!data);
       });
     });
@@ -119,24 +57,24 @@ export class GunAuthManager extends BaseManager<any> {
    * Effettua il login con una coppia di chiavi
    */
   public async loginWithKeys(keyPair: GunKeyPair): Promise<string> {
-    return new Promise((resolve, reject) => {
-      this.user.auth(keyPair, (ack: any) => {
-        if (ack.err) {
-          reject(new Error(ack.err));
-        } else {
-          resolve(keyPair.pub);
-        }
-      });
-    });
+    const result = await this.firegun.loginPair(keyPair);
+    if ('err' in result) {
+      throw new Error(result.err);
+    }
+    this.user = result;
+    return result.pair.pub;
   }
 
   /**
    * Effettua il logout
    */
   public async logout(): Promise<void> {
-    this.user.leave();
-    this.pub = "";
-    this.alias = "";
+    try {
+      await this.firegun.userLogout();
+    } catch (error) {
+      console.error("Logout error:", error);
+      throw error;
+    }
   }
 
   /**
@@ -146,14 +84,14 @@ export class GunAuthManager extends BaseManager<any> {
     if (!this.isAuthenticated()) {
       throw new Error("User not authenticated");
     }
-    return this.user._.sea;
+    return this.user.pair;
   }
 
   /**
    * Verifica se l'utente è autenticato
    */
   public isAuthenticated(): boolean {
-    return !!(this.user && this.user._.sea?.pub);
+    return !!(this.user && this.user.pair && this.user.pair.pub);
   }
 
   /**
@@ -163,9 +101,8 @@ export class GunAuthManager extends BaseManager<any> {
     if (!this.isAuthenticated()) {
       throw new Error("User not authenticated");
     }
-    return this.user._.sea.pub;
+    return this.user.pair.pub;
   }
-
 
   /**
    * Checks username availability and creates user if available.
@@ -187,9 +124,6 @@ export class GunAuthManager extends BaseManager<any> {
     }
     log("User does not exist, proceeding with creation...");
 
-    let retryCount = 0;
-    const maxRetries = 3;
-
     const attemptUserCreation = async (): Promise<string> => {
       // Reset dello stato prima di ogni tentativo
       await this.resetGunState();
@@ -201,20 +135,9 @@ export class GunAuthManager extends BaseManager<any> {
           reject(new Error("User creation timeout"));
         }, 20000);
 
-        this.gun.user().create(username, password, async (ack: any) => {
-          clearTimeout(timeoutId);
-          if (ack.err) {
-            reject(new Error(ack.err));
-            return;
-          }
-
-          try {
-            await this.login(username, password);
-            resolve(this.user._.sea.pub);
-          } catch (error) {
-            reject(error);
-          }
-        });
+        this.firegun.userNew(username, password).then((user: FiregunUser) => {
+          resolve(user.pair.pub);
+        }).catch(reject);
       });
     };
 
@@ -223,7 +146,7 @@ export class GunAuthManager extends BaseManager<any> {
 
   private async getPubFromAlias(alias: string): Promise<string | null> {
     return new Promise((resolve) => {
-      this.gun.get(`~@${alias}`).once((data: any) => {
+      this.firegun.Get(`~@${alias}`).then((data: any) => {
         if (!data) return resolve(null);
         if ("_" in data) {
           delete data._;
@@ -243,47 +166,18 @@ export class GunAuthManager extends BaseManager<any> {
    * @param passphrase User's password.
    * @returns Generated SEA key pair for the user.
    */
-  public override async createAccount(alias: string, passphrase: string): Promise<GunKeyPair> {
+  public async createAccount(alias: string, passphrase: string): Promise<GunKeyPair> {
     try {
-      // Prima verifichiamo se l'utente esiste
-      const exists = await this.exists(alias);
-      if (exists) {
-        throw new Error("Username already taken");
+      const result = await this.firegun.userNew(alias, passphrase);
+      if ('err' in result) {
+        throw new Error(result.err);
       }
-
-      // Creiamo l'utente
-      return new Promise((resolve, reject) => {
-        this.gun.user().create(alias, passphrase, async (ack: any) => {
-          if (ack.err) {
-            reject(new Error(ack.err));
-            return;
-          }
-
-          try {
-            // Login dopo la creazione
-            await this.login(alias, passphrase);
-            
-            const keys = this.user._.sea;
-            await this.saveKeys('gun', {
-              pub: keys.pub,
-              priv: keys.priv,
-              epub: keys.epub,
-              epriv: keys.epriv,
-              alias: alias,
-              lastSeen: Date.now()
-            });
-            
-            resolve(keys);
-          } catch (error) {
-            reject(error);
-          }
-        });
-      });
+      return result.pair;
     } catch (error) {
       if (error.message === "Username already taken") {
         throw error;
       }
-      throw new Error("Creazione account fallita");
+      throw new Error("Account creation failed");
     }
   }
 
@@ -293,42 +187,30 @@ export class GunAuthManager extends BaseManager<any> {
    * @throws Error if user is not authenticated.
    */
   public getPublicKey(): string {
-    if (this.pub) return this.pub;
-    if (this.keys.gun?.pub) {
-      this.pub = this.keys.gun.pub;
-      return this.pub;
+    if (!this.isAuthenticated()) {
+      throw new Error("User not authenticated");
     }
-    if (this.user._.sea?.pub) {
-      this.pub = this.user._.sea.pub;
-      this.keys.gun = {
-        pub: this.user._.sea.pub,
-        priv: this.user._.sea.priv,
-        epub: this.user._.sea.epub,
-        epriv: this.user._.sea.epriv
-      };
-      return this.pub;
-    }
-    throw new Error("Utente non autenticato");
+    return this.user.pair.pub;
   }
 
   /**
    * Gets current user's SEA key pair.
    */
   public getPair(): GunKeyPair {
-    return this.keys.gun as GunKeyPair || this.user._.sea;
+    return (this.keys.gun as GunKeyPair) || this.user.pair;
   }
 
   /**
    * Gets the GUN instance reference.
    */
-  public getGun(): IGunInstance {
-    return this.gun;
+  public getGun(): Firegun {
+    return this.firegun;
   }
 
   /**
    * Gets the user instance.
    */
-  public getUser(): IGunUser {
+  public getUser(): FiregunUser {
     return this.user;
   }
 
@@ -339,7 +221,7 @@ export class GunAuthManager extends BaseManager<any> {
    */
   public async exportGunKeyPair(): Promise<string> {
     this.checkAuthentication();
-    return JSON.stringify(this.keys.gun || this.user._.sea);
+    return JSON.stringify(this.user.pair);
   }
 
   /**
@@ -368,12 +250,12 @@ export class GunAuthManager extends BaseManager<any> {
    */
   public async exists(alias: string): Promise<boolean> {
     log(`Checking existence for alias: ${alias}`);
-    if (this.user._.sea?.pub && this.user.is?.alias === alias) {
+    if (this.user.pair.pub && this.user.alias === alias) {
       log("User is already authenticated with this alias");
       return true;
     }
     return new Promise((resolve) => {
-      this.gun.get(`~@${alias}`).once((data: any) => {
+      this.firegun.Get(`~@${alias}`).then((data: any) => {
         if (!data) {
           log("No data found for alias");
           return resolve(false);
@@ -402,12 +284,11 @@ export class GunAuthManager extends BaseManager<any> {
   public async authListener(): Promise<void> {
     return new Promise((resolve) => {
       log("Initializing authentication listener...");
-      this.gun.on("auth", (pub: any) => {
-        this.pub = pub;
+      this.firegun.On("auth", (pub: any) => {
+        this.currentPub = pub;
         log("Authentication listener ready");
         resolve();
       });
-      // Se non riceviamo l'evento auth, risolviamo dopo un timeout
       setTimeout(() => {
         log("Auth listener timeout, continuing anyway");
         resolve();

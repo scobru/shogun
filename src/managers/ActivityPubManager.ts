@@ -1,7 +1,8 @@
 import { IGunInstance, ISEAPair } from "gun";
 import type { ActivityPubKeys } from "../interfaces/ActivityPubKeys";
+import { GunAuthManager } from "./GunAuthManager";
 import { BaseManager } from "./BaseManager";
-import { FiregunUser } from "../db/common";
+import type { FiregunUser } from "../db/common";
 
 let cryptoModule: any;
 try {
@@ -13,7 +14,7 @@ try {
   cryptoModule = null;
 }
 
-export class ActivityPubManager extends BaseManager<any> {
+export class ActivityPubManager extends BaseManager<Record<string, any>> {
   protected storagePrefix = "activitypub";
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
@@ -57,26 +58,12 @@ export class ActivityPubManager extends BaseManager<any> {
    */
   public async login(username: string, password: string): Promise<string> {
     try {
-      return new Promise((resolve, reject) => {
-        this.user.auth(username, password, (ack: any) => {
-          if (ack.err) {
-            reject(ack.err);
-          } else {
-            // Attendi che l'utente sia completamente autenticato
-            let attempts = 0;
-            const checkAuth = () => {
-              if (this.isAuthenticated()) {
-                resolve(this.user._.sea.pub);
-              } else if (attempts++ < 10) {
-                setTimeout(checkAuth, 500);
-              } else {
-                reject(new Error("Authentication timeout"));
-              }
-            };
-            checkAuth();
-          }
-        });
-      });
+      const result = await this.firegun.userLogin(username, password);
+      if ('err' in result) {
+        throw new Error(result.err);
+      }
+      this.user = result;
+      return result.pair.pub;
     } catch (error) {
       console.error("Login error:", error);
       throw error;
@@ -135,12 +122,51 @@ export class ActivityPubManager extends BaseManager<any> {
   public async deleteKeys(): Promise<void> {
     this.checkAuthentication();
     
-    // Rimuoviamo le chiavi dalla memoria
-    delete this.keys.activityPub;
-    
-    // Salviamo lo stato aggiornato
-    await this.savePrivateData(this.keys, "keys");
-    await this.deletePublicData("activitypub/publicKey");
+    try {
+      console.log("Starting ActivityPub keys deletion...");
+      
+      // Rimuoviamo le chiavi dalla memoria
+      if (this.keys) {
+        delete this.keys.activityPub;
+      }
+
+      // Eliminiamo i dati privati
+      console.log("Deleting private keys...");
+      await this.deletePrivateData("keys");
+      await this.waitForOperation(2000);
+
+      // Eliminiamo i dati pubblici
+      console.log("Deleting public keys...");
+      const publicPath = `~${this.getCurrentPublicKey()}/activitypub`;
+      await this.deletePublicData(publicPath);
+      await this.waitForOperation(2000);
+
+      // Verifica finale
+      console.log("Verifying keys deletion...");
+      try {
+        const privateKeys = await this.getPrivateData("keys");
+        const publicKeys = await this.getPublicData(publicPath);
+
+        if (privateKeys?.activityPub || publicKeys) {
+          throw new Error("Keys were not properly deleted");
+        }
+        console.log("ActivityPub keys deletion completed successfully");
+      } catch (error) {
+        // Se getPrivateData/getPublicData lanciano un errore, significa che i dati non esistono più
+        if (error?.err === "notfound") {
+          console.log("Keys deletion verified (not found)");
+          return;
+        }
+        throw error;
+      }
+    } catch (error) {
+      if (error?.err === "notfound") {
+        console.log("Keys deletion completed (not found)");
+        return;
+      }
+      console.error("Error in deleteKeys:", error);
+      throw error;
+    }
   }
 
   /**
@@ -151,24 +177,13 @@ export class ActivityPubManager extends BaseManager<any> {
    */
   public async getPk(username: string): Promise<string> {
     try {
-      // Add stricter validation
-      if (!username || !/^[a-zA-Z0-9_]{3,30}$/.test(username)) {
-        throw new Error(`Invalid username "${username}"`);
+      const data = await this.getPrivateData(`${username}/activityPub`);
+      if (!data || !data.privateKey) {
+        throw new Error(`Private key not found for user ${username}`);
       }
-
-      // Modifica: usa il percorso corretto per recuperare le chiavi
-      const keys = await this.getPrivateData("activitypub");
-      if (!keys || !keys.privateKey) {
-        throw new Error("Private key not found for user " + username);
-      }
-
-      if (!this.validateKey(keys.privateKey)) {
-        throw new Error("Invalid key format for user " + username);
-      }
-
-      return keys.privateKey;
+      return data.privateKey;
     } catch (error) {
-      console.error("Error retrieving key:", error);
+      console.error("Error getting private key:", error);
       throw error;
     }
   }

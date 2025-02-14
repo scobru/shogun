@@ -1,25 +1,58 @@
-const Gun = require('gun')
-require('gun/sea')
+const Gun = require('gun');
+require('gun/sea');
 
-const port = 8765
+const port = 8765;
 
-const server = require('http').createServer().listen(port)
+// Crea il server HTTP
+const server = require('http').createServer();
+
+console.log("Initializing Gun server...");
+
+// Inizializza Gun con configurazione minima
 const gun = Gun({
   web: server,
-  file: './tests/radata',  // Disabilitiamo il file storage per i test
-  radisk: true, // Disabilitiamo radisk per i test
-  axe: true // Disabilitiamo axe per ridurre la complessità
+  file: './radata',
+  radisk: true,
+  multicast: false,
+  axe: false
+});
 
-})
+let serverReady = false;
 
-console.log(`Gun server running on port ${port}`)
+server.listen(port, () => {
+  console.log(`Gun server running on port ${port}`);
+  serverReady = true;
+});
+
+gun.on('hi', peer => {
+  console.log('Peer connected:', peer);
+});
+
+gun.on('bye', peer => {
+  console.log('Peer disconnected:', peer);
+});
+
+// Gestione errori del server
+server.on('error', (error) => {
+  console.error('Server error:', error);
+});
+
+// Gestione errori di Gun
+gun.on('error', (error) => {
+  console.error('Gun error:', error);
+});
+
+// Esporta sia gun che lo stato del server
+module.exports = {
+  gun,
+  isReady: () => serverReady
+};
 
 // Pulizia delle risorse alla chiusura
-process.on('SIGINT', async () => {
-  console.log('Shutting down Gun server...')
-  await new Promise(resolve => setTimeout(resolve, 1000)) // Attendiamo che le operazioni in corso terminino
+process.on('SIGINT', () => {
+  console.log('Shutting down server...');
   server.close(() => {
-    console.log('Server closed successfully')
-    process.exit(0)
-  })
-}) 
+    console.log('Server closed successfully');
+    process.exit(0);
+  });
+}); 

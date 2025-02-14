@@ -44,6 +44,7 @@ export default class Firegun {
    * @returns {Promise<*>}
    */
   async Get(path, wait = 1000, prefix = this.prefix) {
+    console.log("Get", path, wait, prefix);
     return new Promise((resolve, reject) => {
       const paths = path.split("/");
 

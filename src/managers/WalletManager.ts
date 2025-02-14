@@ -315,7 +315,7 @@ export class WalletManager extends BaseManager<WalletKeys> {
       let retries = 3;
       while (retries > 0) {
         try {
-          if (this.user._.sea) {
+          if (this.user.pair.pub) {
             return;
           }
           await new Promise(resolve => setTimeout(resolve, 1000));
