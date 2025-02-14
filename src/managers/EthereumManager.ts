@@ -1,23 +1,16 @@
 import { ethers } from "ethers";
 import { AuthenticationError, ValidationError } from "../utils/gun/errors";
-import { BaseManager } from "./BaseManager";
-import { EthereumProvider, GunKeyPair } from "../interfaces";
+import { EthereumProvider } from "../interfaces";
 import { IGunInstance, ISEAPair } from "gun";
-import { FiregunUser } from "../db/common";
 
 /**
  * Gestisce le operazioni Ethereum inclusa la creazione dell'account e il login
  */
-export class EthereumManager extends BaseManager<Record<string, any>> {
-  protected storagePrefix = "ethereum";
+export class EthereumManager {
   private customProvider: ethers.JsonRpcProvider | null = null;
   private customWallet: ethers.Wallet | null = null;
   private MESSAGE_TO_SIGN = "I Love Shogun!";
   private readonly OPERATION_TIMEOUT = 60000; // 60 secondi
-
-  constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
-    super(gun, APP_KEY_PAIR);
-  }
 
   /**
    * Imposta un provider Ethereum personalizzato
@@ -101,13 +94,14 @@ export class EthereumManager extends BaseManager<Record<string, any>> {
     }
   }
 
-  /**
-   * Crea un nuovo account Ethereum
-   */
-  public async createAccount(): Promise<GunKeyPair> {
+  public async generateCredentials(): Promise<{
+    address: string;
+    username: string;
+    password: string;
+  }> {
     return new Promise(async (resolve, reject) => {
       const timeoutId = setTimeout(() => {
-        reject(new Error("Operation timed out"));
+        reject(new Error("Operazione scaduta"));
       }, this.OPERATION_TIMEOUT);
 
       try {
@@ -115,53 +109,28 @@ export class EthereumManager extends BaseManager<Record<string, any>> {
         const address = await signer.getAddress();
 
         if (!address || !address.startsWith("0x")) {
-          throw new Error("Invalid Ethereum address");
+          throw new Error("Indirizzo Ethereum non valido");
         }
 
         const signature = await signer.signMessage(this.MESSAGE_TO_SIGN);
         const password = await this.generatePassword(signature);
         const username = address.toLowerCase();
 
-        const result = await this.firegun.userLogin(username, password);
-        if ('err' in result) {
-          throw new Error(result.err);
-        }
-
-        this.user = result;
-        const internalWalletAddress = this.convertToEthPk(this.user.pair.priv);
-
-        // Salviamo sia le chiavi private che pubbliche
-        await this.saveKeys('ethereum', {
-          address: address,
-          privateKey: internalWalletAddress,
-          timestamp: Date.now()
-        });
-
         clearTimeout(timeoutId);
-        resolve(this.user.pair);
+        resolve({
+          address,
+          username,
+          password,
+        });
       } catch (error) {
         clearTimeout(timeoutId);
-        reject(error);
+        reject(new Error(`Errore nella generazione delle credenziali: ${
+          error instanceof Error ? error.message : "Errore sconosciuto"
+        }`));
       }
     });
   }
 
-  /**
-   * Effettua il login con un account Ethereum
-   */
-  public async login(username: string, password: string): Promise<string> {
-    try {
-      const result = await this.firegun.userLogin(username, password);
-      if ('err' in result) {
-        throw new Error(result.err);
-      }
-      this.user = result;
-      return result.pair.pub;
-    } catch (error) {
-      console.error("Login error:", error);
-      throw error;
-    }
-  }
 
   /**
    * Genera una password da una firma

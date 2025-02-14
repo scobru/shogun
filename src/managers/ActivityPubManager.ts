@@ -1,10 +1,8 @@
 import { IGunInstance, ISEAPair } from "gun";
 import type { ActivityPubKeys } from "../interfaces/ActivityPubKeys";
-import { GunAuthManager } from "./GunAuthManager";
-import { BaseManager } from "./BaseManager";
-import type { FiregunUser } from "../db/common";
 
 let cryptoModule: any;
+
 try {
   if (typeof window === "undefined") {
     // We're in Node.js
@@ -14,19 +12,13 @@ try {
   cryptoModule = null;
 }
 
-export class ActivityPubManager extends BaseManager<Record<string, any>> {
-  protected storagePrefix = "activitypub";
-
-  constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
-    super(gun, APP_KEY_PAIR);
-  }
-
+export class ActivityPubManager {
   /**
    * Generates a new RSA key pair for ActivityPub.
    * @returns {Promise<ActivityPubKeys>} - The generated key pair.
    * @throws {Error} - If key generation fails.
    */
-  public async createAccount(): Promise<ActivityPubKeys> {
+  public async createPair(): Promise<ActivityPubKeys> {
     try {
       const { privateKey, publicKey } = await this.generateRSAKeyPair();
 
@@ -34,156 +26,13 @@ export class ActivityPubManager extends BaseManager<Record<string, any>> {
         throw new Error("Invalid generated key format");
       }
 
-      const activityPubKeys: ActivityPubKeys = {
+      return {
         publicKey,
         privateKey,
         createdAt: Date.now(),
       };
-
-      // Salva le chiavi
-      await this.saveKeys('activityPub', activityPubKeys);
-      
-      return activityPubKeys;
     } catch (error) {
       console.error("Error generating ActivityPub keys:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Logs in with the provided credentials
-   * @param {string} username - The username to login with
-   * @param {string} password - The password to login with
-   * @returns {Promise<FiregunUser>} - The authenticated user
-   */
-  public async login(username: string, password: string): Promise<string> {
-    try {
-      const result = await this.firegun.userLogin(username, password);
-      if ('err' in result) {
-        throw new Error(result.err);
-      }
-      this.user = result;
-      return result.pair.pub;
-    } catch (error) {
-      console.error("Login error:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Retrieves ActivityPub keys
-   * @returns {Promise<ActivityPubKeys>} - The stored ActivityPub keys
-   * @throws {Error} - If keys are not found
-   */
-  public async getKeys(): Promise<ActivityPubKeys> {
-    this.checkAuthentication();
-    
-    try {
-      // Prima controlliamo se abbiamo le chiavi in memoria
-      if (this.keys.activityPub) {
-        return this.keys.activityPub;
-      }
-
-      // Altrimenti le recuperiamo dal database
-      const savedKeys = await this.getPrivateData("keys");
-      if (savedKeys?.activityPub) {
-        this.keys = savedKeys;
-        return this.keys.activityPub as ActivityPubKeys;
-      }
-
-      throw new Error("ActivityPub keys not found");
-    } catch (error) {
-      console.error("Error retrieving ActivityPub keys:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Retrieves the ActivityPub public key
-   * @returns {Promise<string>} - The public key
-   */
-  public async getPub(): Promise<string> {
-    this.checkAuthentication();
-    
-    // Prima controlliamo le chiavi in memoria
-    if (this.keys.activityPub?.publicKey) {
-      return this.keys.activityPub.publicKey;
-    }
-
-    // Altrimenti recuperiamo dal database
-    const publicKey = await this.getPublicData("activitypub/publicKey");
-    return publicKey?.publicKey;
-  }
-
-  /**
-   * Deletes ActivityPub keys
-   * @returns {Promise<void>}
-   */
-  public async deleteKeys(): Promise<void> {
-    this.checkAuthentication();
-    
-    try {
-      console.log("Starting ActivityPub keys deletion...");
-      
-      // Rimuoviamo le chiavi dalla memoria
-      if (this.keys) {
-        delete this.keys.activityPub;
-      }
-
-      // Eliminiamo i dati privati
-      console.log("Deleting private keys...");
-      await this.deletePrivateData("keys");
-      await this.waitForOperation(2000);
-
-      // Eliminiamo i dati pubblici
-      console.log("Deleting public keys...");
-      const publicPath = `~${this.getCurrentPublicKey()}/activitypub`;
-      await this.deletePublicData(publicPath);
-      await this.waitForOperation(2000);
-
-      // Verifica finale
-      console.log("Verifying keys deletion...");
-      try {
-        const privateKeys = await this.getPrivateData("keys");
-        const publicKeys = await this.getPublicData(publicPath);
-
-        if (privateKeys?.activityPub || publicKeys) {
-          throw new Error("Keys were not properly deleted");
-        }
-        console.log("ActivityPub keys deletion completed successfully");
-      } catch (error) {
-        // Se getPrivateData/getPublicData lanciano un errore, significa che i dati non esistono più
-        if (error?.err === "notfound") {
-          console.log("Keys deletion verified (not found)");
-          return;
-        }
-        throw error;
-      }
-    } catch (error) {
-      if (error?.err === "notfound") {
-        console.log("Keys deletion completed (not found)");
-        return;
-      }
-      console.error("Error in deleteKeys:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Retrieves the private key for a given username.
-   * @param {string} username - The username to retrieve the private key for.
-   * @returns {Promise<string>}
-   * @throws {Error} - If the username format is invalid or the private key is not found.
-   */
-  public async getPk(username: string): Promise<string> {
-    try {
-      const data = await this.getPrivateData(`${username}/activityPub`);
-      if (!data || !data.privateKey) {
-        throw new Error(`Private key not found for user ${username}`);
-      }
-      return data.privateKey;
-    } catch (error) {
-      console.error("Error getting private key:", error);
       throw error;
     }
   }
@@ -261,16 +110,9 @@ export class ActivityPubManager extends BaseManager<Record<string, any>> {
    */
   public async sign(
     stringToSign: string,
-    username: string
+    privateKey: string,
   ): Promise<{ signature: string; signatureHeader: string }> {
     try {
-      // Retrieve private key
-      const privateKey = await this.getPk(username);
-
-      if (!privateKey) {
-        throw new Error("Private key not found for user " + username);
-      }
-
       let signature: string;
 
       // If in Node.js
@@ -328,8 +170,10 @@ export class ActivityPubManager extends BaseManager<Record<string, any>> {
         throw new Error("No cryptographic implementation available");
       }
 
+      const randomKeyId = `${Math.random().toString(36).substring(2, 15)}`;
+
       // Generate signature header
-      const signatureHeader = `keyId="${username}",algorithm="rsa-sha256",signature="${signature}"`;
+      const signatureHeader = `keyId="${randomKeyId}",algorithm="rsa-sha256",signature="${signature}"`;
 
       return { signature, signatureHeader };
     } catch (error) {
@@ -381,20 +225,23 @@ export class ActivityPubManager extends BaseManager<Record<string, any>> {
           privateKey: this.formatPEM(privateKeyBuffer, "PRIVATE")
         };
       } else if (cryptoModule) {
-        // Node.js implementation
-        const { generateKeyPairSync } = cryptoModule;
-        const { publicKey, privateKey } = generateKeyPairSync("rsa", {
-          modulusLength: 2048,
-          publicKeyEncoding: {
-            type: "spki",
-            format: "pem",
-          },
-          privateKeyEncoding: {
-            type: "pkcs8",
-            format: "pem",
-          },
-        });
-        return { publicKey, privateKey };
+        try {
+          const { generateKeyPairSync } = cryptoModule;
+          const { publicKey, privateKey } = generateKeyPairSync("rsa", {
+            modulusLength: 2048,
+            publicKeyEncoding: {
+              type: "spki",
+              format: "pem",
+            },
+            privateKeyEncoding: {
+              type: "pkcs8",
+              format: "pem",
+            },
+          });
+          return { publicKey, privateKey };
+        } catch (error) {
+          throw new Error(`Node.js key generation failed: ${error instanceof Error ? error.message : "unknown error"}`);
+        }
       }
       throw new Error("No cryptographic implementation available");
     } catch (error) {

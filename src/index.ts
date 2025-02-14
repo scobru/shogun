@@ -1,7 +1,6 @@
 import { Shogun } from "./Shogun";
 import { StealthManager } from "./managers/StealthManager";
 import { EthereumManager } from "./managers/EthereumManager";
-import { GunAuthManager } from "./managers/GunAuthManager";
 import { ActivityPubManager } from "./managers/ActivityPubManager";
 import { WebAuthnManager } from "./managers/WebAuthnManager";
 import { WalletManager } from "./managers/WalletManager";
@@ -31,7 +30,6 @@ export { Shogun };
 // export managers
 export {
   EthereumManager,
-  GunAuthManager,
   ActivityPubManager,
   WebAuthnManager,
   StealthManager,

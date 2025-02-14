@@ -1,16 +1,101 @@
 import Gun from "gun";
 import Firegun from "./firegun";
+import { WalletData } from "../interfaces/WalletResult";
 
-export type FiregunUser = {
-  alias: string;
-  pair: {
-    priv: string;
+/**
+ * Interfaccia per le chiavi pubbliche
+ */
+export type PublicKeys = {
+  gun?: {
     pub: string;
-    epriv: string;
+    epub: string;
+    alias?: string;
+    lastSeen?: number;
+  };
+  activityPub?: {
+    publicKey: string;
+    createdAt: number;
+  };
+  ethereum?: {
+    address: string;
+    timestamp: number;
+  };
+  stealth?: {
+    pub: string;
     epub: string;
   };
-  err?: any;
-};
+  webAuthn?: {
+    credentialId: string;
+    lastUsed: number;
+    deviceInfo?: {
+      name: string;
+      platform: string;
+    };
+  };
+  externalWallet?: {
+    internalWalletAddress: string;
+    externalWalletAddress: string;
+  };
+  wallets?: {
+    ethereum: {
+      address: string;
+      timestamp: number;
+    }[];
+  };
+}
+
+/**
+ * Interfaccia che raccoglie tutti i tipi di chiavi private supportate
+ */
+export type Keys = {
+  gun?: {
+    pub: string;
+    priv: string;
+    epub: string;
+    epriv: string;
+  };
+  activityPub?: {
+    publicKey: string;
+    privateKey: string;
+    createdAt: number;
+  };
+  ethereum?: {
+    address: string;
+    privateKey: string;
+    entropy?: string;
+    timestamp?: number;
+  };
+  stealth?: {
+    pub: string;
+    priv: string;
+    epub: string;
+    epriv: string;
+  };
+  webAuthn?: {
+    credentialId: string;
+    deviceInfo: {
+      name: string;
+      platform: string;
+    };
+    username: string;
+    password: string;
+    timestamp: number;
+  };
+  externalWallet?: {
+    internalWalletAddress: string;
+    externalWalletAddress: string;
+  };
+  wallets?: {
+    ethereum: WalletData[];  // Array di wallet
+  };
+}
+
+export interface FiregunUser {
+  alias: string;
+  pair: GunKeyPair;
+  is?: any;
+  _?: any;
+}
 
 export interface GunKeyPair {
   pub: string;

@@ -5,9 +5,7 @@ import type {
   WebAuthnCredentials,
   DeviceCredential,
 } from "../interfaces/WebAuthnResult";
-import { BaseManager } from "./BaseManager";
 import jsSha256 from "js-sha256";
-import { GunKeyPair } from "../interfaces/GunKeyPair";
 import "gun/sea";
 
 const sha256 = jsSha256.sha256;
@@ -132,13 +130,7 @@ const generateCredentialsFromSalt = (
   };
 };
 
-export class WebAuthnManager extends BaseManager<Record<string, any>> {
-  protected storagePrefix = "webauthn";
-
-  constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
-    super(gun, APP_KEY_PAIR);
-  }
-
+export class WebAuthnManager {
   private validateUsername(username: string): void {
     if (!username || typeof username !== "string") {
       throw new Error("Username must be a non-empty string");
@@ -158,45 +150,11 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
     }
   }
 
-  /**
-   * Recupera i dati privati per un utente WebAuthn
-   */
-  private async getWebAuthnPrivateData(
-    username: string
-  ): Promise<WebAuthnCredentials | null> {
-    const data = await this.getPrivateData(username);
-    return data as WebAuthnCredentials;
-  }
-
-  /**
-   * Salva i dati privati per un utente WebAuthn
-   */
-  private async saveWebAuthnPrivateData(
-    data: WebAuthnCredentials
-  ): Promise<void> {
-    await this.savePrivateData(data, "webauthn");
-  }
-
-  /**
-   * Salva i dati pubblici per un utente WebAuthn
-   */
-  private async saveWebAuthnPublicData(
-    data: Record<string, any>
-  ): Promise<void> {
-    await this.savePublicData(data, "webauthn");
-  }
-
-  /**
-   * Ottiene la coppia di chiavi corrente
-   */
-  public getPairFromGun(): GunKeyPair {
-    return this.user.pair as GunKeyPair;
-  }
 
   /**
    * Implementazione del metodo createAccount richiesto da BaseManager
    */
-  public async createAccount(
+  public async createPair(
     username: string,
     isNewDevice: boolean = false,
     deviceName?: string
@@ -220,28 +178,6 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
   ): Promise<WebAuthnCredentials | null> {
     const credentials = await this.getWebAuthnPrivateData(username);
     return credentials as WebAuthnCredentials;
-  }
-
-  private async save(
-    username: string,
-    credentials: WebAuthnCredentials
-  ): Promise<void> {
-    // Salva i dati privati (credenziali complete)
-    await this.saveWebAuthnPrivateData(credentials);
-
-    // Salva i dati pubblici (solo informazioni non sensibili)
-    const publicData = {
-      username,
-      registered: true,
-      lastUsed: Date.now(),
-      deviceCount: Object.keys(credentials.credentials).length,
-    };
-
-    await this.saveWebAuthnPublicData(publicData);
-  }
-
-  public getAuthenticators(): GunKeyPair[] {
-    return [this.getPairFromGun()];
   }
 
   public async generateCredentials(
@@ -345,8 +281,7 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
           },
         };
 
-        // Salva le credenziali aggiornate
-        await this.save(username, updatedCreds);
+      
 
         return {
           success: true,
@@ -387,11 +322,8 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
     if (!creds?.credentials || !creds.credentials[credentialId]) {
       return false;
     }
-
     const updatedCreds = { ...creds };
     delete updatedCreds.credentials[credentialId];
-
-    await this.save(username, updatedCreds);
     return true;
   }
 
@@ -432,10 +364,6 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
 
         // Genera le credenziali dal salt salvato
         const { password } = generateCredentialsFromSalt(username, salt);
-
-        await this.saveWebAuthnPublicData({
-          lastUsed: Date.now(),
-        });
 
         return {
           success: true,
@@ -526,5 +454,24 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
       typeof window.crypto !== "undefined" &&
       typeof window.crypto.subtle !== "undefined"
     );
+  }
+
+  private async getWebAuthnPrivateData(username: string): Promise<WebAuthnCredentials | null> {
+    if (!username || typeof username !== "string") {
+        throw new Error("Username non valido");
+    }
+
+    try {
+        // Implementazione da spostare in Firegun
+        throw new Error("Metodo da implementare in Firegun");
+    } catch (error) {
+        console.error("Errore nel recupero dei dati WebAuthn:", error);
+        throw error;
+    }
+  }
+
+  private async save(data: any): Promise<void> {
+    // Questo metodo non dovrebbe esistere nel manager
+    throw new Error("Method should be implemented in Firegun");
   }
 }

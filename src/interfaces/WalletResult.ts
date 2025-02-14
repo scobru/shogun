@@ -1,13 +1,18 @@
 export interface WalletData {
   address: string;
   privateKey: string;
-  entropy: string;
+  entropy?: string;
   timestamp: number;
 }
 
+export interface WalletKeys {
+  ethereum?: WalletData[];
+}
+
 export interface WalletResult {
-  walletObj: WalletData;
-  entropy: string;
+  success: boolean;
+  error?: string;
+  wallet?: WalletData;
 }
 
 export interface StealthAddressResult {
