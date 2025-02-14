@@ -1,6 +1,6 @@
 import { ethers } from "ethers";
 import Gun from "gun";
-import { BaseManager } from "./BaseManager";
+import { BaseManager, Keys } from "./BaseManager";
 import type { StealthKeyPair } from "../interfaces/StealthKeyPair";
 import { IGunInstance, ISEAPair } from "gun";
 
@@ -36,33 +36,51 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
    */
   public async createAccount(): Promise<StealthKeyPair> {
     try {
-      const existingKeys = await this.getPair();
-      if (existingKeys) {
-        return existingKeys;
-      }
-    } catch (error) {
-      // Se non troviamo chiavi esistenti, ne creiamo di nuove
-    }
-
-    return new Promise((resolve, reject) => {
-      SEA.pair((pair: any) => {
-        if (!pair?.pub || !pair?.priv || !pair?.epub || !pair?.epriv) {
-          reject(new Error("Generated keys are invalid"));
-          return;
-        }
-
-        const stealthKeyPair: StealthKeyPair = {
-          pub: pair.pub,
-          priv: pair.priv,
-          epub: pair.epub,
-          epriv: pair.epriv,
+      // Prima verifichiamo se esistono già delle chiavi
+      const existingKeys = await this.getPrivateData("keys") as Keys;
+      if (existingKeys?.stealth) {
+        return {
+          pub: existingKeys.stealth.pub,
+          priv: existingKeys.stealth.priv,
+          epub: existingKeys.stealth.epub,
+          epriv: existingKeys.stealth.epriv
         };
+      }
 
-        this.save(stealthKeyPair)
-          .then(() => resolve(stealthKeyPair))
-          .catch(reject);
-      });
-    });
+      // Creiamo nuove chiavi con retry
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          return new Promise((resolve, reject) => {
+            SEA.pair((pair: any) => {
+              if (!pair?.pub || !pair?.priv || !pair?.epub || !pair?.epriv) {
+                reject(new Error("Generated keys are invalid"));
+                return;
+              }
+
+              const stealthKeyPair: StealthKeyPair = {
+                pub: pair.pub,
+                priv: pair.priv,
+                epub: pair.epub,
+                epriv: pair.epriv,
+              };
+
+              this.saveKeys('stealth', stealthKeyPair)
+                .then(() => resolve(stealthKeyPair))
+                .catch(reject);
+            });
+          });
+        } catch (error) {
+          retries--;
+          if (retries === 0) throw error;
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      throw new Error("Failed to create stealth keys after retries");
+    } catch (error) {
+      console.error("Error creating stealth keys:", error);
+      throw error;
+    }
   }
 
   /**
@@ -203,8 +221,8 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
       throw new Error("Invalid public key");
     }
     const formattedPubKey = this.formatPublicKey(publicKey);
-    const data = await this.getPublicData(formattedPubKey, "stealth");
-    return data?.epub || null;
+    const data = await this.getPublicData(`~${formattedPubKey}`);
+    return data?.stealth.epub || null;
 
   }
 
@@ -253,8 +271,20 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
       throw new Error("Invalid stealth keys: missing or incomplete parameters");
     }
 
+    // Salva i dati privati con ritardo
     await this.savePrivateData(stealthKeyPair, "stealth");
-    await this.savePublicData({ epub: stealthKeyPair.epub }, "stealth");
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Salva i dati pubblici con ritardo
+    const publicData = { epub: stealthKeyPair.epub };
+    await this.savePublicData(publicData, "stealth");
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Verifica il salvataggio
+    const saved = await this.getPair();
+    if (!saved) {
+      throw new Error("Failed to verify saved keys");
+    }
   }
 
   /**
@@ -278,8 +308,8 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
    */
   public async getPub(publicKey: string): Promise<string | null> {
     const formattedPubKey = this.formatPublicKey(publicKey);
-    const data = await this.getPublicData(formattedPubKey, "stealth");
-    return data?.epub || null;
+    const data = await this.getPublicData(`~${formattedPubKey}/stealth`);
+    return data?.stealth.epub || null;
 
   }
 }

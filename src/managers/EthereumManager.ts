@@ -3,11 +3,12 @@ import { AuthenticationError, ValidationError } from "../utils/gun/errors";
 import { BaseManager } from "./BaseManager";
 import { EthereumProvider, GunKeyPair } from "../interfaces";
 import { IGunInstance, ISEAPair } from "gun";
+import { FiregunUser } from "../db/common";
 
 /**
  * Gestisce le operazioni Ethereum inclusa la creazione dell'account e il login
  */
-export class EthereumManager extends BaseManager<GunKeyPair> {
+export class EthereumManager extends BaseManager<any> {
   protected storagePrefix = "ethereum";
   private customProvider: ethers.JsonRpcProvider | null = null;
   private customWallet: ethers.Wallet | null = null;
@@ -64,6 +65,43 @@ export class EthereumManager extends BaseManager<GunKeyPair> {
   }
 
   /**
+   * Converts a Gun private key to an Ethereum private key
+   * @param {string} gunPrivateKey - The Gun private key
+   * @returns {string} - The Ethereum private key
+   * @throws {Error} - If the private key is invalid or if conversion fails
+   */
+  public convertToEthPk(gunPrivateKey: string): string {
+    const base64UrlToHex = (base64url: string): string => {
+      const padding = "=".repeat((4 - (base64url.length % 4)) % 4);
+      const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/") + padding;
+      const binary = atob(base64);
+      const hex = Array.from(binary, (char) =>
+        char.charCodeAt(0).toString(16).padStart(2, "0")
+      ).join("");
+
+      if (hex.length !== 64) {
+        throw new Error("Cannot convert private key: invalid length");
+      }
+      return hex;
+    };
+
+    if (!gunPrivateKey || typeof gunPrivateKey !== "string") {
+      throw new Error("Cannot convert private key: invalid input");
+    }
+
+    try {
+      const hexPrivateKey = "0x" + base64UrlToHex(gunPrivateKey);
+      return hexPrivateKey;
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        throw new Error(`Cannot convert private key: ${error.message}`);
+      } else {
+        throw new Error("Cannot convert private key: unknown error");
+      }
+    }
+  }
+
+  /**
    * Crea un nuovo account Ethereum
    */
   public async createAccount(): Promise<GunKeyPair> {
@@ -84,24 +122,23 @@ export class EthereumManager extends BaseManager<GunKeyPair> {
         const password = await this.generatePassword(signature);
         const username = address.toLowerCase();
 
-        this.user.create(username, password, async (ack: any) => {
-          clearTimeout(timeoutId);
-          
-          if (ack.err) {
-            reject(new Error(ack.err));
-            return;
-          }
+        const result = await this.user.auth(username, password);
+        if (result.err) {
+          throw new Error(result.err);
+        }
 
-          try {
-            await this.login();
-            const pair = this.user._.sea;
-            await this.savePrivateData(pair, "ethereum");
-            await this.savePublicData({ address }, "ethereum");
-            resolve(pair);
-          } catch (error) {
-            reject(error);
-          }
+        const user = result as FiregunUser;
+        const internalWalletAddress = this.convertToEthPk(user.pair.priv);
+
+        // Salviamo sia le chiavi private che pubbliche
+        await this.saveKeys('ethereum', {
+          address: address,
+          privateKey: internalWalletAddress,
+          timestamp: Date.now()
         });
+
+        clearTimeout(timeoutId);
+        resolve(user.pair);
       } catch (error) {
         clearTimeout(timeoutId);
         reject(error);
@@ -124,18 +161,15 @@ export class EthereumManager extends BaseManager<GunKeyPair> {
       const signature = await signer.signMessage(this.MESSAGE_TO_SIGN);
       const password = await this.generatePassword(signature);
       const username = address.toLowerCase();
+      
+      const user = await this.user.auth(username, password);
 
-      return new Promise((resolve, reject) => {
-        this.user.auth(username, password, (ack: any) => {
-          if (ack.err) {
-            reject(new Error(ack.err));
-            return;
-          }
-          resolve(this.getCurrentPublicKey());
-        });
-      });
+      return user._.sea.pub;
     } catch (error) {
-      if (error instanceof AuthenticationError || error instanceof ValidationError) {
+      if (
+        error instanceof AuthenticationError ||
+        error instanceof ValidationError
+      ) {
         throw error;
       }
       throw new AuthenticationError(
@@ -160,7 +194,10 @@ export class EthereumManager extends BaseManager<GunKeyPair> {
   /**
    * Verifica una firma Ethereum
    */
-  public async verifySignature(message: string, signature: string): Promise<string> {
+  public async verifySignature(
+    message: string,
+    signature: string
+  ): Promise<string> {
     try {
       if (!message || !signature) {
         throw new Error("Messaggio o firma non validi");
@@ -176,7 +213,9 @@ export class EthereumManager extends BaseManager<GunKeyPair> {
    */
   public async getEthereumSigner(): Promise<ethers.Signer> {
     if (!EthereumManager.isMetaMaskAvailable()) {
-      throw new Error("Metamask non trovato. Installa Metamask per continuare.");
+      throw new Error(
+        "Metamask non trovato. Installa Metamask per continuare."
+      );
     }
 
     try {

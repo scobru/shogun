@@ -3,19 +3,20 @@ const { expect } = chai;
 const Gun = require("gun");
 require("gun/sea");
 const { ActivityPubManager } = require("../dist/managers/ActivityPubManager");
+const { GunAuthManager } = require("../dist/managers/GunAuthManager");
 
 describe("ActivityPubManager", function () {
   let activityPubManager;
   let APP_KEY_PAIR;
   let gun;
-  let testUser;
   let testUsername;
+  let testPassword;
 
   const waitForOperation = async (ms = 5000) => {
     await new Promise(resolve => setTimeout(resolve, ms));
   };
 
-  before(async function () {
+  before(async function () {    
     try {
       // Genera chiavi
       APP_KEY_PAIR = await Gun.SEA.pair();
@@ -32,36 +33,22 @@ describe("ActivityPubManager", function () {
 
       // Inizializza ActivityPubManager
       activityPubManager = new ActivityPubManager(gun, APP_KEY_PAIR);
+      const gunAuthManager = new GunAuthManager(gun, APP_KEY_PAIR);
 
-      // Crea un utente di test
-      testUser = gun.user();
+      // Crea credenziali test
       testUsername = "testUser_" + Date.now();
+      testPassword = "password123";
 
-      // Prima creiamo l'utente
-      await new Promise((resolve, reject) => {
-        testUser.create(testUsername, "password123", (ack) => {
-          if (ack.err) reject(new Error(ack.err));
-          else resolve();
-        });
-      });
+      await gunAuthManager.gun.userNew(testUsername, testPassword);
 
-      await waitForOperation(3000);
-
-      // Poi effettuiamo il login
-      await new Promise((resolve, reject) => {
-        testUser.auth(testUsername, "password123", (ack) => {
-          if (ack.err) reject(new Error(ack.err));
-          else resolve();
-        });
-      });
-
-      // Importante: assegniamo l'utente autenticato all'activityPubManager
-      activityPubManager.user = testUser;
-
-      // Verifica che l'utente sia autenticato
-      if (!testUser.is || !testUser.is.pub) {
-        throw new Error("User authentication failed");
+      // Effettua il login e verifica l'autenticazione
+      await activityPubManager.login(testUsername, testPassword);
+      
+      // Verifica ulteriormente l'autenticazione
+      if (!activityPubManager.isAuthenticated()) {
+        throw new Error("Authentication failed after login");
       }
+
     } catch (error) {
       console.error("Setup error:", error);
       throw error;
@@ -70,8 +57,8 @@ describe("ActivityPubManager", function () {
 
   after(async function () {
     try {
-      if (testUser && testUser.leave) {
-        testUser.leave();
+      if (activityPubManager.user && activityPubManager.user.leave) {
+        activityPubManager.user.leave();
       }
       if (gun) {
         gun.off();
@@ -86,14 +73,11 @@ describe("ActivityPubManager", function () {
     this.timeout(30000);
 
     beforeEach(async function () {
-      // Verifica che l'utente sia ancora autenticato prima di ogni test
-      if (!testUser.is || !testUser.is.pub) {
-        await new Promise((resolve, reject) => {
-          testUser.auth(testUsername, "password123", (ack) => {
-            if (ack.err) reject(new Error(ack.err));
-            else resolve();
-          });
-        });
+      // Verifica autenticazione prima di ogni test
+      if (!activityPubManager.isAuthenticated()) {
+        console.log("Re-authenticating user before test...");
+        await activityPubManager.login(testUsername, testPassword);
+        await waitForOperation(1000);
       }
     });
 
@@ -111,7 +95,7 @@ describe("ActivityPubManager", function () {
 
     it("should save and retrieve keys", async function () {
       const keys = await activityPubManager.createAccount();
-      await activityPubManager.saveKeys(keys);
+      await activityPubManager.save(keys);
       await waitForOperation(2000);
 
       const retrievedKeys = await activityPubManager.getKeys();
@@ -120,7 +104,7 @@ describe("ActivityPubManager", function () {
 
     it("should retrieve public key", async function () {
       const keys = await activityPubManager.createAccount();
-      await activityPubManager.saveKeys(keys);
+      await activityPubManager.save(keys);
       await waitForOperation(2000);
 
       const publicKey = await activityPubManager.getPub();
@@ -129,7 +113,7 @@ describe("ActivityPubManager", function () {
 
     it("should delete keys", async function () {
       const keys = await activityPubManager.createAccount();
-      await activityPubManager.saveKeys(keys);
+      await activityPubManager.save(keys);
       await waitForOperation(2000);
 
       await activityPubManager.deleteKeys();
@@ -166,17 +150,12 @@ describe("ActivityPubManager", function () {
     let testKeys;
 
     beforeEach(async function () {
-      if (!testUser.is || !testUser.is.pub) {
-        await new Promise((resolve, reject) => {
-          testUser.auth(testUsername, "password123", (ack) => {
-            if (ack.err) reject(new Error(ack.err));
-            else resolve();
-          });
-        });
+      if (!activityPubManager.user || !activityPubManager.user.is || !activityPubManager.user.is.pub) {
+        await activityPubManager.login(testUsername, testPassword);
       }
 
       testKeys = await activityPubManager.createAccount();
-      await activityPubManager.saveKeys(testKeys);
+      await activityPubManager.save(testKeys);
       await waitForOperation(2000);
     });
 

@@ -190,7 +190,7 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
    * Ottiene la coppia di chiavi corrente
    */
   public getPairFromGun(): GunKeyPair {
-    return this.gun.user()._.sea as GunKeyPair;
+    return this.user._.sea as GunKeyPair;
   }
 
   /**
@@ -222,7 +222,7 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
     return credentials as WebAuthnCredentials;
   }
 
-  private async saveCredentials(
+  private async save(
     username: string,
     credentials: WebAuthnCredentials
   ): Promise<void> {
@@ -346,7 +346,7 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
         };
 
         // Salva le credenziali aggiornate
-        await this.saveCredentials(username, updatedCreds);
+        await this.save(username, updatedCreds);
 
         return {
           success: true,
@@ -391,7 +391,7 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
     const updatedCreds = { ...creds };
     delete updatedCreds.credentials[credentialId];
 
-    await this.saveCredentials(username, updatedCreds);
+    await this.save(username, updatedCreds);
     return true;
   }
 

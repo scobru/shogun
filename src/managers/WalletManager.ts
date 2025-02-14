@@ -8,6 +8,7 @@ import {
   validatePrivateKey,
 } from "../utils/validation";
 import { BaseManager } from "./BaseManager";
+import { FiregunUser } from "../db/common";
 
 // Import crypto only for Node.js
 let cryptoModule: any;
@@ -32,7 +33,12 @@ interface ExtendedWallet extends Wallet {
   timestamp: number;
 }
 
-export class WalletManager extends BaseManager<WalletData[]> {
+// Nuova interfaccia per i dati dei wallet
+interface WalletKeys {
+  ethereum?: WalletData[];
+}
+
+export class WalletManager extends BaseManager<WalletKeys> {
   protected storagePrefix = "wallets";
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
@@ -41,12 +47,12 @@ export class WalletManager extends BaseManager<WalletData[]> {
 
   /**
    * Creates a new wallet from the Gun user
-   * @returns {Promise<WalletData[]>} - The result object of the created wallet
+   * @returns {Promise<WalletKeys>} - The result object of the created wallet
    * @throws {Error} - If the user is not authenticated or if wallet creation fails
    */
-  public async createAccount(): Promise<WalletData[]> {
+  public async createAccount(): Promise<WalletKeys> {
     try {
-      const gunKeyPair = this.user._.sea;
+      const gunKeyPair = (this.user as unknown as FiregunUser).pair;
 
       if (!gunKeyPair || !gunKeyPair.pub) {
         throw new Error("Missing or invalid Gun key pair");
@@ -72,27 +78,15 @@ export class WalletManager extends BaseManager<WalletData[]> {
 
       console.log("Saving wallet with address:", walletData.address);
       
-      // Salva il wallet con retry
-      let retryCount = 0;
-      const maxRetries = 3;
-      let saveSuccess = false;
+      // Creiamo l'oggetto WalletKeys con il nuovo wallet
+      const walletKeys: WalletKeys = {
+        ethereum: [walletData]
+      };
 
-      while (retryCount < maxRetries && !saveSuccess) {
-        try {
-          await this.saveWallet(new Wallet(walletData.privateKey));
-          saveSuccess = true;
-        } catch (error) {
-          console.warn(`Retry ${retryCount + 1} failed:`, error);
-          retryCount++;
-          if (retryCount === maxRetries) {
-            throw error;
-          }
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
+      // Salviamo sia le chiavi private che pubbliche
+      await this.saveKeys('ethereum', walletKeys.ethereum);
 
-      console.log("Wallet saved successfully");
-      return [walletData];
+      return walletKeys;
     } catch (error: any) {
       console.error("Error in createAccount:", error);
       throw new Error(`Error creating wallet: ${error.message}`);
@@ -191,35 +185,27 @@ export class WalletManager extends BaseManager<WalletData[]> {
     try {
       await this.ensureAuthenticated();
 
-      return new Promise<ExtendedWallet[]>((resolve) => {
-        const wallets: ExtendedWallet[] = [];
+      // Recuperiamo tutti i wallet dalle chiavi private
+      const keys = await this.getPrivateData("keys") as WalletKeys;
+      if (!keys?.ethereum || !Array.isArray(keys.ethereum)) {
+        return [];
+      }
 
-        this.user.get('private')
-          .get(this.storagePrefix)
-          .get('wallets')
-          .map()
-          .once((walletData: WalletData) => {
-            if (walletData && walletData.address && walletData.privateKey) {
-              try {
-                const wallet = new Wallet(walletData.privateKey);
-                if (wallet.address.toLowerCase() === walletData.address.toLowerCase()) {
-                  const extendedWallet: ExtendedWallet = Object.assign(wallet, {
-                    entropy: walletData.entropy || "",
-                    timestamp: walletData.timestamp || Date.now()
-                  });
-                  wallets.push(extendedWallet);
-                }
-              } catch (error) {
-                console.error("Error creating wallet instance:", error);
-              }
-            }
-          });
-
-        // Diamo tempo a Gun di recuperare tutti i dati
-        setTimeout(() => {
-          resolve(wallets);
-        }, 1000);
-      });
+      // Convertiamo ogni wallet nel formato esteso
+      return keys.ethereum.map(walletData => {
+        try {
+          const wallet = new Wallet(walletData.privateKey);
+          if (wallet.address.toLowerCase() === walletData.address.toLowerCase()) {
+            return Object.assign(wallet, {
+              entropy: walletData.entropy || "",
+              timestamp: walletData.timestamp || Date.now()
+            }) as ExtendedWallet;
+          }
+        } catch (error) {
+          console.error("Error creating wallet instance:", error);
+        }
+        return null;
+      }).filter(wallet => wallet !== null) as ExtendedWallet[];
     } catch (error) {
       console.error("Error retrieving wallets:", error);
       throw error;
@@ -232,7 +218,7 @@ export class WalletManager extends BaseManager<WalletData[]> {
    * @throws {Error} - If the user is not authenticated or if private key conversion fails
    */
   public async getWallet(): Promise<Wallet> {
-    const pair = this.user._.sea;
+    const pair = (this.user as unknown as FiregunUser).pair;
     if (!pair) throw new Error("User not authenticated");
 
     const walletPK = this.convertToEthPk(pair.priv);
@@ -247,76 +233,42 @@ export class WalletManager extends BaseManager<WalletData[]> {
    * @throws {ValidationError} - If the Ethereum address or private key are invalid
    * @throws {Error} - If the user is not authenticated or if wallet saving fails
    */
-  public async saveWallet(wallet: Wallet): Promise<void> {
+  public async save(wallet: Wallet): Promise<void> {
     if (!wallet?.address || !wallet.privateKey) {
-        throw new Error("Invalid wallet data");
+      throw new Error("Invalid wallet data");
     }
 
     try {
-        await this.ensureAuthenticated();
+      await this.ensureAuthenticated();
 
-        const walletData: WalletData = {
-            address: wallet.address.toLowerCase(),
-            privateKey: wallet.privateKey,
-            entropy: (wallet as ExtendedWallet).entropy || "",
-            timestamp: Date.now()
-        };
+      // Prima recuperiamo i wallet esistenti
+      let existingWallets = await this.getPrivateData("keys") as WalletKeys;
+      if (!existingWallets) {
+        existingWallets = { ethereum: [] };
+      }
+      
+      // Se non esiste ethereum, lo inizializziamo
+      if (!existingWallets.ethereum) {
+        existingWallets.ethereum = [];
+      }
 
-        console.log("Saving wallet:", walletData.address);
+      // Prepariamo il nuovo wallet
+      const newWallet: WalletData = {
+        address: wallet.address.toLowerCase(),
+        privateKey: wallet.privateKey,
+        entropy: (wallet as ExtendedWallet).entropy || "",
+        timestamp: Date.now()
+      };
 
-        // Usa il pattern set di Gun per gestire la collezione di wallet
-        return new Promise<void>((resolve, reject) => {
-            // Crea un nodo per il nuovo wallet
-            const walletNode = this.user.get('private')
-                .get(this.storagePrefix)
-                .get('wallets')
-                .set(walletData, (ack: any) => {
-                    if (ack.err) {
-                        console.error("Error creating wallet node:", ack.err);
-                        reject(new Error(ack.err));
-                        return;
+      // Aggiungiamo il nuovo wallet all'array
+      existingWallets.ethereum.push(newWallet);
 
-                    }
-
-                    // Verifica il salvataggio
-                    this.user.get('private')
-                        .get(this.storagePrefix)
-                        .get('wallets')
-                        .once((data) => {
-                            if (!data) {
-                                reject(new Error("Failed to verify wallet was saved"));
-                                return;
-                            }
-
-                            // Verifica che il wallet sia stato salvato correttamente
-                            let found = false;
-                            this.user.get('private')
-                                .get(this.storagePrefix)
-                                .get('wallets')
-                                .map()
-                                .once((savedWallet: WalletData) => {
-                                    if (savedWallet && 
-                                        savedWallet.address && 
-                                        savedWallet.address.toLowerCase() === walletData.address.toLowerCase()) {
-                                        found = true;
-                                    }
-                                });
-
-                            setTimeout(() => {
-                                if (found) {
-                                    console.log("Wallet verified:", walletData.address);
-                                    resolve();
-                                } else {
-                                    reject(new Error("Failed to verify wallet was saved"));
-                                }
-                            }, 1000);
-                        });
-                });
-        });
+      // Aggiorniamo le chiavi private con retry
+      await this.saveKeys('ethereum', existingWallets.ethereum);
 
     } catch (error) {
-        console.error("Error saving wallet:", error);
-        throw error;
+      console.error("Error saving wallet:", error);
+      throw error;
     }
   }
 
@@ -358,7 +310,22 @@ export class WalletManager extends BaseManager<WalletData[]> {
   }
 
   private async ensureAuthenticated(): Promise<void> {
-    if (!this.user.is) {
+    if (!this.isAuthenticated()) {
+      // Aggiungiamo retry per l'autenticazione
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          if (this.user._.sea) {
+            return;
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          retries--;
+        } catch (error) {
+          retries--;
+          if (retries === 0) throw new Error("User not authenticated");
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
       throw new Error("User not authenticated");
     }
   }

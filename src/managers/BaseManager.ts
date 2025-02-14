@@ -1,5 +1,99 @@
-import { IGunChain, IGunInstance, IGunUserInstance, ISEAPair } from "gun";
-import { IGunStaticNode } from "gun-util";
+import {
+  GunCallbackPut,
+  GunMessagePut,
+  IGunChain,
+  IGunInstance,
+  IGunUserInstance,
+  ISEAPair,
+} from "gun";
+import { IGunChainReference } from "../utils/gun/types/chain";
+import Firegun from "../db/Firegun2";
+import { Ack, FiregunUser } from "../db/common";
+
+/**
+ * Interfaccia per le chiavi pubbliche
+ */
+export interface PublicKeys {
+  // Gun public keys
+  gun?: {
+    pub: string;
+    epub: string;
+    alias?: string;
+    lastSeen?: number;
+  };
+
+  // ActivityPub public key
+  activityPub?: {
+    publicKey: string;
+    createdAt: number;
+  };
+
+  // Ethereum public data
+  ethereum?: {
+    address: string;
+    timestamp: number;
+  };
+
+  // Stealth public key
+  stealth?: {
+    pub: string;
+    epub: string;
+  };
+
+  // WebAuthn public data
+  webAuthn?: {
+    credentialId: string;
+    lastUsed: number;
+    deviceInfo?: {
+      name: string;
+      platform: string;
+    };
+  };
+}
+
+/**
+ * Interfaccia che raccoglie tutti i tipi di chiavi private supportate
+ */
+export interface Keys {
+  // Gun keys
+  gun?: {
+    pub: string;
+    priv: string;
+    epub: string;
+    epriv: string;
+  };
+
+  // ActivityPub keys
+  activityPub?: {
+    publicKey: string;
+    privateKey: string;
+    createdAt: number;
+  };
+
+  // Ethereum keys
+  ethereum?: {
+    address: string;
+    privateKey: string;
+    entropy?: string;
+    timestamp?: number;
+  };
+
+  // Stealth keys
+  stealth?: {
+    pub: string;
+    priv: string;
+    epub: string;
+    epriv: string;
+  };
+
+  // WebAuthn keys
+  webAuthn?: {
+    credentialId: string;
+    publicKey: string;
+    privateKey: string;
+    timestamp: number;
+  };
+}
 
 /**
  * Classe base astratta per i manager che utilizzano Gun
@@ -7,14 +101,30 @@ import { IGunStaticNode } from "gun-util";
 export abstract class BaseManager<T> {
   protected gun: IGunInstance;
   protected user: IGunUserInstance;
-  protected abstract storagePrefix: string;
+  protected storagePrefix: string;
   protected APP_KEY_PAIR: ISEAPair;
-  protected nodesPath: { private: string; public: string } = { private: '', public: '' };
+  protected nodesPath: { private: string; public: string } = {
+    private: "",
+    public: "",
+  };
+  protected keys: Keys = {};
+  protected publicKeys: PublicKeys = {};
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
     this.gun = gun;
     this.user = this.gun.user();
     this.APP_KEY_PAIR = APP_KEY_PAIR;
+    this.storagePrefix = APP_KEY_PAIR.pub;
+
+    // Inizializza le strutture dati
+    this.keys = {};
+    this.publicKeys = {};
+
+    // Inizializza i percorsi di default
+    this.nodesPath = {
+      private: `${this.storagePrefix}/keys`,
+      public: `${this.storagePrefix}/public`,
+    };
   }
 
   /**
@@ -23,137 +133,190 @@ export abstract class BaseManager<T> {
   public abstract createAccount(...args: any[]): Promise<T>;
 
   /**
-   * Salva i dati in modo privato
+   * Recupera tutte le chiavi pubbliche per un utente
    */
-  protected async savePrivateData(data: T, path: string = ""): Promise<boolean> {
-    if (!this.user.is) {
-      throw new Error("User not authenticated");
+  public async getPublicKeys(pubKey: string): Promise<PublicKeys> {
+    const publicKeys: PublicKeys = {};
+
+    try {
+      // Recuperiamo tutti i dati pubblici in un'unica query
+      const publicData = await this.getPublicData(`~${pubKey}`);
+      if (!publicData) return publicKeys;
+
+      // Gun public keys
+      if (publicData.gun) {
+        publicKeys.gun = {
+          pub: publicData.gun.pub,
+          epub: publicData.gun.epub,
+          alias: publicData.gun.alias,
+          lastSeen: publicData.gun.lastSeen,
+        };
+      }
+
+      // ActivityPub public key
+      if (publicData.activityPub) {
+        publicKeys.activityPub = {
+          publicKey: publicData.activityPub.publicKey,
+          createdAt: publicData.activityPub.createdAt,
+        };
+      }
+
+      // Ethereum public data
+      if (publicData.ethereum) {
+        publicKeys.ethereum = {
+          address: publicData.ethereum.address,
+          timestamp: publicData.ethereum.timestamp,
+        };
+      }
+
+      // Stealth public key
+      if (publicData.stealth) {
+        publicKeys.stealth = {
+          pub: publicData.stealth.pub,
+          epub: publicData.stealth.epub,
+        };
+      }
+
+      // WebAuthn public data
+      if (publicData.webAuthn) {
+        publicKeys.webAuthn = {
+          credentialId: publicData.webAuthn.credentialId,
+          lastUsed: publicData.webAuthn.lastUsed,
+          deviceInfo: publicData.webAuthn.deviceInfo,
+        };
+      }
+    } catch (error) {
+      console.error("Error retrieving public keys:", error);
     }
 
-    // Se i dati sono un array, li convertiamo in un oggetto speciale
-    const processedData = Array.isArray(data)
-      ? {
-          _isArray: true,
-          length: data.length,
-          ...data.reduce((acc: any, item: any, index: number) => {
-            acc[index.toString()] = item;
-            return acc;
-          }, {}),
-        }
-      : data;
+    return publicKeys;
+  }
 
-    return new Promise<boolean>((resolve, reject) => {
-      const node = this.getPrivateNode(path);
-      
-      // Prima puliamo i dati esistenti
-      node.put(null, (ack: any) => {
-        if (ack.err) {
-          console.error("Error clearing data:", ack.err);
-          reject(new Error(ack.err));
-          return;
-        }
-        
-        // Aumentiamo il tempo di attesa tra la pulizia e il salvataggio
-        setTimeout(() => {
-          // Poi salviamo i nuovi dati con un callback di conferma
-          node.put(processedData, (ack: any) => {
-            if (ack.err) {
-              console.error("Error saving data:", ack.err);
-              reject(new Error(ack.err));
-              return;
-            }
+  /**
+   * Salva le chiavi pubbliche dell'utente
+   */
+  protected async savePublicKeys(): Promise<void> {
+    this.checkAuthentication();
 
-            // Verifichiamo che i dati siano stati effettivamente salvati
-            node.once((savedData: any) => {
-              if (!savedData) {
-                reject(new Error("Data verification failed - no data found"));
-                return;
-              }
-              
-              // Aggiungiamo un ulteriore ritardo per assicurare la propagazione
-              setTimeout(() => {
-                resolve(true);
-              }, 2000);
-            });
+    // Prepariamo l'oggetto con i dati pubblici
+    const publicData = {
+      gun: this.publicKeys.gun,
+      activityPub: this.publicKeys.activityPub,
+      ethereum: this.publicKeys.ethereum,
+      stealth: this.publicKeys.stealth,
+      webAuthn: this.publicKeys.webAuthn,
+    };
+
+    // Salviamo tutto in un unico nodo
+    await this.savePublicData(publicData, `~${this.getCurrentPublicKey()}`);
+  }
+
+  /**
+   * Aggiorna una specifica chiave pubblica
+   */
+  protected async updatePublicKey(
+    type: keyof PublicKeys,
+    data: PublicKeys[keyof PublicKeys]
+  ): Promise<void> {
+    this.checkAuthentication();
+
+    // Aggiorniamo in memoria
+    this.publicKeys[type] = data as any;
+
+    // Salviamo nel database
+    await this.savePublicData(
+      { [type]: data },
+      `~${this.getCurrentPublicKey()}`
+    );
+  }
+
+  /**
+   * Salva i dati in modo privato
+   */
+  protected async savePrivateData(
+    data: T,
+    path: string = ""
+  ): Promise<IGunChain<any, any, any, string>> {
+    this.checkAuthentication();
+
+    try {
+      if (!this.user.is) {
+        throw new Error("User not properly initialized");
+      }
+
+      console.log("Saving private data at path:", path);
+      if (typeof data === "object") {
+        return new Promise((resolve) => {
+          this.user.get(path).set(data as any, (ack: GunMessagePut | GunCallbackPut) => {
+            resolve(ack as unknown as IGunChain<any, any, any, string>);
           });
-        }, 2000); // Aumentiamo il tempo di attesa tra pulizia e salvataggio
-      });
-    });
+        });
+      } else {
+        return new Promise((resolve) => {
+          this.user.get(path).put(data as any, (ack: GunMessagePut | GunCallbackPut) => {
+            resolve(ack as unknown as IGunChain<any, any, any, string>);
+          });
+        });
+      }
+    } catch (error) {
+      console.error("Error saving private data:", error);
+      throw error;
+    }
   }
 
   /**
    * Salva i dati in modo pubblico
    */
-  protected async savePublicData(data: any, path: string = ""): Promise<boolean> {
-    if (!this.user.is) {
-      throw new Error("User not authenticated");
-    }
+  protected async savePublicData(
+    data: any,
+    path: string = ""
+  ): Promise<IGunChain<any, any, any, string>> {
+    this.checkAuthentication();
 
-    const publicKey = this.user.is.pub;
-    if (!publicKey) {
-      throw new Error("Public key not found");
+    try {
+      console.log("Saving public data at path:", path);
+      if (typeof data === "object") {
+        return new Promise((resolve) => {
+          this.gun.get(path).set(data, (ack) => {
+            resolve(ack as unknown as IGunChain<any, any, any, string>);
+          });
+        });
+      } else {
+        return new Promise((resolve) => {
+          this.gun.get(path).put(data, (ack) => {
+            resolve(ack as unknown as IGunChain<any, any, any, string>);
+          });
+        });
+      }
+    } catch (error) {
+      console.error("Error saving public data:", error);
+      throw error;
     }
-
-    return new Promise((resolve, reject) => {
-      const node = this.getPublicNode(path);
-      node.put(data, (ack: any) => {
-        if (ack.err) {
-          reject(new Error(ack.err));
-        } else {
-          resolve(true);
-        }
-      });
-    });
   }
 
   /**
    * Recupera i dati privati
    */
   protected async getPrivateData(path: string = ""): Promise<T | null> {
-    if (!this.user.is) {
-      throw new Error("User not authenticated");
-    }
+    this.checkAuthentication();
 
-    return new Promise((resolve, reject) => {
-      this.user
-        .get("private")
-        .get(this.storagePrefix)
-        .get(path)
-        .once((data: any) => {
-          console.log("Raw data from Gun:", data);
+    try {
+      console.log("Getting private data from path:", path);
+
+      return new Promise((resolve, reject) => {
+        this.user.get(path, (data: any) => {
           if (!data) {
-            resolve(null);
-            return;
-          }
-
-          try {
-            const cleanedData = this.cleanGunMetadata<any>(data);
-            console.log("Cleaned data:", cleanedData);
-
-            // Se i dati sono un array speciale, li convertiamo in un array normale
-            if (cleanedData && cleanedData._isArray) {
-              const length = cleanedData.length;
-              const array = [];
-              for (let i = 0; i < length; i++) {
-                const item = cleanedData[i.toString()];
-                if (item !== undefined && item !== null) {
-                  array.push(this.cleanGunMetadata(item));
-                }
-              }
-              console.log("Processed array data:", array);
-              resolve(array as T);
-              return;
-            }
-
-            const processedData = this.processRetrievedData<T>(cleanedData);
-            console.log("Processed data:", processedData);
-            resolve(processedData);
-          } catch (error) {
-            console.error("Error processing data:", error);
-            reject(error);
+            console.log("Data not found at path:", path);
+            reject(null);
+          } else {
+            resolve(this.processRetrievedData(data));
           }
         });
-    });
+      });
+    } catch (error) {
+      console.error("Error in getPrivateData:", error);
+      return null;
+    }
   }
 
   /**
@@ -196,7 +359,7 @@ export abstract class BaseManager<T> {
     if (typeof data === "object") {
       const cleaned = { ...data };
       delete cleaned._;
-      delete cleaned['#'];
+      delete cleaned["#"];
       return cleaned;
     }
     return data;
@@ -205,162 +368,39 @@ export abstract class BaseManager<T> {
   /**
    * Recupera i dati pubblici
    */
-  protected async getPublicData(publicKey: string, path: string = ""): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.gun
-        .get(`~${publicKey}`)
-        .get("public")
-        .get(this.storagePrefix)
-        .get(path)
-        .once((data: any) => {
-          resolve(this.cleanGunMetadata(data));
-        });
-    });
+  protected async getPublicData(path: string = ""): Promise<any> {
+    const getResult = this.gun.get(path);
+
+    if (getResult === undefined) {
+      return null;
+    }
+
+    return this.processRetrievedData(getResult);
   }
 
   /**
    * Elimina i dati privati
    */
-  protected async deletePrivateData(path?: string): Promise<void> {
-    if (!this.user.is) {
-      throw new Error("User not authenticated");
-    }
-
-    const publicKey = this.user.is.pub;
-    if (!publicKey) {
-      throw new Error("Public key not found");
-    }
-
-    return new Promise((resolve, reject) => {
-      let resolved = false;
-      let verifyAttempts = 0;
-      const maxVerifyAttempts = 5;
-      let verifyInterval: NodeJS.Timeout;
-
-      const cleanup = () => {
-        clearTimeout(timeoutId);
-        clearInterval(verifyInterval);
-      };
-
-      const timeoutId = setTimeout(() => {
-        if (!resolved) {
-          cleanup();
-          resolved = true;
-          reject(new Error("Delete operation timed out"));
-        }
-      }, 30000);
-
-      const node = this.gun
-        .get(`~${publicKey}`)
-        .get("private")
-        .get(this.storagePrefix)
-        .get(path || "");
-
-      node.put(null, (ack: any) => {
-        if (ack.err) {
-          cleanup();
-          reject(new Error(ack.err));
-        } else {
-          // Verifica che i dati siano stati effettivamente eliminati
-          verifyInterval = setInterval(async () => {
-            verifyAttempts++;
-            if (verifyAttempts > maxVerifyAttempts) {
-              cleanup();
-              reject(new Error("Data verification failed - max attempts reached"));
-              return;
-            }
-
-            node.once((data: any) => {
-              if (data === null) {
-                // I dati sono stati eliminati con successo
-                cleanup();
-                if (!resolved) {
-                  resolved = true;
-                  resolve();
-                }
-              } else {
-                console.warn(`Attempt ${verifyAttempts}: Data still exists, waiting...`);
-              }
-            });
-          }, 2000); // Verifica ogni 2 secondi
-        }
-      });
-    });
+  protected async deletePrivateData(path?: string): Promise<IGunChain<any, any, any, string>> {
+    this.checkAuthentication();
+    return this.user.get(path || "").put(null);
   }
 
   /**
    * Elimina i dati pubblici
    */
-  protected async deletePublicData(path?: string): Promise<void> {
-    if (!this.user.is) {
-      throw new Error("User not authenticated");
-    }
-
-    const publicKey = this.user.is.pub;
-    if (!publicKey) {
-      throw new Error("Public key not found");
-    }
-
-    return new Promise((resolve, reject) => {
-      let resolved = false;
-      let verifyAttempts = 0;
-      const maxVerifyAttempts = 5;
-      let verifyInterval: NodeJS.Timeout;
-
-      const cleanup = () => {
-        clearTimeout(timeoutId);
-        clearInterval(verifyInterval);
-      };
-
-      const timeoutId = setTimeout(() => {
-        if (!resolved) {
-          cleanup();
-          resolved = true;
-          reject(new Error("Delete operation timed out"));
-        }
-      }, 30000);
-
-      const node = this.gun
-        .get(`~${publicKey}`)
-        .get("public")
-        .get(this.storagePrefix)
-        .get(path || "");
-
-      node.put(null, (ack: any) => {
-        if (ack.err) {
-          cleanup();
-          reject(new Error(ack.err));
-        } else {
-          // Verifica che i dati siano stati effettivamente eliminati
-          verifyInterval = setInterval(async () => {
-            verifyAttempts++;
-            if (verifyAttempts > maxVerifyAttempts) {
-              cleanup();
-              reject(new Error("Data verification failed - max attempts reached"));
-              return;
-            }
-
-            node.once((data: any) => {
-              if (data === null) {
-                // I dati sono stati eliminati con successo
-                cleanup();
-                if (!resolved) {
-                  resolved = true;
-                  resolve();
-                }
-              } else {
-                console.warn(`Attempt ${verifyAttempts}: Data still exists, waiting...`);
-              }
-            });
-          }, 2000); // Verifica ogni 2 secondi
-        }
-      });
-    });
+  protected async deletePublicData(path?: string): Promise<IGunChain<any, any, any, string>> {
+    this.checkAuthentication();
+    return this.gun.get(path || "").put(null);
   }
 
   protected isNullOrEmpty(data: any): boolean {
     if (data === null || data === undefined) return true;
-    if (typeof data === "object" && Object.keys(data).filter(k => k !== "_").length === 0) return true;
+    if (
+      typeof data === "object" &&
+      Object.keys(data).filter((k) => k !== "_").length === 0
+    )
+      return true;
     return false;
   }
 
@@ -368,17 +408,17 @@ export abstract class BaseManager<T> {
    * Verifica se l'utente è autenticato
    */
   protected isAuthenticated(): boolean {
-    return !!this.user.is;
+    return !!(this.user && this.user.is && this.user.is.pub);
   }
 
   /**
    * Ottiene il public key dell'utente corrente
    */
   protected getCurrentPublicKey(): string {
-    if (!this.user.is) {
+    if (!this.isAuthenticated()) {
       throw new Error("User not authenticated");
     }
-    return this.user.is.pub;
+    return this.user.is?.pub || "";
   }
 
   /**
@@ -391,40 +431,53 @@ export abstract class BaseManager<T> {
   }
 
   public cleanup(): void {
-    if (this.user) {
+    if (this.isAuthenticated()) {
       this.user.leave();
     }
   }
 
   /**
-   * Imposta il percorso del nodo privato
+   * Salva sia le chiavi private che pubbliche
    */
-  protected setPrivateNodePath(path: string): void {
-    this.nodesPath.private = `private/${this.storagePrefix}/${path}`.replace(/\/+/g, '/');
+  protected async saveKeys(type: keyof Keys, data: any): Promise<void> {
+    this.checkAuthentication();
+
+    try {
+      // Aggiorniamo le chiavi private in memoria
+      if (!this.keys) {
+        this.keys = {};
+      }
+      this.keys[type] = data;
+
+      // Salviamo le chiavi private
+      const privateData = { [type]: data };
+      await this.savePrivateData(privateData as T, "keys");
+
+      // Estraiamo e salviamo i dati pubblici
+      const publicData = this.extractPublicData(type, data);
+      if (publicData) {
+        const publicPath = `~${this.getCurrentPublicKey()}`;
+        await this.savePublicData({ [type]: publicData }, publicPath);
+      }
+    } catch (error) {
+      console.error("Error in saveKeys:", error);
+      throw error;
+    }
   }
 
   /**
-   * Imposta il percorso del nodo pubblico
+   * Estrae i dati pubblici dalle chiavi
    */
-  protected setPublicNodePath(path: string): void {
-    this.nodesPath.public = `public/${this.storagePrefix}/${path}`.replace(/\/+/g, '/');
-  }
-
-  /**
-   * Ottiene il nodo Gun per il percorso privato specificato
-   */
-  protected getPrivateNode(path: string = ''): IGunChain<any, any, IGunInstance, string> {
-    this.setPrivateNodePath(path);
-    return this.user.get('private').get(this.storagePrefix).get(path);
-  }
-
-  /**
-   * Ottiene il nodo Gun per il percorso pubblico specificato
-   */
-  protected getPublicNode(path: string = ''): IGunChain<any, any, IGunInstance, string> {
-    this.setPublicNodePath(path);
-    const publicKey = this.user.is?.pub;
-    if (!publicKey) throw new Error('Public key not found');
-    return this.gun.get(`~${publicKey}`).get('public').get(this.storagePrefix).get(path);
+  private extractPublicData(type: keyof Keys, data: any): any {
+    switch (type) {
+      case "activityPub":
+        return {
+          publicKey: data.publicKey,
+          createdAt: data.createdAt,
+        };
+      // ... altri casi per altri tipi di chiavi
+      default:
+        return null;
+    }
   }
 }

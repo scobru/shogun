@@ -1,18 +1,19 @@
 import { IGunInstance, ISEAPair } from "gun";
 import type { ActivityPubKeys } from "../interfaces/ActivityPubKeys";
 import { BaseManager } from "./BaseManager";
+import { FiregunUser } from "../db/common";
 
 let cryptoModule: any;
 try {
   if (typeof window === "undefined") {
-    // Siamo in Node.js
+    // We're in Node.js
     cryptoModule = require("crypto");
   }
 } catch {
   cryptoModule = null;
 }
 
-export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
+export class ActivityPubManager extends BaseManager<any> {
   protected storagePrefix = "activitypub";
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
@@ -32,74 +33,113 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
         throw new Error("Invalid generated key format");
       }
 
-      const keys: ActivityPubKeys = {
+      const activityPubKeys: ActivityPubKeys = {
         publicKey,
         privateKey,
         createdAt: Date.now(),
       };
 
-      await this.saveKeys(keys);
-
-      return keys;
+      // Salva le chiavi
+      await this.saveKeys('activityPub', activityPubKeys);
+      
+      return activityPubKeys;
     } catch (error) {
-      console.error("Error generating keys:", error);
-      throw new Error(
-        `Key generation failed: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
+      console.error("Error generating ActivityPub keys:", error);
+      throw error;
     }
   }
 
   /**
-   * Effettua il login con le credenziali fornite
+   * Logs in with the provided credentials
+   * @param {string} username - The username to login with
+   * @param {string} password - The password to login with
+   * @returns {Promise<FiregunUser>} - The authenticated user
    */
   public async login(username: string, password: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      this.user.auth(username, password, (ack: any) => {
-        if (ack.err) reject(new Error(ack.err));
-        else resolve(this.getCurrentPublicKey());
+    try {
+      return new Promise((resolve, reject) => {
+        this.user.auth(username, password, (ack: any) => {
+          if (ack.err) {
+            reject(ack.err);
+          } else {
+            // Attendi che l'utente sia completamente autenticato
+            let attempts = 0;
+            const checkAuth = () => {
+              if (this.isAuthenticated()) {
+                resolve(this.user._.sea.pub);
+              } else if (attempts++ < 10) {
+                setTimeout(checkAuth, 500);
+              } else {
+                reject(new Error("Authentication timeout"));
+              }
+            };
+            checkAuth();
+          }
+        });
       });
-    });
+    } catch (error) {
+      console.error("Login error:", error);
+      throw error;
+    }
   }
 
   /**
-   * Salva le chiavi ActivityPub
-   */
-  public async saveKeys(keys: ActivityPubKeys): Promise<void> {
-    this.checkAuthentication();
-    await this.savePrivateData(keys, "activitypub/keys");
-    await this.savePublicData({ publicKey: keys.publicKey }, "activitypub/publicKey");
-  }
-
-  /**
-   * Recupera le chiavi ActivityPub
+   * Retrieves ActivityPub keys
+   * @returns {Promise<ActivityPubKeys>} - The stored ActivityPub keys
+   * @throws {Error} - If keys are not found
    */
   public async getKeys(): Promise<ActivityPubKeys> {
     this.checkAuthentication();
-    const keys = await this.getPrivateData("activitypub/keys");
-    if (!keys) {
-      throw new Error("Keys not found");
+    
+    try {
+      // Prima controlliamo se abbiamo le chiavi in memoria
+      if (this.keys.activityPub) {
+        return this.keys.activityPub;
+      }
+
+      // Altrimenti le recuperiamo dal database
+      const savedKeys = await this.getPrivateData("keys");
+      if (savedKeys?.activityPub) {
+        this.keys = savedKeys;
+        return this.keys.activityPub as ActivityPubKeys;
+      }
+
+      throw new Error("ActivityPub keys not found");
+    } catch (error) {
+      console.error("Error retrieving ActivityPub keys:", error);
+      throw error;
     }
-    return keys;
   }
 
   /**
-   * Recupera la chiave pubblica ActivityPub
+   * Retrieves the ActivityPub public key
+   * @returns {Promise<string>} - The public key
    */
   public async getPub(): Promise<string> {
     this.checkAuthentication();
-    const publicKey = this.getCurrentPublicKey();
-    const data = await this.getPublicData(publicKey, "activitypub/publicKey");
-    return data?.publicKey;
+    
+    // Prima controlliamo le chiavi in memoria
+    if (this.keys.activityPub?.publicKey) {
+      return this.keys.activityPub.publicKey;
+    }
+
+    // Altrimenti recuperiamo dal database
+    const publicKey = await this.getPublicData("activitypub/publicKey");
+    return publicKey?.publicKey;
   }
 
   /**
-   * Elimina le chiavi ActivityPub
+   * Deletes ActivityPub keys
+   * @returns {Promise<void>}
    */
   public async deleteKeys(): Promise<void> {
     this.checkAuthentication();
-    await this.deletePrivateData("activitypub/keys");
+    
+    // Rimuoviamo le chiavi dalla memoria
+    delete this.keys.activityPub;
+    
+    // Salviamo lo stato aggiornato
+    await this.savePrivateData(this.keys, "keys");
     await this.deletePublicData("activitypub/publicKey");
   }
 
@@ -111,21 +151,22 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
    */
   public async getPk(username: string): Promise<string> {
     try {
-      // Aggiungi controllo più rigoroso
+      // Add stricter validation
       if (!username || !/^[a-zA-Z0-9_]{3,30}$/.test(username)) {
-        throw new Error(`Username "${username}" non valido`);
+        throw new Error(`Invalid username "${username}"`);
       }
 
-      const privateData = await this.getPrivateData(`activitypub/keys`); // Path specifico per utente
-      if (!privateData || !privateData.privateKey) {
+      // Modifica: usa il percorso corretto per recuperare le chiavi
+      const keys = await this.getPrivateData("activitypub");
+      if (!keys || !keys.privateKey) {
         throw new Error("Private key not found for user " + username);
       }
 
-      if (!this.validateKey(privateData.privateKey)) {
+      if (!this.validateKey(keys.privateKey)) {
         throw new Error("Invalid key format for user " + username);
       }
 
-      return privateData.privateKey;
+      return keys.privateKey;
     } catch (error) {
       console.error("Error retrieving key:", error);
       throw error;
@@ -142,18 +183,22 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
       return false;
     }
 
-    // Per le chiavi private
+    // For private keys
     if (key.includes("PRIVATE KEY")) {
-      return key.includes("-----BEGIN PRIVATE KEY-----") &&
-             key.includes("-----END PRIVATE KEY-----") &&
-             key.length > 500;  // Una chiave RSA 2048 dovrebbe essere più lunga di questo
+      return (
+        key.includes("-----BEGIN PRIVATE KEY-----") &&
+        key.includes("-----END PRIVATE KEY-----") &&
+        key.length > 500
+      ); // An RSA 2048 key should be longer than this
     }
 
-    // Per le chiavi pubbliche
+    // For public keys
     if (key.includes("PUBLIC KEY")) {
-      return key.includes("-----BEGIN PUBLIC KEY-----") &&
-             key.includes("-----END PUBLIC KEY-----") &&
-             key.length > 200;  // Una chiave pubblica RSA 2048 dovrebbe essere più lunga di questo
+      return (
+        key.includes("-----BEGIN PUBLIC KEY-----") &&
+        key.includes("-----END PUBLIC KEY-----") &&
+        key.length > 200
+      ); // A public RSA 2048 key should be longer than this
     }
 
     return false;
@@ -165,12 +210,12 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
    * @returns {Promise<CryptoKey>}
    */
   public async importPk(pem: string): Promise<CryptoKey | string> {
-    // Se siamo in Node.js, non serve importare la chiave
+    // If in Node.js, no need to import the key
     if (typeof window === "undefined") {
       return pem;
     }
 
-    // Se siamo nel browser
+    // If in browser
     const pemContents = pem
       .replace("-----BEGIN PRIVATE KEY-----", "")
       .replace("-----END PRIVATE KEY-----", "")
@@ -204,7 +249,7 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
     username: string
   ): Promise<{ signature: string; signatureHeader: string }> {
     try {
-      // Recupera la chiave privata
+      // Retrieve private key
       const privateKey = await this.getPk(username);
 
       if (!privateKey) {
@@ -213,31 +258,37 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
 
       let signature: string;
 
-      // Se siamo in Node.js
+      // If in Node.js
       if (typeof window === "undefined" && cryptoModule) {
         try {
           const signer = cryptoModule.createSign("RSA-SHA256");
           signer.update(stringToSign);
           signature = signer.sign(privateKey, "base64");
         } catch (error) {
-          throw new Error(`Private key not found or invalid: ${error instanceof Error ? error.message : "unknown error"}`);
+          throw new Error(
+            `Private key not found or invalid: ${
+              error instanceof Error ? error.message : "unknown error"
+            }`
+          );
         }
       }
-      // Se siamo nel browser
+      // If in browser
       else if (typeof window !== "undefined" && window.crypto?.subtle) {
         try {
-          // Converti la chiave PEM in formato utilizzabile
+          // Convert PEM key to usable format
           const cryptoKey = await this.importPk(privateKey);
-          
-          if (typeof cryptoKey === 'string') {
-            throw new Error("Private key not found or invalid format for browser environment");
+
+          if (typeof cryptoKey === "string") {
+            throw new Error(
+              "Private key not found or invalid format for browser environment"
+            );
           }
 
-          // Codifica la stringa da firmare
+          // Encode string to sign
           const encoder = new TextEncoder();
           const dataBuffer = encoder.encode(stringToSign);
 
-          // Firma i dati
+          // Sign data
           const signatureBuffer = await window.crypto.subtle.sign(
             {
               name: "RSASSA-PKCS1-v1_5",
@@ -247,22 +298,31 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
             dataBuffer
           );
 
-          // Converti la firma in base64
-          signature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)));
+          // Convert signature to base64
+          signature = btoa(
+            String.fromCharCode(...new Uint8Array(signatureBuffer))
+          );
         } catch (error) {
-          throw new Error(`Private key not found or invalid: ${error instanceof Error ? error.message : "unknown error"}`);
+          throw new Error(
+            `Private key not found or invalid: ${
+              error instanceof Error ? error.message : "unknown error"
+            }`
+          );
         }
       } else {
         throw new Error("No cryptographic implementation available");
       }
 
-      // Genera l'header della firma
+      // Generate signature header
       const signatureHeader = `keyId="${username}",algorithm="rsa-sha256",signature="${signature}"`;
 
       return { signature, signatureHeader };
     } catch (error) {
-      if (error instanceof Error && error.message.includes("Private key not found")) {
-        throw error; // Rilanciamo l'errore originale se riguarda la chiave privata mancante
+      if (
+        error instanceof Error &&
+        error.message.includes("Private key not found")
+      ) {
+        throw error; // Rethrow original error if about missing private key
       }
       console.error("Error signing ActivityPub data:", error);
       throw new Error(
@@ -282,40 +342,9 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
     publicKey: string;
     privateKey: string;
   }> {
-    // Se siamo in Node.js
-    if (typeof window === "undefined" && cryptoModule) {
-      try {
-        const { generateKeyPairSync } = cryptoModule;
-        const keys = generateKeyPairSync("rsa", {
-          modulusLength: 2048,
-          publicKeyEncoding: {
-            type: "spki",
-            format: "pem",
-          },
-          privateKeyEncoding: {
-            type: "pkcs8",
-            format: "pem",
-          },
-        });
-
-        // Verifica il formato delle chiavi
-        if (!this.validateKey(keys.privateKey)) {
-          throw new Error("Generated private key has invalid format");
-        }
-
-        return {
-          publicKey: keys.publicKey,
-          privateKey: keys.privateKey,
-        };
-      } catch (error) {
-        console.error("Node.js key generation error:", error);
-        throw new Error(`Key generation failed in Node.js: ${error instanceof Error ? error.message : "unknown error"}`);
-      }
-    }
-
-    // Se siamo nel browser
-    if (typeof window !== "undefined" && window.crypto?.subtle) {
-      try {
+    try {
+      if (typeof window !== "undefined" && window.crypto?.subtle) {
+        // Browser implementation
         const keyPair = await window.crypto.subtle.generateKey(
           {
             name: "RSASSA-PKCS1-v1_5",
@@ -332,24 +361,38 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
           window.crypto.subtle.exportKey("pkcs8", keyPair.privateKey),
         ]);
 
-        const publicKey = `-----BEGIN PUBLIC KEY-----\n${this.arrayBufferToBase64(publicKeyBuffer)}\n-----END PUBLIC KEY-----`;
-        const privateKey = `-----BEGIN PRIVATE KEY-----\n${this.arrayBufferToBase64(privateKeyBuffer)}\n-----END PRIVATE KEY-----`;
-
-        // Verifica il formato delle chiavi
-        if (!this.validateKey(privateKey)) {
-          throw new Error("Generated private key has invalid format");
-        }
-
+        return {
+          publicKey: this.formatPEM(publicKeyBuffer, "PUBLIC"),
+          privateKey: this.formatPEM(privateKeyBuffer, "PRIVATE")
+        };
+      } else if (cryptoModule) {
+        // Node.js implementation
+        const { generateKeyPairSync } = cryptoModule;
+        const { publicKey, privateKey } = generateKeyPairSync("rsa", {
+          modulusLength: 2048,
+          publicKeyEncoding: {
+            type: "spki",
+            format: "pem",
+          },
+          privateKeyEncoding: {
+            type: "pkcs8",
+            format: "pem",
+          },
+        });
         return { publicKey, privateKey };
-      } catch (error) {
-        console.error("Browser key generation error:", error);
-        throw new Error(`Key generation failed in browser: ${error instanceof Error ? error.message : "unknown error"}`);
       }
+      throw new Error("No cryptographic implementation available");
+    } catch (error) {
+      console.error("Error generating RSA key pair:", error);
+      throw error;
     }
-
-    throw new Error("No cryptographic implementation available");
   }
 
+  /**
+   * Converts an ArrayBuffer to a base64 string with line breaks
+   * @param {ArrayBuffer} buffer - The buffer to convert
+   * @returns {string} - The base64 string with line breaks every 64 characters
+   */
   private arrayBufferToBase64(buffer: ArrayBuffer): string {
     const bytes = new Uint8Array(buffer);
     let binary = "";
@@ -357,7 +400,12 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
       binary += String.fromCharCode(bytes[i]);
     }
     const base64 = btoa(binary);
-    // Formatta il base64 in linee di 64 caratteri
+    // Format base64 into 64-character lines
     return base64.match(/.{1,64}/g)?.join("\n") || base64;
+  }
+
+  private formatPEM(buffer: ArrayBuffer, type: string): string {
+    const base64 = this.arrayBufferToBase64(buffer);
+    return `-----BEGIN ${type} KEY-----\n${base64}\n-----END ${type} KEY-----`;
   }
 }

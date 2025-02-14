@@ -5,7 +5,6 @@ import { GunAuthManager } from "./managers/GunAuthManager";
 import { ActivityPubManager } from "./managers/ActivityPubManager";
 import { WebAuthnManager } from "./managers/WebAuthnManager";
 import { WalletManager } from "./managers/WalletManager";
-import UnstoppableChat from "./features/unstoppable";
 
 
 import {
@@ -36,8 +35,7 @@ export {
   ActivityPubManager,
   WebAuthnManager,
   StealthManager,
-  WalletManager,
-  UnstoppableChat,
+  WalletManager
 };
 
 

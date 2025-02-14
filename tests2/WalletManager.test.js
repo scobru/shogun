@@ -21,6 +21,11 @@ describe("WalletManager", function () {
     await new Promise(resolve => setTimeout(resolve, ms));
   };
 
+  const waitForOperation = async (ms = 5000) => {
+    console.log(`Waiting ${ms}ms for operation...`);
+    await new Promise(resolve => setTimeout(resolve, ms));
+  };
+
   const ensureAuthenticated = async () => {
     if (!testUser.is) {
       console.log("User not authenticated, attempting to re-authenticate...");
@@ -140,19 +145,18 @@ describe("WalletManager", function () {
     it("should create a new wallet", async function () {
       await ensureAuthenticated();
       console.log("Starting create wallet test");
-      console.log("Checking authentication status:", !!testUser.is);
       
       const walletData = await walletManager.createAccount();
-      await waitForSync();
-      console.log("Wallet created, verifying data...");
+      await waitForOperation(5000); // Aumentato il tempo di attesa
+      
+      expect(walletData).to.be.an("object");
+      expect(walletData.ethereum).to.be.an("array");
+      expect(walletData.ethereum[0]).to.have.property("address").that.is.a("string");
+      expect(walletData.ethereum[0]).to.have.property("privateKey").that.is.a("string");
+      expect(walletData.ethereum[0]).to.have.property("entropy").that.is.a("string");
+      expect(walletData.ethereum[0]).to.have.property("timestamp").that.is.a("number");
 
-      expect(walletData).to.be.an("array");
-      expect(walletData[0]).to.have.property("address").that.is.a("string");
-      expect(walletData[0]).to.have.property("privateKey").that.is.a("string");
-      expect(walletData[0]).to.have.property("entropy").that.is.a("string");
-      expect(walletData[0]).to.have.property("timestamp").that.is.a("number");
-
-      expect(ethers.isAddress(walletData[0].address)).to.be.true;
+      expect(ethers.isAddress(walletData.ethereum[0].address)).to.be.true;
       console.log("Wallet creation test completed successfully");
     });
 
@@ -164,13 +168,13 @@ describe("WalletManager", function () {
       // Prima creiamo un nuovo wallet
       console.log("Creating new wallet for retrieval test...");
       const newWallet = ethers.Wallet.createRandom();
-      await walletManager.saveWallet(newWallet);
+      await walletManager.save(newWallet);
       await waitForSync();
       console.log("Test wallet saved with address:", newWallet.address.toLowerCase());
 
       console.log("Creating new wallet for retrieval test...");
       const newWallet2 = ethers.Wallet.createRandom();
-      await walletManager.saveWallet(newWallet2);
+      await walletManager.save(newWallet2);
       await waitForSync();
       console.log("Test wallet saved with address:", newWallet2.address.toLowerCase());
 
@@ -236,7 +240,7 @@ describe("WalletManager", function () {
       const wallet = ethers.Wallet.createRandom();
       
       console.log("Saving wallet...");
-      await walletManager.saveWallet(wallet);
+      await walletManager.save(wallet);
 
       // Attendiamo un po' per assicurarci che i dati siano sincronizzati
       await new Promise(resolve => setTimeout(resolve, 5000));
