@@ -94,43 +94,18 @@ export class EthereumManager {
     }
   }
 
-  public async generateCredentials(): Promise<{
-    address: string;
-    username: string;
-    password: string;
-  }> {
-    return new Promise(async (resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        reject(new Error("Operazione scaduta"));
-      }, this.OPERATION_TIMEOUT);
-
-      try {
-        const signer = await this.getSigner();
-        const address = await signer.getAddress();
-
-        if (!address || !address.startsWith("0x")) {
-          throw new Error("Indirizzo Ethereum non valido");
-        }
-
-        const signature = await signer.signMessage(this.MESSAGE_TO_SIGN);
-        const password = await this.generatePassword(signature);
-        const username = address.toLowerCase();
-
-        clearTimeout(timeoutId);
-        resolve({
-          address,
-          username,
-          password,
-        });
-      } catch (error) {
-        clearTimeout(timeoutId);
-        reject(new Error(`Errore nella generazione delle credenziali: ${
-          error instanceof Error ? error.message : "Errore sconosciuto"
-        }`));
-      }
-    });
+  public async generateCredentials(): Promise<{ address: string; privateKey: string }> {
+    try {
+      const wallet = ethers.Wallet.createRandom();
+      return {
+        address: wallet.address,
+        privateKey: wallet.privateKey
+      };
+    } catch (error) {
+      console.error("Error generating Ethereum credentials:", error);
+      throw error;
+    }
   }
-
 
   /**
    * Genera una password da una firma

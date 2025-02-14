@@ -45,7 +45,7 @@
  */
 const zeroPad = (num, places) => String(num).padStart(places, '0')
 
-export const common = {
+const common = {
 
 
   /**
@@ -86,29 +86,26 @@ export const common = {
    * @returns {Promise<{info:{name:string,size:number,type:string},content:string | ArrayBuffer | null}>}
    */
   fileTobase64: async (fileElement) => {
-    return new Promise((resolve) => {
-      if (fileElement.files !== null) {
-        let file = fileElement.files[0];
-        var reader = new FileReader();
-        reader.readAsDataURL(file);
-        let fileInfo = {
-          name: file.name,
-          size: file.size,
-          type: file.type,
-        }
-        reader.onload = function () {
-          let data = {
-            info: fileInfo,
-            content: reader.result,
-          }
-          resolve((data));
-        };
-        reader.onerror = function (error) {
-          console.log('Error: ', error);
-        };
+    return new Promise((resolve, reject) => {
+      if (!fileElement.files || fileElement.files.length === 0) {
+        reject(new Error("Nessun file selezionato"));
+        return;
       }
-
-    })
+      const file = fileElement.files[0];
+      const reader = new FileReader();
+      const fileInfo = {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      };
+      reader.readAsDataURL(file);
+      reader.onload = function () {
+        resolve({ info: fileInfo, content: reader.result });
+      };
+      reader.onerror = function (error) {
+        reject(error);
+      };
+    });
   },
 
   /**
@@ -125,6 +122,29 @@ export const common = {
     let seconds = zeroPad(currentdate.getSeconds(), 2)
     let miliseconds = zeroPad(currentdate.getMilliseconds(), 3)
     return ({ year: year, month: month, date: date, hour: hour, minutes: minutes, seconds: seconds, miliseconds: miliseconds })
-  }
+  },
 
+  /**
+   * Genera il certificato pubblico per l'utente loggato.
+   */
+  async generatePublicCert(fg) {
+    if (!fg.user || !fg.user.alias) {
+      throw new Error("Utente non loggato");
+    }
+    try {
+      let cert = await Gun.SEA.certify(
+        "*",
+        [{ "*": "chat-with", "+": "*" }],
+        fg.user.pair,
+        null,
+        {}
+      );
+      let ack = await fg.userPut("chat-cert", cert);
+      return ack;
+    } catch (error) {
+      throw error;
+    }
+  },
 }
+
+module.exports = { common };

@@ -16,6 +16,6 @@
     "stripInternal": true,
     "strictNullChecks": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "tests/Firegun2.test.js"],
   "exclude": ["node_modules", "dist", "tests"]
 }

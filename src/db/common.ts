@@ -1,110 +1,43 @@
 import Gun from "gun";
 import Firegun from "./firegun";
-import { WalletData } from "../interfaces/WalletResult";
 
-/**
- * Interfaccia per le chiavi pubbliche
- */
-export type PublicKeys = {
-  gun?: {
-    pub: string;
-    epub: string;
-    alias?: string;
-    lastSeen?: number;
-  };
-  activityPub?: {
-    publicKey: string;
-    createdAt: number;
-  };
-  ethereum?: {
-    address: string;
-    timestamp: number;
-  };
-  stealth?: {
-    pub: string;
-    epub: string;
-  };
-  webAuthn?: {
-    credentialId: string;
-    lastUsed: number;
-    deviceInfo?: {
-      name: string;
-      platform: string;
-    };
-  };
-  externalWallet?: {
-    internalWalletAddress: string;
-    externalWalletAddress: string;
-  };
-  wallets?: {
-    ethereum: {
-      address: string;
-      timestamp: number;
-    }[];
-  };
-}
-
-/**
- * Interfaccia che raccoglie tutti i tipi di chiavi private supportate
- */
-export type Keys = {
-  gun?: {
-    pub: string;
-    priv: string;
-    epub: string;
-    epriv: string;
-  };
-  activityPub?: {
-    publicKey: string;
-    privateKey: string;
-    createdAt: number;
-  };
-  ethereum?: {
-    address: string;
-    privateKey: string;
-    entropy?: string;
-    timestamp?: number;
-  };
-  stealth?: {
-    pub: string;
-    priv: string;
-    epub: string;
-    epriv: string;
-  };
-  webAuthn?: {
-    credentialId: string;
-    deviceInfo: {
-      name: string;
-      platform: string;
-    };
-    username: string;
-    password: string;
-    timestamp: number;
-  };
-  externalWallet?: {
-    internalWalletAddress: string;
-    externalWalletAddress: string;
-  };
-  wallets?: {
-    ethereum: WalletData[];  // Array di wallet
-  };
-}
-
-export interface FiregunUser {
+export declare type FiregunUser = {
   alias: string;
-  pair: GunKeyPair;
-  is?: any;
-  _?: any;
-}
+  pair: {
+    priv: string;
+    pub: string;
+    epriv: string;
+    epub: string;
+  };
+  rsa_pair?: {
+    priv: string;
+    pub: string;
+  };
+  pair_stealth?: {
+    priv: string;
+    pub: string;
+    epriv: string;
+    epub: string;
+  };
+  wallet?: {
+    address: string;
+    privateKey: string;
+  };
+  externalWallet?: {
+    address: string;
+  };
+  wallets?: {
+    ethereum: Array<{
+      address: string;
+      privateKey: string;
+      entropy: string;
+      timestamp: number;
+    }>;
+  };
+  err?: any;
+};
 
-export interface GunKeyPair {
-  pub: string;
-  priv: string;
-  epub: string;
-  epriv: string;
-}
-
-export type Ack =
+export declare type Ack =
   | {
       "@"?: string;
       err: undefined;
@@ -117,12 +50,12 @@ export type Ack =
     }
   | void;
 
-export type Pubkey = {
+export declare type Pubkey = {
   pub: string;
   epub?: string;
 };
 
-export type chatType = {
+export declare type chatType = {
   _self: boolean;
   alias: string;
   msg: string;
@@ -136,97 +69,111 @@ const zeroPad = (num: number, places: number) =>
 
 export const common = {
   /**
-   * Genera il certificato pubblico per l'utente loggato.
+   * Generate Public Certificate for Logged in User
+   * @returns
    */
-  async generatePublicCert(fg: Firegun): Promise<{ data: Ack[]; error: Ack[] }> {
-    if (!fg.user || !fg.user.alias) {
-      throw new Error("Utente non loggato");
-    }
-    try {
-      // Se necessario, si può gestire il blacklist (attualmente commentato per via di bug conosciuti)
-      // await fg.userPut("chat-blacklist", { t: "_" });
+  async generatePublicCert(
+    fg: Firegun
+  ): Promise<{ data: Ack[]; error: Ack[] }> {
+    return new Promise(async (resolve, reject) => {
+      if (fg.user.alias) {
+        // BUG Blacklist Work Around
+        // await fg.userPut("chat-blacklist",{
+        //     "t" : "_"
+        // })
 
-      let cert = await (Gun as any).SEA.certify(
-        "*",
-        [{ "*": "chat-with", "+": "*" }],
-        fg.user.pair,
-        null,
-        {
-          // block: 'chat-blacklist' // BUG noto: blacklist non funziona correttamente
-        }
-      );
-      let ack = await fg.userPut("chat-cert", cert);
-      return ack;
-    } catch (error) {
-      throw error;
-    }
+        let cert = await (Gun as any).SEA.certify(
+          "*",
+          [{ "*": "chat-with", "+": "*" }],
+          fg.user.pair,
+          null,
+          {
+            // block : 'chat-blacklist' //ADA BUG DARI GUN JADI BELUM BISA BLACKLIST
+          }
+        );
+        let ack = await fg.userPut("chat-cert", cert);
+        resolve(ack);
+      } else {
+        reject("User belum Login");
+      }
+    });
   },
 
   /**
-   * Restituisce una funzione per ordinare dinamicamente un array in base a una proprietà.
-   * Esempio: arrays.sort(common.dynamicSort("timestamp"));
+   * Sort and array based of their property
+   *
+   * e.g. arrays.sort(dynamicSort("timestamp"));
+   *
+   * @param property
+   * @returns
    */
   dynamicSort: (property: string) => {
-    let sortOrder = 1;
+    var sortOrder = 1;
     if (property[0] === "-") {
       sortOrder = -1;
       property = property.substr(1);
     }
     return function (a: any, b: any) {
-      const result =
-        a[property] < b[property]
-          ? -1
-          : a[property] > b[property]
-          ? 1
-          : 0;
+      /* next line works with strings and numbers,
+       * and you may want to customize it to your needs
+       */
+      var result =
+        a[property] < b[property] ? -1 : a[property] > b[property] ? 1 : 0;
       return result * sortOrder;
     };
   },
 
-  /**
-   * Converte il file selezionato in base64.
-   */
   fileTobase64: async (
     fileElement: HTMLInputElement
   ): Promise<{
     info: { name: string; size: number; type: string };
     content: string | ArrayBuffer | null;
   }> => {
-    return new Promise((resolve, reject) => {
-      if (!fileElement.files || fileElement.files.length === 0) {
-        reject(new Error("Nessun file selezionato"));
-        return;
+    return new Promise((resolve) => {
+      if (fileElement.files !== null) {
+        let file = fileElement.files[0];
+        var reader = new FileReader();
+        reader.readAsDataURL(file);
+        let fileInfo = {
+          name: file.name,
+          size: file.size,
+          type: file.type,
+        };
+        reader.onload = function () {
+          let data = {
+            info: fileInfo,
+            content: reader.result,
+          };
+          resolve(data);
+        };
+        reader.onerror = function (error) {
+          console.log("Error: ", error);
+        };
       }
-      const file = fileElement.files[0];
-      const reader = new FileReader();
-      const fileInfo = {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-      };
-      reader.readAsDataURL(file);
-      reader.onload = function () {
-        resolve({ info: fileInfo, content: reader.result });
-      };
-      reader.onerror = function (error) {
-        reject(error);
-      };
     });
   },
 
   /**
-   * Restituisce l'oggetto della data corrente.
+   * Generate Current date and time object
+   * @returns
    */
   getDate: () => {
-    const currentdate = new Date();
+    let currentdate = new Date();
+    let year = currentdate.getFullYear().toString();
+    let month = zeroPad(currentdate.getMonth() + 1, 2);
+    let date = zeroPad(currentdate.getDate(), 2);
+    let hour = zeroPad(currentdate.getHours(), 2);
+    let minutes = zeroPad(currentdate.getMinutes(), 2);
+    let seconds = zeroPad(currentdate.getSeconds(), 2);
+    let miliseconds = zeroPad(currentdate.getMilliseconds(), 3);
     return {
-      year: currentdate.getFullYear().toString(),
-      month: zeroPad(currentdate.getMonth() + 1, 2),
-      date: zeroPad(currentdate.getDate(), 2),
-      hour: zeroPad(currentdate.getHours(), 2),
-      minutes: zeroPad(currentdate.getMinutes(), 2),
-      seconds: zeroPad(currentdate.getSeconds(), 2),
-      milliseconds: zeroPad(currentdate.getMilliseconds(), 3), // Corretto il nome
+      year: year,
+      month: month,
+      date: date,
+      hour: hour,
+      minutes: minutes,
+      seconds: seconds,
+      miliseconds: miliseconds,
     };
   },
 };

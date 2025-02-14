@@ -21,15 +21,11 @@ export class ActivityPubManager {
   public async createPair(): Promise<ActivityPubKeys> {
     try {
       const { privateKey, publicKey } = await this.generateRSAKeyPair();
-
-      if (!this.validateKey(privateKey) || !this.validateKey(publicKey)) {
-        throw new Error("Invalid generated key format");
-      }
-
+      
       return {
         publicKey,
         privateKey,
-        createdAt: Date.now(),
+        createdAt: Date.now()
       };
     } catch (error) {
       console.error("Error generating ActivityPub keys:", error);

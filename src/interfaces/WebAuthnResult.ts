@@ -9,9 +9,15 @@ export interface WebAuthnResult {
   success: boolean;
   username?: string;
   password?: string;
+  signature?: ArrayBuffer;
   credentialId?: string;
+  deviceInfo?: {
+    deviceId: string;
+    timestamp: number;
+    name: string;
+    platform: string;
+  };
   error?: string;
-  deviceInfo?: DeviceInfo;
 }
 
 export interface WebAuthnVerifyResult {

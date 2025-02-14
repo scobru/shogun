@@ -2,12 +2,6 @@ import { IGunInstance, ISEAPair, SEA } from "gun";
 import { GunKeyPair } from "../interfaces";
 import { WalletData } from "../interfaces/WalletResult";
 import { Wallet } from "ethers";
-import { ValidationError } from "../utils/gun/errors";
-import {
-  validateEthereumAddress,
-  validatePrivateKey,
-} from "../utils/validation";
-import { FiregunUser } from "../db/common";
 
 // Import crypto only for Node.js
 let cryptoModule: any;
@@ -45,13 +39,13 @@ export class WalletManager {
    */
   public async createWallet(pair: GunKeyPair): Promise<WalletData> {
     try {
-      const salt = `${pair.pub}_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      const salt = `${pair.pub}_${Date.now()}_${Math.random().toString(36).substring(2, 15)}` as string;
       const wallet = await this.createWalletFromSalt(pair, salt);
 
       return {
         address: wallet.address.toLowerCase(),
         privateKey: wallet.privateKey,
-        entropy: salt,
+        entropy: salt as string,
         timestamp: Date.now(),
       };
     } catch (error) {

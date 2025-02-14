@@ -7,6 +7,7 @@ import type {
 } from "../interfaces/WebAuthnResult";
 import jsSha256 from "js-sha256";
 import "gun/sea";
+import { WebAuthnResult as IWebAuthnResult } from '../interfaces/WebAuthnResult';
 
 const sha256 = jsSha256.sha256;
 
@@ -130,7 +131,15 @@ const generateCredentialsFromSalt = (
   };
 };
 
+// Utility per convertire una firma in password
+async function signatureToPassword(signature: ArrayBuffer): Promise<string> {
+  const hash = await crypto.subtle.digest('SHA-256', signature);
+  return bufferToBase64(hash);
+}
+
 export class WebAuthnManager {
+  private user: { pair: any } | null = null;
+
   private validateUsername(username: string): void {
     if (!username || typeof username !== "string") {
       throw new Error("Username must be a non-empty string");
@@ -150,61 +159,29 @@ export class WebAuthnManager {
     }
   }
 
-
   /**
    * Implementazione del metodo createAccount richiesto da BaseManager
    */
   public async createPair(
     username: string,
-    isNewDevice: boolean = false,
     deviceName?: string
   ): Promise<Record<string, any>> {
-    const result = await this.generateCredentials(
-      username,
-      isNewDevice,
-      deviceName
-    );
+    const result = await this.generateCredentials(username, deviceName);
     if (!result.success) {
-      throw new Error(
-        result.error || "Errore durante la creazione dell'account"
-      );
+      throw new Error(result.error || "Errore durante la creazione dell'account");
     }
     return result;
   }
 
-  // Recupera le credenziali WebAuthn da Gun
-  private async getWebAuthnCredentials(
-    username: string
-  ): Promise<WebAuthnCredentials | null> {
-    const credentials = await this.getWebAuthnPrivateData(username);
-    return credentials as WebAuthnCredentials;
-  }
-
   public async generateCredentials(
     username: string,
-    isNewDevice: boolean = false,
     deviceName?: string
-  ): Promise<WebAuthnResult> {
+  ): Promise<IWebAuthnResult> {
     try {
       this.validateUsername(username);
 
       if (!this.isSupported()) {
         throw new Error("WebAuthn non è supportato su questo browser");
-      }
-
-      // Recupera le credenziali esistenti
-      const existingCreds = await this.getWebAuthnCredentials(username);
-
-      // Se non è un nuovo dispositivo e l'username esiste, errore
-      if (existingCreds && !isNewDevice) {
-        throw new Error("Username già registrato con WebAuthn");
-      }
-
-      // Se è un nuovo dispositivo ma l'username non esiste, errore
-      if (!existingCreds && isNewDevice) {
-        throw new Error(
-          "Username non trovato. Registrati prima come nuovo utente"
-        );
       }
 
       // Genera una challenge unica per questa registrazione
@@ -252,11 +229,12 @@ export class WebAuthnManager {
           signal: abortController.signal,
         })) as PublicKeyCredential;
 
-        // Usa il salt esistente o ne crea uno nuovo
-        const salt = existingCreds?.salt || uint8ArrayToHex(getRandomBytes(32));
-
-        // Genera le credenziali dal salt
-        const { password } = generateCredentialsFromSalt(username, salt);
+        // Genera la password dalla chiave pubblica
+        const publicKey = (credential.response as AuthenticatorAttestationResponse)
+          .getPublicKey();
+        if (!publicKey) throw new Error("Impossibile ottenere la chiave pubblica");
+        
+        const password = await signatureToPassword(publicKey);
 
         // Ottieni informazioni sul dispositivo
         const { name: defaultDeviceName, platform } = getPlatformInfo();
@@ -264,31 +242,19 @@ export class WebAuthnManager {
 
         // Prepara le credenziali da salvare
         const credentialId = bufferToBase64(credential.rawId);
-        const newCredential: DeviceCredential = {
+        const newCredential = {
           deviceId,
           timestamp: Date.now(),
           name: deviceName || defaultDeviceName,
-          platform,
+          platform: platform || 'Unknown Platform'
         };
-
-        // Aggiorna o crea le credenziali WebAuthn
-        const updatedCreds: WebAuthnCredentials = {
-          salt,
-          timestamp: Date.now(),
-          credentials: {
-            ...(existingCreds?.credentials || {}),
-            [credentialId]: newCredential,
-          },
-        };
-
-      
 
         return {
           success: true,
           username,
-          password,
           credentialId,
           deviceInfo: newCredential,
+          password
         };
       } finally {
         clearTimeout(timeoutId);
@@ -302,32 +268,7 @@ export class WebAuthnManager {
     }
   }
 
-  // Ottieni la lista dei dispositivi registrati
-  public async getRegisteredDevices(
-    username: string
-  ): Promise<DeviceCredential[]> {
-    const creds = await this.getWebAuthnCredentials(username);
-    if (!creds?.credentials) {
-      return [];
-    }
-    return Object.values(creds.credentials);
-  }
-
-  // Rimuovi un dispositivo registrato
-  public async removeDevice(
-    username: string,
-    credentialId: string
-  ): Promise<boolean> {
-    const creds = await this.getWebAuthnCredentials(username);
-    if (!creds?.credentials || !creds.credentials[credentialId]) {
-      return false;
-    }
-    const updatedCreds = { ...creds };
-    delete updatedCreds.credentials[credentialId];
-    return true;
-  }
-
-  public async authenticateUser(username: string): Promise<WebAuthnResult> {
+  public async authenticateUser(username: string): Promise<IWebAuthnResult> {
     try {
       // Validazioni di sicurezza
       this.validateUsername(username);
@@ -362,14 +303,18 @@ export class WebAuthnManager {
           throw new Error("Verifica WebAuthn fallita");
         }
 
-        // Genera le credenziali dal salt salvato
-        const { password } = generateCredentialsFromSalt(username, salt);
+        // Estrai la firma e genera la password
+        const signature = (assertion.response as AuthenticatorAssertionResponse).signature;
+        if (!signature) throw new Error("Firma non disponibile");
+        
+        const password = await signatureToPassword(signature);
 
         return {
           success: true,
           username,
-          password,
           credentialId: bufferToBase64(assertion.rawId),
+          password,
+          signature
         };
       } finally {
         clearTimeout(timeoutId);
@@ -456,22 +401,33 @@ export class WebAuthnManager {
     );
   }
 
-  private async getWebAuthnPrivateData(username: string): Promise<WebAuthnCredentials | null> {
-    if (!username || typeof username !== "string") {
-        throw new Error("Username non valido");
+  // Aggiungi questo metodo per firmare messaggi
+  public async signMessage(message: string): Promise<ArrayBuffer> {
+    if (!this.user?.pair) {
+      throw new Error("Utente non autenticato");
     }
 
-    try {
-        // Implementazione da spostare in Firegun
-        throw new Error("Metodo da implementare in Firegun");
-    } catch (error) {
-        console.error("Errore nel recupero dei dati WebAuthn:", error);
-        throw error;
-    }
+    const challenge = new TextEncoder().encode(message);
+    const assertionOptions: PublicKeyCredentialRequestOptions = {
+      challenge,
+      allowCredentials: [],
+      timeout: TIMEOUT_MS,
+      userVerification: "required",
+      rpId: window.location.hostname,
+    };
+
+    const assertion = (await navigator.credentials.get({
+      publicKey: assertionOptions
+    })) as PublicKeyCredential;
+
+    const signature = (assertion.response as AuthenticatorAssertionResponse).signature;
+    if (!signature) throw new Error("Firma non disponibile");
+    
+    return signature;
   }
 
-  private async save(data: any): Promise<void> {
-    // Questo metodo non dovrebbe esistere nel manager
-    throw new Error("Method should be implemented in Firegun");
+  private async getWebAuthnCredentials(username: string): Promise<{ salt: string } | null> {
+    // Implementa il recupero delle credenziali da Gun o altro storage
+    return null; // Per ora restituisce null
   }
 }

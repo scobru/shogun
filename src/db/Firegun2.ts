@@ -6,7 +6,7 @@ import "gun/lib/radisk";
 // import 'gun/lib/store';
 import "gun/lib/rindexed";
 
-import { FiregunUser, Ack, common, Keys, PublicKeys } from "./common";
+import { FiregunUser, Ack, common } from "./common";
 // @ts-ignore
 import { IGunChainReference } from "gun/types/chain";
 // @ts-ignore
@@ -14,25 +14,35 @@ import { IGunCryptoKeyPair } from "gun/types/types";
 // @ts-ignore
 import { IGunStatic } from "gun/types/static";
 
-import { ActivityPubManager } from "../managers/ActivityPubManager";
-
 import { EthereumManager } from "../managers/EthereumManager";
+
+import { ActivityPubManager } from "../managers/ActivityPubManager";
 import { ActivityPubKeys } from "../interfaces/ActivityPubKeys";
-
-import { StealthManager } from "../managers/StealthManager";
-import { StealthKeyPair } from "../interfaces/StealthKeyPair";
-
+import { Wallet } from "ethers";
 import { WebAuthnManager } from "../managers/WebAuthnManager";
-import { WebAuthnResult, DeviceCredential } from "../interfaces/WebAuthnResult";
-
 import { WalletManager } from "../managers/WalletManager";
-import { WalletKeys } from "../interfaces/WalletResult";
+import { WalletData } from "../interfaces/WalletResult";
+import { StealthKeyPair } from "../interfaces/StealthKeyPair";
+import { StealthKeys } from "../interfaces/StealthKeyPair";
+import { StealthManager } from "../managers/StealthManager";
 
-import { ethers } from "ethers";
+// Aggiungi l'interfaccia per il risultato di SEA.derive
+interface SEAKeyPair {
+  pub: string;
+  priv: string;
+  epub: string;
+  epriv: string;
+}
 
-interface GunSubscription {
-  off: () => void;
-  [key: string]: any;
+function randomAlphaNumeric(length: number): string {
+  var result = "";
+  var characters =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  var charactersLength = characters.length;
+  for (var i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() * charactersLength));
+  }
+  return result;
 }
 
 export default class Firegun {
@@ -47,16 +57,12 @@ export default class Firegun {
       handler: any;
     };
   };
-  keys: Keys;
-  publicKeys: PublicKeys;
+
   activityPubManager: ActivityPubManager;
   ethereumManager: EthereumManager;
-  stealthManager: StealthManager;
   webAuthnManager: WebAuthnManager;
   walletManager: WalletManager;
-  private locks: Map<string, Promise<void>> = new Map();
-  private subscriptions: Map<string, GunSubscription> = new Map();
-
+  stealthManager: StealthManager;
   /**
    *
    * --------------------------------------
@@ -95,10 +101,9 @@ export default class Firegun {
 
     this.activityPubManager = new ActivityPubManager();
     this.ethereumManager = new EthereumManager();
-    this.stealthManager = new StealthManager();
     this.webAuthnManager = new WebAuthnManager();
     this.walletManager = new WalletManager();
-
+    this.stealthManager = new StealthManager();
     if (option?.gunInstance) {
       this.gun = option.gunInstance;
     } else {
@@ -150,16 +155,6 @@ export default class Firegun {
 
     this.ev = {};
   }
-
-  private randomAlphaNumeric(length: number): string {
-    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let result = "";
-    for (let i = 0; i < length; i++) {
-      result += characters.charAt(Math.floor(Math.random() * characters.length));
-    }
-    return result;
-  }
-
   /**
    * Wait in ms
    * @param ms duration of timeout in ms
@@ -319,112 +314,206 @@ export default class Firegun {
    *
    * Create a new user and Log him in
    *
-   * @param username
+   * @param alias
    * @param password
+   * @param username
    * @returns
    */
   async userNew(
-    username: string,
+    alias: string,
     password: string,
-    alias: string = ""
-  ): Promise<{ err: string } | FiregunUser> {
-    return new Promise((resolve, reject) => {
-      this.gun.user().create(username, password, async (s: any) => {
-        if ("err" in s) {
-          reject(s);
-        } else {
-          this.gun.user().leave();
-          let user = (await this.userLogin(username, password, alias)) as FiregunUser;
+    username?: string
+  ): Promise<FiregunUser> {
+    try {
+      // Crea l'utente Gun di base
+      const user = (await this.gun.user().create(
+        alias,
+        password
+      )) as FiregunUser;
 
-          try {
-            // 1. Genera le chiavi Gun
-            this.keys.gun = user?.pair;
+      if ("err" in user) {
+        throw new Error(user.err);
+      }
 
-            // 2. Genera le chiavi ActivityPub
-            const activityPubKeys = await this.activityPubManager.createPair();
-            this.keys.activityPub = activityPubKeys;
+      // Login con le credenziali appena create
+      await this.userLogin(alias, password, username);
 
-            // 3. Genera le chiavi Stealth
-            const stealthKeys = await this.stealthManager.createPair();
-            this.keys.stealth = stealthKeys;
+      // Genera tutte le chiavi necessarie
+      const [activityPub, ethereum, stealth, wallet, webAuthn] = await Promise.all([
+        this.activityPubManager.createPair(),
+        this.ethereumManager.generateCredentials(),
+        this.stealthManager.createPair(),
+        this.walletManager.createWallet(this.user.pair),
+        this.webAuthnManager.authenticateUser('')
+      ]);
 
-            // 4. Salva le chiavi private nel nodo privato dell'utente
-            await this.userSet(`keys`, this.keys, true);
+      // Salva le chiavi nei nodi privati
+      await Promise.all([
+        this.userPut("activityPub", {
+          publicKey: activityPub.publicKey,
+          privateKey: activityPub.privateKey,
+          createdAt: activityPub.createdAt
+        }),
+        this.userPut("ethereum", {
+          address: ethereum.address,
+          privateKey: ethereum.privateKey
+        }),
+        this.userPut("stealth", {
+          pub: stealth.pub,
+          priv: stealth.priv,
+          epub: stealth.epub,
+          epriv: stealth.epriv
+        }),
+        this.userPut("wallets/ethereum", [{
+          address: wallet.address,
+          privateKey: wallet.privateKey,
+          entropy: wallet.entropy,
+          timestamp: wallet.timestamp
+        }])
+      ]);
 
-            // 5. Prepara le chiavi pubbliche
-            const publicKeys: PublicKeys = {
-              gun: {
-                pub: user.pair.pub,
-                epub: user.pair.epub,
-                alias: user.alias,
-                lastSeen: Date.now()
-              },
-              activityPub: {
-                publicKey: activityPubKeys.publicKey,
-                createdAt: activityPubKeys.createdAt
-              },
-              stealth: {
-                pub: stealthKeys.pub,
-                epub: stealthKeys.epub
-              }
-            };
+      // Salva le chiavi pubbliche
+      await Promise.all([
+        this.Put(`~${this.user.pair.pub}/activityPub`, {
+          publicKey: activityPub.publicKey,
+          createdAt: activityPub.createdAt
+        }),
+        this.Put(`~${this.user.pair.pub}/ethereum`, {
+          address: ethereum.address
+        }),
+        this.Put(`~${this.user.pair.pub}/stealth`, {
+          pub: stealth.pub,
+          epub: stealth.epub
+        }),
+        this.Put(`~${this.user.pair.pub}/public/wallets/ethereum`, {
+          address: wallet.address,
+          timestamp: wallet.timestamp
+        })
+      ]);
 
-            // 6. Salva le chiavi pubbliche
-            await this.Set(`~${user.pair.pub}`, publicKeys);
-
-            resolve(user);
-          } catch (error) {
-            console.error("Error generating keys:", error);
-            reject(error);
-          }
+      // Aggiorna la struttura dell'utente con i tipi corretti
+      this.user = {
+        ...this.user,
+        rsa_pair: {
+          priv: activityPub.privateKey,
+          pub: activityPub.publicKey
+        },
+        wallet: {
+          address: ethereum.address,
+          privateKey: ethereum.privateKey
+        },
+        pair_stealth: {
+          pub: stealth.pub,
+          priv: stealth.priv,
+          epub: stealth.epub,
+          epriv: stealth.epriv
+        },
+        wallets: {
+          ethereum: [{
+            address: wallet.address,
+            privateKey: wallet.privateKey,
+            entropy: wallet.entropy,
+            timestamp: wallet.timestamp
+          }]
         }
-      });
-    });
+      };
+
+      return this.user;
+    } catch (error) {
+      console.error("Errore nella creazione dell'utente:", error);
+      throw error;
+    }
   }
 
   /**
    *
    * Log a user in
    *
-   * @param username
+   * @param alias
    * @param password
-   * @param repeat time to repeat the login before give up. Because the nature of decentralization, just because the first time login is failed, doesn't mean the user / password pair doesn't exist in the network
+   * @param username
    * @returns
    */
   async userLogin(
-    username: string,
+    alias: string,
     password: string,
-    alias: string = "",
-    repeat: number = 2
-  ): Promise<{ err: string } | FiregunUser> {
-    return new Promise((resolve, reject) => {
-      this.gun.user().auth(username, password, async (s: any) => {
-        if ("err" in s) {
-          if (repeat > 0) {
-            await this._timeout(1000);
-            this.userLogin(username, password, alias, repeat - 1)
-              .then((s) => resolve(s))
-              .catch((s) => reject(s));
-          } else {
-            reject(s);
-            this.userLogout();
-          }
-        } else {
-          this.user = {
-            alias: alias || username,
-            pair: s.sea,
-          };
-          
-          // Carica le chiavi salvate
-          await this.loadStoredKeys();
-          
-          resolve(this.user);
-          if (typeof localStorage !== "undefined") {
-            localStorage.setItem("fg.keypair", JSON.stringify(this.user));
-          }
+    username?: string
+  ): Promise<FiregunUser> {
+    try {
+      const user = (await this.gun.user().auth(
+        alias,
+        password
+      )) as FiregunUser;
+
+      if ("err" in user) {
+        throw new Error(user.err);
+      }
+
+      // Recupera tutte le chiavi
+      const [
+        activityPubKeysRaw,
+        ethereumKeysRaw,
+        stealthKeysRaw,
+        walletsRaw,
+        webauthnData
+      ] = await Promise.all([
+        this.userGet("activityPub"),
+        this.userGet("ethereum"),
+        this.userGet("stealth"),
+        this.userGet("wallets/ethereum"),
+        this.userGet("webauthn")
+      ]);
+
+      // Cast sicuro dei dati
+      const activityPubKeys = activityPubKeysRaw as unknown as ActivityPubKeys;
+      const ethereumKeys = ethereumKeysRaw as unknown as { address: string; privateKey: string };
+      const stealthKeys = stealthKeysRaw as unknown as StealthKeyPair;
+      const wallets = walletsRaw as unknown as WalletData[];
+
+      // Aggiorna la struttura dell'utente
+      this.user = {
+        ...user,
+        alias: username || alias,
+        rsa_pair: activityPubKeys ? {
+          priv: activityPubKeys.privateKey,
+          pub: activityPubKeys.publicKey
+        } : undefined,
+        wallet: ethereumKeys ? {
+          address: ethereumKeys.address,
+          privateKey: ethereumKeys.privateKey
+        } : undefined,
+        pair_stealth: stealthKeys ? {
+          pub: stealthKeys.pub,
+          priv: stealthKeys.priv,
+          epub: stealthKeys.epub,
+          epriv: stealthKeys.epriv
+        } : undefined,
+        wallets: {
+          ethereum: Array.isArray(wallets) ? wallets.map(w => ({
+            address: w.address,
+            privateKey: w.privateKey,
+            entropy: w.entropy,
+            timestamp: w.timestamp
+          })) : []
         }
-      });
-    });
+      };
+
+      // Salva le credenziali per l'auto-login
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem(
+          "fg.keypair",
+          JSON.stringify({
+            pair: this.user.pair,
+            alias: this.user.alias
+          })
+        );
+      }
+
+      return this.user;
+    } catch (error) {
+      console.error("Errore nel login:", error);
+      throw error;
+    }
   }
 
   /**
@@ -514,48 +603,46 @@ export default class Firegun {
   ): Promise<
     undefined | string | { [key: string]: {} } | { [key: string]: string }
   > {
-    return this.withTimeout(async () => {
-      let path0 = path;
-      path = `${prefix}${path}`;
-      let paths = path.split("/");
-      let dataGun = this.gun;
+    let path0 = path;
+    path = `${prefix}${path}`;
+    let paths = path.split("/");
+    let dataGun = this.gun;
 
-      paths.forEach((path) => {
-        dataGun = dataGun.get(path);
-      });
+    paths.forEach((path) => {
+      dataGun = dataGun.get(path);
+    });
 
-      return new Promise((resolve, reject) => {
-        setTimeout(() => {
-          reject({
-            err: "timeout",
-            ket: `TIMEOUT, Possibly Data : ${path} is corrupt`,
-            data: {},
-            "#": path,
-          });
-        }, 5000);
-        dataGun.once(async (s: any) => {
-          if (s) {
-            s = JSON.parse(JSON.stringify(s));
-            resolve(s);
-          } else {
-            if (repeat) {
-              await this._timeout(1000);
-              try {
-                let data = await this.Get(path0, repeat - 1, prefix);
-                resolve(data);
-              } catch (error) {
-                reject(error);
-              }
-            } else {
-              reject({
-                err: "notfound",
-                ket: `Data Not Found,  Data : ${path} is undefined`,
-                data: {},
-                "#": path,
-              });
-            }
-          }
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        reject({
+          err: "timeout",
+          ket: `TIMEOUT, Possibly Data : ${path} is corrupt`,
+          data: {},
+          "#": path,
         });
+      }, 5000);
+      dataGun.once(async (s: any) => {
+        if (s) {
+          s = JSON.parse(JSON.stringify(s));
+          resolve(s);
+        } else {
+          if (repeat) {
+            await this._timeout(1000);
+            try {
+              let data = await this.Get(path0, repeat - 1, prefix);
+              resolve(data);
+            } catch (error) {
+              reject(error);
+            }
+          } else {
+            reject({
+              err: "notfound",
+              ket: `Data Not Found,  Data : ${path} is undefined`,
+              data: {},
+              "#": path,
+            });
+          }
+        }
       });
     });
   }
@@ -570,51 +657,18 @@ export default class Firegun {
    */
   async userPut(
     path: string,
-    data: string | { [key: string]: {} },
+    data: string | { [key: string]: any },
     async = false,
     prefix = this.prefix
   ): Promise<{ data: Ack[]; error: Ack[] }> {
-    console.log("userPut", path, data, async, prefix);
-
-    if (!this.user.alias) {
-      throw new Error("User not logged in");
-    }
-
-    path = `~${this.user.pair.pub}/${path}`;
-    return await this.Put(path, data, async, prefix);
-  }
-
-  private async encryptSensitiveData(data: any): Promise<string> {
-    if (!this.user?.pair) {
-      throw new Error("User not authenticated");
-    }
-    
-    // Doppia cifratura: prima con SEA, poi con la chiave dell'utente
-    const encryptedWithSEA = await this.Gun.SEA.encrypt(data, this.user.pair);
-    return await this.Gun.SEA.encrypt(encryptedWithSEA, this.user.pair.epriv);
-  }
-
-  private async decryptSensitiveData(encryptedData: string): Promise<any> {
-    if (!this.user?.pair) {
-      throw new Error("User not authenticated");
-    }
-    
-    const decryptedFirst = await this.Gun.SEA.decrypt(encryptedData, this.user.pair.epriv);
-    return await this.Gun.SEA.decrypt(decryptedFirst, this.user.pair);
-  }
-
-  public async userSet(
-    path: string,
-    data: any,
-    sensitive: boolean = false,
-    async = false,
-    prefix = this.prefix
-  ): Promise<{ data: Ack[]; error: Ack[] }> {
-    const finalData = sensitive ? 
-      await this.encryptSensitiveData(data) : 
-      data;
-      
-    return this.Set(path, finalData, async, prefix);
+    return new Promise(async (resolve, reject) => {
+      if (this.user.alias) {
+        path = `~${this.user.pair.pub}/${path}`;
+        resolve(await this.Put(path, data, async, prefix));
+      } else {
+        reject(<Ack>{ err: new Error("User Belum Login"), ok: undefined });
+      }
+    });
   }
 
   /**
@@ -634,7 +688,7 @@ export default class Firegun {
     opt: undefined | { opt: { cert: string } } = undefined
   ): Promise<{ data: Ack[]; error: Ack[] }> {
     return new Promise(async (resolve, reject) => {
-      const token = this.randomAlphaNumeric(30);
+      var token = randomAlphaNumeric(30);
       data.id = token;
       this.Put(`${path}/${token}`, data, async, prefix, opt)
         .then((s) => {
@@ -663,90 +717,84 @@ export default class Firegun {
     prefix: string = this.prefix,
     opt: undefined | { opt: { cert: string } } = undefined
   ): Promise<{ data: Ack[]; error: Ack[] }> {
-    const lockPath = `${prefix}${path}`;
-    
-    try {
-      await this.acquireLock(lockPath);
-      
-      path = `${prefix}${path}`;
-      // if (async) { console.log(path) }
-      let paths = path.split("/");
-      let dataGun = this.gun;
+    path = `${prefix}${path}`;
+    // if (async) { console.log(path) }
+    let paths = path.split("/");
+    let dataGun = this.gun;
 
-      paths.forEach((path) => {
-        dataGun = dataGun.get(path);
-      });
+    paths.forEach((path) => {
+      dataGun = dataGun.get(path);
+    });
 
-      if (typeof data === "undefined") {
-        data = { t: "_" };
-      }
-      let promises: Promise<Ack>[] = [];
-      if (typeof data === "object") var obj: { data: Ack[]; error: Ack[] };
-      obj = { data: [], error: [] };
-      if (typeof data == "object")
-        for (const key in data) {
-          if (Object.hasOwnProperty.call(data, key)) {
-            const element = data[key];
-            if (typeof element === "object") {
-              delete data[key];
-              if (async) {
-                let s = await this.Put(`${path}/${key}`, element as any, async);
-                obj.data = [...obj.data, ...s.data];
-                obj.error = [...obj.error, ...s.error];
-              } else {
-                promises.push(
-                  this.Put(`${path}/${key}`, element as any, async).then((s) => {
-                    obj.data = [...obj.data, ...s.data];
-                    obj.error = [...obj.error, ...s.error];
-                  })
-                );
-              }
+    if (typeof data === "undefined") {
+      data = { t: "_" };
+    }
+    let promises: Promise<Ack>[] = [];
+    if (typeof data === "object") var obj: { data: Ack[]; error: Ack[] };
+    obj = { data: [], error: [] };
+    if (typeof data == "object")
+      for (const key in data) {
+        if (Object.hasOwnProperty.call(data, key)) {
+          const element = data[
+            key
+          ] as "string | { [key: string]: string | {}; } | null";
+          if (typeof element === "object") {
+            delete data[key];
+            if (async) {
+              let s = await this.Put(`${path}/${key}`, element, async);
+              obj.data = [...obj.data, ...s.data];
+              obj.error = [...obj.error, ...s.error];
+            } else {
+              promises.push(
+                this.Put(`${path}/${key}`, element, async).then((s) => {
+                  obj.data = [...obj.data, ...s.data];
+                  obj.error = [...obj.error, ...s.error];
+                })
+              );
             }
           }
         }
+      }
 
-      return new Promise((resolve, reject) => {
-        Promise.allSettled(promises)
-          .then(() => {
-            // Handle Empty Object
-            if (data && Object.keys(data).length === 0) {
-              resolve(obj);
-            } else {
-              setTimeout(() => {
-                obj.error.push({
-                  err: Error("TIMEOUT, Failed to put Data"),
-                  ok: path,
-                });
-                resolve(obj);
-              }, 2000);
-              dataGun.put(
-                <any>data,
-                (ack: any) => {
-                  if (typeof obj === "undefined") {
-                    obj = { data: [], error: [] };
-                  }
-                  if (ack.err === undefined) {
-                    obj.data.push(ack);
-                  } else {
-                    obj.error.push({ err: Error(JSON.stringify(ack)), ok: path });
-                  }
-                  resolve(obj);
-                },
-                opt
-              );
-            }
-          })
-          .catch((s) => {
-            obj.error.push({ err: Error(JSON.stringify(s)), ok: path });
+    return new Promise((resolve, reject) => {
+      Promise.allSettled(promises)
+        .then(() => {
+          // Handle Empty Object
+          if (data && Object.keys(data).length === 0) {
             resolve(obj);
-          })
-          .catch((err) => {
-            reject(err);
-          });
-      });
-    } finally {
-      this.releaseLock(lockPath);
-    }
+          } else {
+            setTimeout(() => {
+              obj.error.push({
+                err: Error("TIMEOUT, Failed to put Data"),
+                ok: path,
+              });
+              resolve(obj);
+            }, 2000);
+            dataGun.put(
+              <any>data,
+              (ack: any) => {
+                if (typeof obj === "undefined") {
+                  obj = { data: [], error: [] };
+                }
+                if (ack.err === undefined) {
+                  obj.data.push(ack);
+                } else {
+                  obj.error.push({ err: Error(JSON.stringify(ack)), ok: path });
+                }
+                resolve(obj);
+              },
+              opt
+            );
+          }
+        })
+        .catch((s) => {
+          obj.error.push({ err: Error(JSON.stringify(s)), ok: path });
+          resolve(obj);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
   }
 
   async purge(path: string) {
@@ -989,421 +1037,240 @@ export default class Firegun {
     localStorage.removeItem("radata");
   }
 
-  // ETHEREUM MANAGER
+  async loginWebAuthn(username: string): Promise<void> {
+    const result = await this.webAuthnManager.authenticateUser(username);
 
-  /**
-   * Generates credentials for Ethereum
-   */
-  async generateCredentials(customAlias?:string): Promise<{
-    username: string;
-    password: string;
-  }> {
-    const credentials = await this.ethereumManager.generateCredentials();
-    const alias = customAlias ? customAlias : credentials.username
-
-    const user = await this.userNew(credentials.username,credentials.password, alias) as FiregunUser
-
-    const internalWalletAddress = this.ethereumManager.convertToEthPk(user.pair.epriv)
-    const externalWalletAddress = credentials.address
-
-    this.publicKeys.externalWallet = {
-      internalWalletAddress: internalWalletAddress,
-      externalWalletAddress: externalWalletAddress,
+    if (!result.success || !result.password) {
+      throw new Error("Autenticazione WebAuthn fallita");
     }
 
-    this.keys.externalWallet = {
-      internalWalletAddress: internalWalletAddress,
-      externalWalletAddress: externalWalletAddress,
-    }
+    // Genera la coppia di chiavi Gun dalla password
+    const pair = (await (this.Gun.SEA as any).derive({
+      password: result.password,
+      salt: username,
+    })) as SEAKeyPair;
 
-    await this.userSet(`keys`, this.keys, true)
-    await this.Set(`~${user.pair.pub}`, this.publicKeys)
-    
-    return credentials;
+    // Effettua il login
+    await this.loginPair(pair, username);
   }
 
   /**
-   * Login with Ethereum wallet
+   * Crea un nuovo utente usando WebAuthn
+   * @param username Username dell'utente
+   * @param deviceName Nome opzionale del dispositivo
    */
-  async walletLogin(): Promise<string> {
-    const credentials = await this.generateCredentials();
-    const result = await this.userLogin(
-      credentials.username,
-      credentials.password
-    );
-    if ("err" in result) {
-      throw new Error(result.err);
-    }
-    return result.pair.pub;
-  }
-
-  // Metodi per ActivityPub
-  async createActivityPubPair(): Promise<ActivityPubKeys> {
-    if (!this.user?.pair) {
-      throw new Error("User not authenticated");
-    }
-
-    // Usa il manager solo per creare le chiavi
-    const activityPubKeys = await this.activityPubManager.createPair();
-    
-    // Gestisce il salvataggio
-    this.keys.activityPub = activityPubKeys;
-    this.publicKeys.activityPub = {
-      publicKey: activityPubKeys.publicKey,
-      createdAt: activityPubKeys.createdAt
-    };
-
-    // Salva le modifiche
-    await this.userSet(`keys`, this.keys, true);
-    await this.Set(`~${this.user.pair.pub}`, this.publicKeys);
-
-    return activityPubKeys;
-  }
-
-  async getActivityPubKeys(): Promise<ActivityPubKeys | null> {
-    if (!this.user?.pair) {
-      throw new Error("User not authenticated");
-    }
-
-    const keys = await this.userGet("keys") as Keys;
-    if (!keys?.activityPub) {
-      throw new Error("ActivityPub keys not found");
-    }
-
-    return keys.activityPub;
-  }
-
-  // Metodi per Ethereum
-  async generateEthereumCredentials(): Promise<{
-    address: string;
-    username: string;
-    password: string;
-  }> {
-    const credentials = await this.ethereumManager.generateCredentials();
-    
-    // Se l'utente è già loggato, salva le informazioni del wallet
-    if (this.user?.pair) {
-      const internalWalletAddress = this.ethereumManager.convertToEthPk(this.user.pair.epriv);
-      
-      // Aggiorna le chiavi private
-      this.keys.ethereum = {
-        address: credentials.address,
-        privateKey: internalWalletAddress,
-        timestamp: Date.now()
-      };
-      
-      // Aggiorna le chiavi pubbliche
-      this.publicKeys.ethereum = {
-        address: credentials.address,
-        timestamp: Date.now()
-      };
-
-      // Salva le modifiche
-      await this.userSet(`keys`, this.keys, true);
-      await this.Set(`~${this.user.pair.pub}`, this.publicKeys);
-    }
-
-    return credentials;
-  }
-
-  async ethereumLogin(): Promise<string> {
-    const credentials = await this.generateEthereumCredentials();
-    const result = await this.userLogin(credentials.username, credentials.password);
-    if ('err' in result) {
-      throw new Error(result.err);
-    }
-    return result.pair.pub;
-  }
-
-  setCustomEthereumProvider(rpcUrl: string, privateKey: string): void {
-    this.ethereumManager.setCustomProvider(rpcUrl, privateKey);
-  }
-
-  async getEthereumSigner(): Promise<ethers.Signer> {
-    return this.ethereumManager.getSigner();
-  }
-
-  convertToEthereumPrivateKey(gunPrivateKey: string): string {
-    return this.ethereumManager.convertToEthPk(gunPrivateKey);
-  }
-
-  // Metodi per Stealth
-  async createStealthPair(): Promise<StealthKeyPair> {
-    return this.stealthManager.createPair();
-  }
-
-  async generateStealthAddress(recipientPublicKey: string): Promise<{
-    stealthAddress: string;
-    ephemeralPublicKey: string;
-    recipientPublicKey: string;
-  }> {
-    if (!this.keys.stealth) {
-      throw new Error("Stealth keys not found");
-    }
-    return this.stealthManager.generateStAdd(
-      recipientPublicKey
-    );
-  }
-
-  async openStealthAddress(stealthAddress: string, ephemeralPublicKey: string, stealthPair: StealthKeyPair): Promise<ethers.Wallet> {
-    return this.stealthManager.openStAdd(stealthAddress, ephemeralPublicKey, stealthPair);
-  }
-
-  // Metodi per WebAuthn
-  async loginWebAuthn(username: string): Promise<FiregunUser> {
+  async userNewWebAuthn(
+    username: string,
+    deviceName?: string
+  ): Promise<FiregunUser> {
     try {
-      // 1. Prima autentica con WebAuthn
-      const authResult = await this.webAuthnManager.authenticateUser(username);
-      if (!authResult.success) {
-        throw new Error(authResult.error || "WebAuthn authentication failed");
+      // Genera le credenziali WebAuthn
+      const webAuthnResult = await this.webAuthnManager.generateCredentials(
+        username,
+        deviceName
+      );
+
+      if (!webAuthnResult.success || !webAuthnResult.password) {
+        throw new Error(
+          webAuthnResult.error || "Registrazione WebAuthn fallita"
+        );
       }
 
-      // 2. Se l'autenticazione WebAuthn è riuscita, effettua il login con le credenziali salvate
-      const result = await this.userLogin(authResult.username!, authResult.password!);
-      if ('err' in result) {
-        throw new Error(result.err);
+      // Usa la password generata da WebAuthn per creare l'utente Gun
+      const user = await this.userNew(
+        username,
+        webAuthnResult.password,
+        username
+      );
+
+      if ("err" in user) {
+        throw new Error(user.err);
       }
 
-      // 3. Aggiorna il timestamp dell'ultimo utilizzo del dispositivo
-      if (this.user?.pair && authResult.credentialId) {
-        if (this.publicKeys.webAuthn) {
-          this.publicKeys.webAuthn.lastUsed = Date.now();
-          await this.Set(`~${this.user.pair.pub}`, this.publicKeys);
-        }
+      // Salva le credenziali WebAuthn
+      if (webAuthnResult.credentialId && webAuthnResult.deviceInfo) {
+        const webauthnData = {
+          credentialId: webAuthnResult.credentialId,
+          deviceInfo: webAuthnResult.deviceInfo,
+          timestamp: Date.now(),
+        };
+        await this.userPut("webauthn", webauthnData);
       }
 
-      return result;
+      return user as FiregunUser;
     } catch (error) {
-      console.error("WebAuthn login failed:", error);
+      console.error("Errore nella registrazione WebAuthn:", error);
       throw error;
     }
   }
 
-  // Metodo per registrare un nuovo dispositivo WebAuthn
-  async registerWebAuthnDevice(
-    username: string,
-    deviceName?: string
-  ): Promise<WebAuthnResult> {
-    // 1. Genera le credenziali WebAuthn per il nuovo dispositivo
-    const credentials = await this.generateWebAuthnCredentials(username, true, deviceName);
-    
-    if (!credentials.success) {
-      throw new Error(credentials.error || "Failed to generate WebAuthn credentials");
-    }
+  /**
+   * Effettua il login di un utente usando WebAuthn
+   * @param username Username dell'utente
+   */
+  async userLoginWebAuthn(username: string): Promise<FiregunUser> {
+    try {
+      // Autentica l'utente con WebAuthn
+      const webAuthnResult = await this.webAuthnManager.authenticateUser(
+        username
+      );
 
-    return credentials;
-  }
+      if (!webAuthnResult.success || !webAuthnResult.password) {
+        throw new Error(
+          webAuthnResult.error || "Autenticazione WebAuthn fallita"
+        );
+      }
 
-  async generateWebAuthnCredentials(
-    username: string,
-    isNewDevice: boolean = false,
-    deviceName?: string
-  ): Promise<WebAuthnResult> {
-    const credentials = await this.webAuthnManager.generateCredentials(username, isNewDevice, deviceName);
-    
-    if (credentials.success && this.user?.pair) {
-      // Salva le credenziali WebAuthn nelle chiavi private
-      this.keys.webAuthn = {
-        credentialId: credentials.credentialId!,
-        deviceInfo: {
-          name: deviceName || 'default',
-          platform: navigator.platform
-        },
-        username: credentials.username!,
-        password: credentials.password!,
-        timestamp: Date.now()
-      };
+      // Usa la password generata da WebAuthn per il login Gun
+      const user = await this.userLogin(
+        username,
+        webAuthnResult.password,
+        username
+      );
 
-      // Salva le informazioni pubbliche
-      this.publicKeys.webAuthn = {
-        credentialId: credentials.credentialId!,
-        lastUsed: Date.now(),
-        deviceInfo: {
-          name: deviceName || 'default',
-          platform: navigator.platform
+      if ("err" in user) {
+        throw new Error(user.err);
+      }
+
+      // Aggiorna il timestamp dell'ultimo accesso
+      if (webAuthnResult.credentialId) {
+        const webauthnData = await this.userGet("webauthn");
+        if (webauthnData && typeof webauthnData === "object") {
+          const updatedData = {
+            ...(webauthnData as object),
+            lastUsed: Date.now(),
+          };
+          await this.userPut("webauthn", updatedData);
         }
-      };
-
-      // Salva le modifiche
-      await this.userSet(`keys`, this.keys, true);
-      await this.Set(`~${this.user.pair.pub}`, this.publicKeys);
-    }
-
-    return credentials;
-  }
-
-  async authenticateWebAuthnUser(username: string): Promise<WebAuthnResult> {
-    return this.webAuthnManager.authenticateUser(username);
-  }
-
-  async getWebAuthnDevices(username: string): Promise<DeviceCredential[]> {
-    return this.webAuthnManager.getRegisteredDevices(username);
-  }
-
-  async removeWebAuthnDevice(username: string, credentialId: string): Promise<boolean> {
-    const removed = await this.webAuthnManager.removeDevice(username, credentialId);
-    
-    if (removed && this.user?.pair) {
-      // Aggiorna le chiavi rimuovendo il dispositivo
-      if (this.keys.webAuthn?.credentialId === credentialId) {
-        delete this.keys.webAuthn;
-      }
-      
-      if (this.publicKeys.webAuthn?.credentialId === credentialId) {
-        delete this.publicKeys.webAuthn;
       }
 
-      // Salva le modifiche
-      await this.userSet(`keys`, this.keys, true);
-      await this.Set(`~${this.user.pair.pub}`, this.publicKeys);
+      return user as FiregunUser;
+    } catch (error) {
+      console.error("Errore nel login WebAuthn:", error);
+      throw error;
     }
-
-    return removed;
   }
 
-  // Metodi per Wallet
-  async createNewWallet(): Promise<WalletKeys> {
-    if (!this.user?.pair) {
-      throw new Error("User not authenticated");
-    }
-
-    // Usa il manager solo per creare il wallet
-    const walletData = await this.walletManager.createWallet(this.user.pair);
-    
-    // Gestisce il salvataggio
-    if (!this.keys.wallets) {
-      this.keys.wallets = { ethereum: [] };
-    }
-    if (!this.publicKeys.wallets) {
-      this.publicKeys.wallets = { ethereum: [] };
-    }
-
-    // Aggiorna lo stato interno
-    this.keys.wallets.ethereum.push(walletData);
-    this.publicKeys.wallets.ethereum.push({
-      address: walletData.address,
-      timestamp: walletData.timestamp
-    });
-
-    // Salva le modifiche
-    await this.userSet(`keys`, this.keys, true);
-    await this.Set(`~${this.user.pair.pub}`, this.publicKeys);
-
-    return {
-      ethereum: [walletData]
-    };
-  }
-
-  // Metodo per caricare le chiavi salvate durante il login
-  private async loadStoredKeys(): Promise<void> {
-    if (!this.user?.pair) {
+  /**
+   * Firma un messaggio usando WebAuthn
+   * @param message Messaggio da firmare
+   */
+  async signMessageWebAuthn(message: string): Promise<ArrayBuffer> {
+    if (!this.isAuthenticated()) {
       throw new Error("Utente non autenticato");
     }
 
+    return this.webAuthnManager.signMessage(message);
+  }
+
+  /**
+   * Verifica se l'utente è autenticato
+   */
+  private isAuthenticated(): boolean {
+    return Boolean(this.user?.pair?.pub);
+  }
+
+  /**
+   * Crea un nuovo wallet e lo salva nei nodi pubblici e privati
+   */
+  async createWallet(): Promise<WalletData> {
     try {
-      // Carica le chiavi private
-      const storedKeys = await this.userGet("keys");
-      if (storedKeys) {
-        this.keys = this.validateKeys(storedKeys as Keys);
+      if (!this.isAuthenticated()) {
+        throw new Error("Utente non autenticato");
       }
 
-      // Carica le chiavi pubbliche
-      const publicPath = `~${this.user.pair.pub}`;
-      const storedPublicKeys = await this.Get(publicPath);
-      if (storedPublicKeys) {
-        this.publicKeys = this.validatePublicKeys(storedPublicKeys as PublicKeys);
+      // Crea il wallet usando il WalletManager
+      const wallet = await this.walletManager.createWallet(this.user.pair);
+
+      // Inizializza la struttura dei wallet se non esiste
+      if (!this.user.wallets) {
+        this.user.wallets = { ethereum: [] };
       }
 
-      console.log("Chiavi caricate con successo");
+      // Aggiorna l'array dei wallet
+      const updatedWallets = [...this.user.wallets.ethereum, wallet];
+      
+      // Salva il wallet completo nel nodo privato dell'utente
+      await this.userPut("wallets/ethereum", updatedWallets);
+
+      // Salva solo l'indirizzo nel nodo pubblico
+      await this.Put(`~${this.user.pair.pub}/public/wallets/ethereum`, {
+        address: wallet.address,
+        timestamp: wallet.timestamp
+      });
+
+      // Aggiorna la struttura FiregunUser
+      this.user.wallets.ethereum = updatedWallets;
+
+      return wallet;
     } catch (error) {
-      console.error("Errore nel caricamento delle chiavi:", error);
-      throw new Error(`Impossibile caricare le chiavi: ${
-        error instanceof Error ? error.message : "Errore sconosciuto"
-      }`);
-    }
-  }
-
-  private validateKeys(keys: Keys): Keys {
-    // Implementa la validazione delle chiavi
-    if (!keys) {
-      throw new Error("Chiavi non valide");
-    }
-    return keys;
-  }
-
-  private validatePublicKeys(publicKeys: PublicKeys): PublicKeys {
-    // Implementa la validazione delle chiavi pubbliche
-    if (!publicKeys) {
-      throw new Error("Chiavi pubbliche non valide");
-    }
-    return publicKeys;
-  }
-
-  private async acquireLock(path: string): Promise<void> {
-    while (this.locks.has(path)) {
-      await this.locks.get(path);
-    }
-    
-    const release = new Promise<void>((resolve) => {
-      setTimeout(resolve, 5000); // Timeout di sicurezza
-    });
-    
-    this.locks.set(path, release);
-    return release;
-  }
-
-  private releaseLock(path: string): void {
-    this.locks.delete(path);
-  }
-
-  private async withTimeout<T>(
-    operation: () => Promise<T>,
-    timeoutMs: number = 5000
-  ): Promise<T> {
-    const timeout = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Operation timed out')), timeoutMs);
-    });
-
-    return Promise.race([
-      operation(),
-      timeout
-    ]).catch(error => {
-      if (error.message === 'Operation timed out') {
-        console.warn(`Operation timed out: retrying...`);
-        return this.withTimeout(operation, timeoutMs);
-      }
+      console.error("Errore nella creazione del wallet:", error);
       throw error;
-    });
-  }
-
-  public async subscribeToChannel(channelId: string, callback: Function): Promise<void> {
-    if (this.subscriptions.has(channelId)) {
-      this.unsubscribeFromChannel(channelId);
-    }
-    
-    const handler = this.gun.get('channels').get(channelId).on((data) => {
-      callback(data);
-    });
-    
-    if (typeof handler.off !== 'function') {
-      throw new Error('Invalid Gun subscription handler');
-    }
-    
-    this.subscriptions.set(channelId, handler);
-  }
-
-  public unsubscribeFromChannel(channelId: string): void {
-    const handler = this.subscriptions.get(channelId);
-    if (handler && typeof handler.off === 'function') {
-      handler.off();
-      this.subscriptions.delete(channelId);
     }
   }
 
-  // Metodo per cleanup generale
-  public cleanup(): void {
-    for (const channelId of this.subscriptions.keys()) {
-      this.unsubscribeFromChannel(channelId);
+  /**
+   * Recupera i wallet dell'utente
+   */
+  async getWallets(): Promise<WalletData[]> {
+    try {
+      if (!this.isAuthenticated()) {
+        throw new Error("Utente non autenticato");
+      }
+
+      const wallets = await this.userGet("wallets/ethereum");
+      if (!wallets) {
+        this.user.wallets = { ethereum: [] };
+        return [];
+      }
+
+      // Converti in array se non lo è già
+      const walletsArray = Array.isArray(wallets) ? wallets : [wallets];
+
+      // Aggiorna la struttura FiregunUser
+      this.user.wallets = {
+        ethereum: walletsArray.map((w) => ({
+          address: w.address,
+          privateKey: w.privateKey,
+          entropy: w.entropy,
+          timestamp: w.timestamp,
+        })),
+      };
+
+      return this.user.wallets.ethereum;
+    } catch (error) {
+      console.error("Errore nel recupero dei wallet:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Firma un messaggio con un wallet specifico
+   */
+  async signWithWallet(
+    message: string,
+    walletAddress: string
+  ): Promise<string> {
+    try {
+      if (!this.isAuthenticated()) {
+        throw new Error("Utente non autenticato");
+      }
+
+      const wallets = await this.getWallets();
+      const wallet = wallets.find(
+        (w) => w.address.toLowerCase() === walletAddress.toLowerCase()
+      );
+
+      if (!wallet) {
+        throw new Error("Wallet non trovato");
+      }
+
+      // Crea un'istanza di Wallet di ethers.js
+      const ethersWallet = new Wallet(wallet.privateKey);
+      return ethersWallet.signMessage(message);
+    } catch (error) {
+      console.error("Errore nella firma del messaggio:", error);
+      throw error;
     }
   }
 }
