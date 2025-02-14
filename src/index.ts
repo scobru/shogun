@@ -1,9 +1,9 @@
-import { Shogun } from "./Shogun";
 import { StealthManager } from "./managers/StealthManager";
 import { EthereumManager } from "./managers/EthereumManager";
 import { ActivityPubManager } from "./managers/ActivityPubManager";
 import { WebAuthnManager } from "./managers/WebAuthnManager";
 import { WalletManager } from "./managers/WalletManager";
+import Firegun from "./db/Firegun2";
 
 
 import {
@@ -25,7 +25,7 @@ import {
 
 import { SEA } from "gun";
 
-export { Shogun };
+export { Firegun };
 
 // export managers
 export {

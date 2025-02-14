@@ -30,15 +30,9 @@ import { WalletKeys } from "../interfaces/WalletResult";
 
 import { ethers } from "ethers";
 
-function randomAlphaNumeric(length: number): string {
-  var result = "";
-  var characters =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  var charactersLength = characters.length;
-  for (var i = 0; i < length; i++) {
-    result += characters.charAt(Math.floor(Math.random() * charactersLength));
-  }
-  return result;
+interface GunSubscription {
+  off: () => void;
+  [key: string]: any;
 }
 
 export default class Firegun {
@@ -60,6 +54,9 @@ export default class Firegun {
   stealthManager: StealthManager;
   webAuthnManager: WebAuthnManager;
   walletManager: WalletManager;
+  private locks: Map<string, Promise<void>> = new Map();
+  private subscriptions: Map<string, GunSubscription> = new Map();
+
   /**
    *
    * --------------------------------------
@@ -153,6 +150,16 @@ export default class Firegun {
 
     this.ev = {};
   }
+
+  private randomAlphaNumeric(length: number): string {
+    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let result = "";
+    for (let i = 0; i < length; i++) {
+      result += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    return result;
+  }
+
   /**
    * Wait in ms
    * @param ms duration of timeout in ms
@@ -507,46 +514,48 @@ export default class Firegun {
   ): Promise<
     undefined | string | { [key: string]: {} } | { [key: string]: string }
   > {
-    let path0 = path;
-    path = `${prefix}${path}`;
-    let paths = path.split("/");
-    let dataGun = this.gun;
+    return this.withTimeout(async () => {
+      let path0 = path;
+      path = `${prefix}${path}`;
+      let paths = path.split("/");
+      let dataGun = this.gun;
 
-    paths.forEach((path) => {
-      dataGun = dataGun.get(path);
-    });
+      paths.forEach((path) => {
+        dataGun = dataGun.get(path);
+      });
 
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        reject({
-          err: "timeout",
-          ket: `TIMEOUT, Possibly Data : ${path} is corrupt`,
-          data: {},
-          "#": path,
-        });
-      }, 5000);
-      dataGun.once(async (s: any) => {
-        if (s) {
-          s = JSON.parse(JSON.stringify(s));
-          resolve(s);
-        } else {
-          if (repeat) {
-            await this._timeout(1000);
-            try {
-              let data = await this.Get(path0, repeat - 1, prefix);
-              resolve(data);
-            } catch (error) {
-              reject(error);
-            }
+      return new Promise((resolve, reject) => {
+        setTimeout(() => {
+          reject({
+            err: "timeout",
+            ket: `TIMEOUT, Possibly Data : ${path} is corrupt`,
+            data: {},
+            "#": path,
+          });
+        }, 5000);
+        dataGun.once(async (s: any) => {
+          if (s) {
+            s = JSON.parse(JSON.stringify(s));
+            resolve(s);
           } else {
-            reject({
-              err: "notfound",
-              ket: `Data Not Found,  Data : ${path} is undefined`,
-              data: {},
-              "#": path,
-            });
+            if (repeat) {
+              await this._timeout(1000);
+              try {
+                let data = await this.Get(path0, repeat - 1, prefix);
+                resolve(data);
+              } catch (error) {
+                reject(error);
+              }
+            } else {
+              reject({
+                err: "notfound",
+                ket: `Data Not Found,  Data : ${path} is undefined`,
+                data: {},
+                "#": path,
+              });
+            }
           }
-        }
+        });
       });
     });
   }
@@ -575,20 +584,37 @@ export default class Firegun {
     return await this.Put(path, data, async, prefix);
   }
 
-  async userSet(
+  private async encryptSensitiveData(data: any): Promise<string> {
+    if (!this.user?.pair) {
+      throw new Error("User not authenticated");
+    }
+    
+    // Doppia cifratura: prima con SEA, poi con la chiave dell'utente
+    const encryptedWithSEA = await this.Gun.SEA.encrypt(data, this.user.pair);
+    return await this.Gun.SEA.encrypt(encryptedWithSEA, this.user.pair.epriv);
+  }
+
+  private async decryptSensitiveData(encryptedData: string): Promise<any> {
+    if (!this.user?.pair) {
+      throw new Error("User not authenticated");
+    }
+    
+    const decryptedFirst = await this.Gun.SEA.decrypt(encryptedData, this.user.pair.epriv);
+    return await this.Gun.SEA.decrypt(decryptedFirst, this.user.pair);
+  }
+
+  public async userSet(
     path: string,
-    data: string | { [key: string]: {} },
+    data: any,
+    sensitive: boolean = false,
     async = false,
     prefix = this.prefix
   ): Promise<{ data: Ack[]; error: Ack[] }> {
-    console.log("userSet", path, data, async, prefix);
-
-    if (!this.user.alias) {
-      throw new Error("User not logged in");
-    }
-
-    path = `~${this.user.pair.pub}/${path}`;
-    return await this.Set(path, data as any, async, prefix);
+    const finalData = sensitive ? 
+      await this.encryptSensitiveData(data) : 
+      data;
+      
+    return this.Set(path, finalData, async, prefix);
   }
 
   /**
@@ -608,7 +634,7 @@ export default class Firegun {
     opt: undefined | { opt: { cert: string } } = undefined
   ): Promise<{ data: Ack[]; error: Ack[] }> {
     return new Promise(async (resolve, reject) => {
-      var token = randomAlphaNumeric(30);
+      const token = this.randomAlphaNumeric(30);
       data.id = token;
       this.Put(`${path}/${token}`, data, async, prefix, opt)
         .then((s) => {
@@ -637,82 +663,90 @@ export default class Firegun {
     prefix: string = this.prefix,
     opt: undefined | { opt: { cert: string } } = undefined
   ): Promise<{ data: Ack[]; error: Ack[] }> {
-    path = `${prefix}${path}`;
-    // if (async) { console.log(path) }
-    let paths = path.split("/");
-    let dataGun = this.gun;
+    const lockPath = `${prefix}${path}`;
+    
+    try {
+      await this.acquireLock(lockPath);
+      
+      path = `${prefix}${path}`;
+      // if (async) { console.log(path) }
+      let paths = path.split("/");
+      let dataGun = this.gun;
 
-    paths.forEach((path) => {
-      dataGun = dataGun.get(path);
-    });
+      paths.forEach((path) => {
+        dataGun = dataGun.get(path);
+      });
 
-    if (typeof data === "undefined") {
-      data = { t: "_" };
-    }
-    let promises: Promise<Ack>[] = [];
-    if (typeof data === "object") var obj: { data: Ack[]; error: Ack[] };
-    obj = { data: [], error: [] };
-    if (typeof data == "object")
-      for (const key in data) {
-        if (Object.hasOwnProperty.call(data, key)) {
-          const element = data[key];
-          if (typeof element === "object") {
-            delete data[key];
-            if (async) {
-              let s = await this.Put(`${path}/${key}`, element as any, async);
-              obj.data = [...obj.data, ...s.data];
-              obj.error = [...obj.error, ...s.error];
-            } else {
-              promises.push(
-                this.Put(`${path}/${key}`, element as any, async).then((s) => {
-                  obj.data = [...obj.data, ...s.data];
-                  obj.error = [...obj.error, ...s.error];
-                })
-              );
+      if (typeof data === "undefined") {
+        data = { t: "_" };
+      }
+      let promises: Promise<Ack>[] = [];
+      if (typeof data === "object") var obj: { data: Ack[]; error: Ack[] };
+      obj = { data: [], error: [] };
+      if (typeof data == "object")
+        for (const key in data) {
+          if (Object.hasOwnProperty.call(data, key)) {
+            const element = data[key];
+            if (typeof element === "object") {
+              delete data[key];
+              if (async) {
+                let s = await this.Put(`${path}/${key}`, element as any, async);
+                obj.data = [...obj.data, ...s.data];
+                obj.error = [...obj.error, ...s.error];
+              } else {
+                promises.push(
+                  this.Put(`${path}/${key}`, element as any, async).then((s) => {
+                    obj.data = [...obj.data, ...s.data];
+                    obj.error = [...obj.error, ...s.error];
+                  })
+                );
+              }
             }
           }
         }
-      }
 
-    return new Promise((resolve, reject) => {
-      Promise.allSettled(promises)
-        .then(() => {
-          // Handle Empty Object
-          if (data && Object.keys(data).length === 0) {
-            resolve(obj);
-          } else {
-            setTimeout(() => {
-              obj.error.push({
-                err: Error("TIMEOUT, Failed to put Data"),
-                ok: path,
-              });
+      return new Promise((resolve, reject) => {
+        Promise.allSettled(promises)
+          .then(() => {
+            // Handle Empty Object
+            if (data && Object.keys(data).length === 0) {
               resolve(obj);
-            }, 2000);
-            dataGun.put(
-              <any>data,
-              (ack: any) => {
-                if (typeof obj === "undefined") {
-                  obj = { data: [], error: [] };
-                }
-                if (ack.err === undefined) {
-                  obj.data.push(ack);
-                } else {
-                  obj.error.push({ err: Error(JSON.stringify(ack)), ok: path });
-                }
+            } else {
+              setTimeout(() => {
+                obj.error.push({
+                  err: Error("TIMEOUT, Failed to put Data"),
+                  ok: path,
+                });
                 resolve(obj);
-              },
-              opt
-            );
-          }
-        })
-        .catch((s) => {
-          obj.error.push({ err: Error(JSON.stringify(s)), ok: path });
-          resolve(obj);
-        })
-        .catch((err) => {
-          reject(err);
-        });
-    });
+              }, 2000);
+              dataGun.put(
+                <any>data,
+                (ack: any) => {
+                  if (typeof obj === "undefined") {
+                    obj = { data: [], error: [] };
+                  }
+                  if (ack.err === undefined) {
+                    obj.data.push(ack);
+                  } else {
+                    obj.error.push({ err: Error(JSON.stringify(ack)), ok: path });
+                  }
+                  resolve(obj);
+                },
+                opt
+              );
+            }
+          })
+          .catch((s) => {
+            obj.error.push({ err: Error(JSON.stringify(s)), ok: path });
+            resolve(obj);
+          })
+          .catch((err) => {
+            reject(err);
+          });
+      });
+    } finally {
+      this.releaseLock(lockPath);
+    }
   }
 
   async purge(path: string) {
@@ -1303,5 +1337,73 @@ export default class Firegun {
       throw new Error("Chiavi pubbliche non valide");
     }
     return publicKeys;
+  }
+
+  private async acquireLock(path: string): Promise<void> {
+    while (this.locks.has(path)) {
+      await this.locks.get(path);
+    }
+    
+    const release = new Promise<void>((resolve) => {
+      setTimeout(resolve, 5000); // Timeout di sicurezza
+    });
+    
+    this.locks.set(path, release);
+    return release;
+  }
+
+  private releaseLock(path: string): void {
+    this.locks.delete(path);
+  }
+
+  private async withTimeout<T>(
+    operation: () => Promise<T>,
+    timeoutMs: number = 5000
+  ): Promise<T> {
+    const timeout = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Operation timed out')), timeoutMs);
+    });
+
+    return Promise.race([
+      operation(),
+      timeout
+    ]).catch(error => {
+      if (error.message === 'Operation timed out') {
+        console.warn(`Operation timed out: retrying...`);
+        return this.withTimeout(operation, timeoutMs);
+      }
+      throw error;
+    });
+  }
+
+  public async subscribeToChannel(channelId: string, callback: Function): Promise<void> {
+    if (this.subscriptions.has(channelId)) {
+      this.unsubscribeFromChannel(channelId);
+    }
+    
+    const handler = this.gun.get('channels').get(channelId).on((data) => {
+      callback(data);
+    });
+    
+    if (typeof handler.off !== 'function') {
+      throw new Error('Invalid Gun subscription handler');
+    }
+    
+    this.subscriptions.set(channelId, handler);
+  }
+
+  public unsubscribeFromChannel(channelId: string): void {
+    const handler = this.subscriptions.get(channelId);
+    if (handler && typeof handler.off === 'function') {
+      handler.off();
+      this.subscriptions.delete(channelId);
+    }
+  }
+
+  // Metodo per cleanup generale
+  public cleanup(): void {
+    for (const channelId of this.subscriptions.keys()) {
+      this.unsubscribeFromChannel(channelId);
+    }
   }
 }
