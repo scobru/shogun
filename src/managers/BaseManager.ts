@@ -178,11 +178,9 @@ export abstract class BaseManager<T> {
     publicKey: string,
     path: string = ""
   ): Promise<any> {
+    const node = this.getPublicNode(path)
     return new Promise((resolve, reject) => {
-      this.gun
-        .get(`~${publicKey}`)
-        .get(this.storagePrefix)
-        .get(path)
+      node
         .once((data: any) => {
           resolve(this.cleanGunMetadata(data));
         });

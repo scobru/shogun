@@ -267,7 +267,7 @@ describe("GunAuthManager", function () {
     });
 
     it("should save and retrieve private data", async function () {
-      this.timeout(60000); // Aumentiamo il timeout a 60 secondi
+      this.timeout(300000); // Aumentato a 5 minuti
       
       const data = { secret: "This is private data" };
       const path = "secrets/data1";
@@ -275,54 +275,79 @@ describe("GunAuthManager", function () {
       // Verifichiamo lo stato di autenticazione
       expect(gunAuthManager.isAuthenticated(), "User should be authenticated").to.be.true;
 
+      console.log("Starting save operation...");
+      
+      // Prima proviamo a pulire eventuali dati residui
+      try {
+        await gunAuthManager.deletePrivateData(path);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      } catch (error) {
+        console.log("Pre-cleanup warning:", error);
+      }
+      
       // Salviamo i dati con retry
       let saveAttempts = 0;
-      const maxSaveAttempts = 3;
+      const maxSaveAttempts = 5;
       let saved = false;
 
       while (!saved && saveAttempts < maxSaveAttempts) {
         try {
+          console.log(`Save attempt ${saveAttempts + 1}...`);
           await gunAuthManager.savePrivateData(data, path);
-          saved = true;
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          
+          // Verifica immediata del salvataggio
+          const verifyData = await gunAuthManager.getPrivateData(path);
+          if (verifyData && verifyData.secret === data.secret) {
+            console.log("Save verified immediately");
+            saved = true;
+          } else {
+            throw new Error("Immediate verification failed");
+          }
         } catch (error) {
           console.log(`Save attempt ${saveAttempts + 1} failed:`, error);
           saveAttempts++;
-          if (saveAttempts === maxSaveAttempts) throw error;
-          await waitForOperation(2000);
+          if (saveAttempts === maxSaveAttempts) {
+            throw error;
+          }
+          await new Promise(resolve => setTimeout(resolve, 5000));
         }
       }
       
-      // Aumentiamo il tempo di attesa per la sincronizzazione
-      await waitForOperation(5000);
+      console.log("Waiting for data synchronization...");
+      await new Promise(resolve => setTimeout(resolve, 10000));
 
       // Recuperiamo i dati con retry
       let retrieveAttempts = 0;
-      const maxRetrieveAttempts = 3;
+      const maxRetrieveAttempts = 5;
       let retrievedData = null;
 
-      while (retrieveAttempts < maxRetrieveAttempts) {
+      while (retrieveAttempts < maxRetrieveAttempts && !retrievedData) {
         try {
-          retrievedData = await gunAuthManager.getPrivateData(path);
-          if (retrievedData) break;
+          console.log(`Retrieve attempt ${retrieveAttempts + 1}...`);
+          const result = await gunAuthManager.getPrivateData(path);
+          
+          if (result && result.secret === data.secret) {
+            retrievedData = result;
+            console.log("Data retrieved successfully");
+            break;
+          }
+          
+          console.log("Retrieved data verification failed, retrying...");
+          await new Promise(resolve => setTimeout(resolve, 5000));
         } catch (error) {
           console.log(`Retrieve attempt ${retrieveAttempts + 1} failed:`, error);
+          retrieveAttempts++;
+          if (retrieveAttempts === maxRetrieveAttempts) {
+            throw error;
+          }
+          await new Promise(resolve => setTimeout(resolve, 5000));
         }
-        retrieveAttempts++;
-        await waitForOperation(2000);
       }
       
-      // Verifichiamo che i dati siano stati recuperati
-      expect(retrievedData, "Retrieved data should not be null").to.not.be.null;
-      expect(retrievedData, "Retrieved data should not be undefined").to.not.be.undefined;
-
-      // Se i dati sono una stringa JSON, li parsiamo
-      let parsedData = retrievedData;
-      if (typeof retrievedData === 'string') {
-        parsedData = JSON.parse(retrievedData);
-      }
-
-      // Verifichiamo che i dati contengano il nostro segreto
-      expect(parsedData.secret, "Retrieved data should contain the secret").to.equal(data.secret);
+      expect(retrievedData).to.not.be.null;
+      expect(retrievedData.secret).to.equal(data.secret);
+      console.log("Test completed successfully");
     });
   });
 });

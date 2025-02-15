@@ -146,21 +146,26 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
     try {
       // Prima eliminiamo i dati pubblici
       await this.deletePublicData("activitypub");
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Poi eliminiamo i dati privati
       await this.deletePrivateData("activitypub/keys");
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Verifica con timeout più breve e intervalli più frequenti
+      // Verifica con timeout più lungo e intervalli più frequenti
       const startTime = Date.now();
-      const timeout = 10000; // Ridotto a 10 secondi
+      const timeout = 30000; // Aumentato a 30 secondi
       
       const verifyDeletion = async (): Promise<boolean> => {
         try {
           const privateData = await this.getPrivateData("activitypub/keys");
+          if (privateData) return false;
+          
           const publicKey = this.getCurrentPublicKey();
           const publicData = await this.getPublicData(publicKey, "activitypub");
+          if (publicData) return false;
           
-          return !privateData && !publicData;
+          return true;
         } catch (error) {
           if (error.message === "Keys not found") {
             return true;
@@ -173,7 +178,7 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
         if (await verifyDeletion()) {
           return;
         }
-        await new Promise(resolve => setTimeout(resolve, 500)); // Ridotto a 500ms
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
       // Verifica finale

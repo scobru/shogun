@@ -3,10 +3,10 @@ const { expect } = chai;
 const Gun = require("gun");
 require("gun/sea");
 const { ethers } = require("ethers");
-const { EthereumManager } = require("../dist/managers/EthereumManager");
+const { EthereumConnector } = require("../dist/connector/EthereumConnector");
 
-describe("EthereumManager", function () {
-  let ethereumManager;
+describe("EthereumConnector", function () {
+  let ethereumConnector;
   let APP_KEY_PAIR;
   let gun;
   let testWallet;
@@ -31,10 +31,10 @@ describe("EthereumManager", function () {
       testWallet = ethers.Wallet.createRandom();
 
       // Inizializza EthereumManager
-      ethereumManager = new EthereumManager(gun, APP_KEY_PAIR);
+      ethereumConnector = new EthereumConnector(gun, APP_KEY_PAIR);
       
       // Configura il provider personalizzato per i test
-      ethereumManager.setCustomProvider(TEST_RPC_URL, testWallet.privateKey);
+      ethereumConnector.setCustomProvider(TEST_RPC_URL, testWallet.privateKey);
     } catch (error) {
       console.error("Setup error:", error);
       throw error;
@@ -50,20 +50,20 @@ describe("EthereumManager", function () {
   describe("Provider Configuration", function () {
     it("should set custom provider correctly", function () {
       const newWallet = ethers.Wallet.createRandom();
-      ethereumManager.setCustomProvider(TEST_RPC_URL, newWallet.privateKey);
-      expect(ethereumManager).to.have.property("customProvider");
-      expect(ethereumManager).to.have.property("customWallet");
+      ethereumConnector.setCustomProvider(TEST_RPC_URL, newWallet.privateKey);
+      expect(ethereumConnector).to.have.property("customProvider");
+      expect(ethereumConnector).to.have.property("customWallet");
     });
 
     it("should fail with invalid RPC URL", function () {
       expect(() => 
-        ethereumManager.setCustomProvider("", testWallet.privateKey)
+        ethereumConnector.setCustomProvider("", testWallet.privateKey)
       ).to.throw("RPC URL non valido");
     });
 
     it("should fail with invalid private key", function () {
       expect(() => 
-        ethereumManager.setCustomProvider(TEST_RPC_URL, "")
+        ethereumConnector.setCustomProvider(TEST_RPC_URL, "")
       ).to.throw("Chiave privata non valida");
     });
   });
@@ -71,15 +71,15 @@ describe("EthereumManager", function () {
   describe("Account Management", function () {
     beforeEach(async function () {
       // Reset dello stato prima di ogni test
-      if (ethereumManager.user.is) {
-        ethereumManager.user.leave();
+      if (ethereumConnector.user.is) {
+        ethereumConnector.user.leave();
       }
       // Riconfigura il provider
-      ethereumManager.setCustomProvider(TEST_RPC_URL, testWallet.privateKey);
+      ethereumConnector.setCustomProvider(TEST_RPC_URL, testWallet.privateKey);
     });
 
     it("should create an Ethereum account", async function () {
-      const account = await ethereumManager.createAccount();
+      const account = await ethereumConnector.createAccount();
       expect(account).to.be.an("object");
       expect(account).to.have.property("pub").that.is.a("string");
       expect(account).to.have.property("priv").that.is.a("string");
@@ -88,13 +88,13 @@ describe("EthereumManager", function () {
     });
 
     it("should login with Ethereum account", async function () {
-      const publicKey = await ethereumManager.login();
+      const publicKey = await ethereumConnector.login();
       expect(publicKey).to.be.a("string");
       expect(publicKey).to.have.length.greaterThan(0);
     });
 
     it("should get Ethereum signer", async function () {
-      const signer = await ethereumManager.getSigner();
+      const signer = await ethereumConnector.getSigner();
       expect(signer).to.be.an("object");
       expect(signer.address).to.equal(testWallet.address);
     });
@@ -105,20 +105,20 @@ describe("EthereumManager", function () {
 
     it("should generate password from signature", async function () {
       const signature = await testWallet.signMessage(testMessage);
-      const password = await ethereumManager.generatePassword(signature);
+      const password = await ethereumConnector.generatePassword(signature);
       expect(password).to.be.a("string");
       expect(password).to.have.length(64); // 32 bytes in hex
     });
 
     it("should verify signature", async function () {
       const signature = await testWallet.signMessage(testMessage);
-      const recoveredAddress = await ethereumManager.verifySignature(testMessage, signature);
+      const recoveredAddress = await ethereumConnector.verifySignature(testMessage, signature);
       expect(recoveredAddress.toLowerCase()).to.equal(testWallet.address.toLowerCase());
     });
 
     it("should fail with invalid signature", async function () {
       try {
-        await ethereumManager.verifySignature(testMessage, "invalid_signature");
+        await ethereumConnector.verifySignature(testMessage, "invalid_signature");
         expect.fail("Should have thrown an error");
       } catch (error) {
         expect(error.message).to.include("Messaggio o firma non validi");
@@ -132,19 +132,19 @@ describe("EthereumManager", function () {
       this.timeout(10000);
       
       // Assicuriamoci che l'utente sia completamente disconnesso
-      if (ethereumManager.user) {
-        ethereumManager.user.leave();
+      if (ethereumConnector.user) {
+        ethereumConnector.user.leave();
       }
       
       // Attendiamo un tempo sufficiente per la disconnessione
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       try {
-        await ethereumManager.createAccount();
+        await ethereumConnector.createAccount();
       } catch (error) {
         if (error.message.includes("already created")) {
           // Se l'account esiste già, proviamo a fare il login
-          await ethereumManager.login();
+          await ethereumConnector.login();
         } else {
           throw error;
         }
@@ -156,25 +156,25 @@ describe("EthereumManager", function () {
 
     it("should save and retrieve private data", async function () {
       const testData = { test: "data" };
-      await ethereumManager.savePrivateData(testData, "test");
-      const retrievedData = await ethereumManager.getPrivateData("test");
+      await ethereumConnector.savePrivateData(testData, "test");
+      const retrievedData = await ethereumConnector.getPrivateData("test");
       expect(retrievedData).to.deep.equal(testData);
     });
 
     it("should save and retrieve public data", async function () {
       const testData = { test: "public_data" };
-      await ethereumManager.savePublicData(testData, "test");
-      const publicKey = ethereumManager.getCurrentPublicKey();
-      const retrievedData = await ethereumManager.getPublicData(publicKey, "test");
+      await ethereumConnector.savePublicData(testData, "test");
+      const publicKey = ethereumConnector.getCurrentPublicKey();
+      const retrievedData = await ethereumConnector.getPublicData(publicKey, "test");
       expect(retrievedData).to.deep.equal(testData);
     });
   });
 
   describe("Error Handling", function () {
     it("should handle authentication errors", async function () {
-      ethereumManager.user.leave();
+      ethereumConnector.user.leave();
       try {
-        await ethereumManager.getPrivateData("test");
+        await ethereumConnector.getPrivateData("test");
         throw new Error("Should have failed");
       } catch (error) {
         expect(error.message).to.include("not authenticated");
@@ -183,9 +183,9 @@ describe("EthereumManager", function () {
 
     it("should handle invalid Ethereum addresses", async function () {
       try {
-        await ethereumManager.login();
+        await ethereumConnector.login();
         const invalidAddress = "0xinvalid";
-        await ethereumManager.verifySignature("test", invalidAddress);
+        await ethereumConnector.verifySignature("test", invalidAddress);
         throw new Error("Should have failed");
       } catch (error) {
         expect(error.message).to.include("Messaggio o firma non validi");

@@ -1,13 +1,13 @@
 import { ethers } from "ethers";
 import { AuthenticationError, ValidationError } from "../utils/gun/errors";
-import { BaseManager } from "./BaseManager";
+import { BaseManager } from "../managers/BaseManager";
 import { EthereumProvider, GunKeyPair } from "../interfaces";
 import { IGunInstance, ISEAPair } from "gun";
 
 /**
  * Gestisce le operazioni Ethereum inclusa la creazione dell'account e il login
  */
-export class EthereumManager extends BaseManager<GunKeyPair> {
+export class EthereumConnector extends BaseManager<GunKeyPair> {
   protected storagePrefix = "ethereum";
   private customProvider: ethers.JsonRpcProvider | null = null;
   private customWallet: ethers.Wallet | null = null;
@@ -175,7 +175,7 @@ export class EthereumManager extends BaseManager<GunKeyPair> {
    * Ottiene un'istanza del signer Ethereum
    */
   public async getEthereumSigner(): Promise<ethers.Signer> {
-    if (!EthereumManager.isMetaMaskAvailable()) {
+    if (!EthereumConnector.isMetaMaskAvailable()) {
       throw new Error("Metamask non trovato. Installa Metamask per continuare.");
     }
 

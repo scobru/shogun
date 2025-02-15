@@ -2,13 +2,13 @@ const chai = require("chai");
 const { expect } = chai;
 const Gun = require("gun");
 require("gun/sea");
-const { StealthManager } = require("../dist/managers/StealthManager");
+const { StealthChain } = require("../dist/features/stealth/StealthChain");
 const { ethers } = require("ethers");
 
 describe("StealthManager", function () {
   // Aumentato timeout totale a 5 minuti
 
-  let stealthManager;
+  let stealthChain;
   let APP_KEY_PAIR;
   let gun;
   let testUser;
@@ -35,7 +35,7 @@ describe("StealthManager", function () {
       });
 
       // Inizializza StealthManager
-      stealthManager = new StealthManager(gun, APP_KEY_PAIR);
+      stealthChain = new StealthChain(gun, APP_KEY_PAIR);
 
       // Crea un utente di test
       testUser = gun.user();
@@ -99,7 +99,7 @@ describe("StealthManager", function () {
     });
 
     it("should create stealth keys", async function () {
-      const stealthKeyPair = await stealthManager.createAccount();
+      const stealthKeyPair = await stealthChain.createAccount();
       await waitForOperation(2000);
 
       expect(stealthKeyPair).to.have.property("pub").that.is.a("string");
@@ -109,33 +109,33 @@ describe("StealthManager", function () {
     });
 
     it("should save and retrieve stealth keys", async function () {
-      const stealthKeyPair = await stealthManager.createAccount();
-      await stealthManager.save(stealthKeyPair);
+      const stealthKeyPair = await stealthChain.createAccount();
+      await stealthChain.save(stealthKeyPair);
       await waitForOperation(3000);
 
-      const retrievedKeys = await stealthManager.getPair();
+      const retrievedKeys = await stealthChain.getPair();
       expect(retrievedKeys).to.deep.equal(stealthKeyPair);
     });
 
     it("should retrieve public stealth key", async function () {
-      const stealthKeyPair = await stealthManager.createAccount();
-      await stealthManager.save(stealthKeyPair);
+      const stealthKeyPair = await stealthChain.createAccount();
+      await stealthChain.save(stealthKeyPair);
       await waitForOperation(3000);
 
       const publicKey = testUser._.sea.pub;
-      const retrievedPub = await stealthManager.getPub(publicKey);
+      const retrievedPub = await stealthChain.getPub(publicKey);
 
       expect(retrievedPub).to.equal(stealthKeyPair.epub);
     });
 
     it("should generate stealth address", async function () {
-      const senderKeyPair = await stealthManager.createAccount();
-      await stealthManager.save(senderKeyPair);
+      const senderKeyPair = await stealthChain.createAccount();
+      await stealthChain.save(senderKeyPair);
 
       const recipientKeyPair = await Gun.SEA.pair();
       const recipientPublicKey = recipientKeyPair.pub;
 
-      const stealthResult = await stealthManager.generateStAdd(
+      const stealthResult = await stealthChain.generateStAdd(
         recipientPublicKey
       );
 
@@ -153,17 +153,17 @@ describe("StealthManager", function () {
 
     it("should open stealth address", async function () {
       // Prima creiamo e salviamo le chiavi stealth
-      const recipientKeys = await stealthManager.createAccount();
-      await stealthManager.save(recipientKeys);
+      const recipientKeys = await stealthChain.createAccount();
+      await stealthChain.save(recipientKeys);
       await waitForOperation(2000);
 
       // Generiamo un indirizzo stealth
-      const stealthResult = await stealthManager.generateStAdd(
+      const stealthResult = await stealthChain.generateStAdd(
         testUser._.sea.pub
       );
 
       // Proviamo ad aprire l'indirizzo stealth
-      const wallet = await stealthManager.openStAdd(
+      const wallet = await stealthChain.openStAdd(
         stealthResult.stealthAddress,
         stealthResult.ephemeralPublicKey
       );
@@ -175,11 +175,11 @@ describe("StealthManager", function () {
     });
 
     it("should fail to open invalid stealth address", async function () {
-      const recipientKeys = await stealthManager.createAccount();
-      await stealthManager.save(recipientKeys);
+      const recipientKeys = await stealthChain.createAccount();
+      await stealthChain.save(recipientKeys);
 
       try {
-        await stealthManager.openStAdd(
+        await stealthChain.openStAdd(
           "0x1234567890123456789012345678901234567890", // indirizzo invalido
           "invalidEphemeralKey"
         );
@@ -191,19 +191,19 @@ describe("StealthManager", function () {
 
     it("should format public key correctly", async function () {
       const publicKey = "~testPublicKey";
-      const formattedKey = await stealthManager.retrieveKeys(publicKey);
+      const formattedKey = await stealthChain.retrieveKeys(publicKey);
 
       // Il metodo retrieveKeys internamente usa formatPublicKey
       expect(formattedKey).to.be.null; // Poiché la chiave di test non esiste
     });
 
     it("should retrieve stealth keys for specific user", async function () {
-      const stealthKeyPair = await stealthManager.createAccount();
-      await stealthManager.save(stealthKeyPair);
+      const stealthKeyPair = await stealthChain.createAccount();
+      await stealthChain.save(stealthKeyPair);
       await waitForOperation(2000);
 
       const publicKey = testUser._.sea.pub;
-      const retrievedPair = await stealthManager.retrievePair(publicKey);
+      const retrievedPair = await stealthChain.retrievePair(publicKey);
 
       expect(retrievedPair).to.deep.equal(stealthKeyPair);
     });

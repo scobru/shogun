@@ -5,13 +5,13 @@
 
 import Gun, { IGunInstance, IGunUserInstance } from "gun";
 import "gun/sea";
-import { EthereumManager } from "./managers/EthereumManager";
-import { StealthManager } from "./managers/StealthManager";
+import { EthereumConnector } from "./connector/EthereumConnector";
+import { StealthChain } from "./features/stealth/StealthChain";
 import type { GunKeyPair } from "./interfaces/GunKeyPair";
 import { GunAuthManager } from "./managers/GunAuthManager";
 import { ActivityPubManager } from "./managers/ActivityPubManager";
 import { WebAuthnManager } from "./managers/WebAuthnManager";
-import { WalletManager } from "./managers/WalletManager";
+import { EthereumWalletGenerator } from "./generator/EthereumWalletGenerator";
 import { UserKeys } from "./interfaces/UserKeys";
 import { StealthKeyPair } from "./interfaces/StealthKeyPair";
 
@@ -28,19 +28,19 @@ declare module "gun" {
  */
 export class Shogun {
   private gunAuthManager: GunAuthManager;
-  private ethereumManager: EthereumManager;
-  private stealthManager: StealthManager;
+  private ethereumConnector: EthereumConnector;
+    private stealthChain: StealthChain;
   private activityPubManager: ActivityPubManager;
-  private walletManager: WalletManager;
+  private ethereumWalletGenerator: EthereumWalletGenerator;
   private webAuthnManager: WebAuthnManager;
   private gun: IGunInstance;
   private user: IGunUserInstance
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: any) {    
     this.gunAuthManager = new GunAuthManager(gun, APP_KEY_PAIR);
-    this.ethereumManager = new EthereumManager(gun, APP_KEY_PAIR);
-    this.stealthManager = new StealthManager(gun, APP_KEY_PAIR);
-    this.walletManager = new WalletManager(gun, APP_KEY_PAIR);
+    this.ethereumConnector = new EthereumConnector(gun, APP_KEY_PAIR);
+    this.stealthChain = new StealthChain(gun, APP_KEY_PAIR);
+    this.ethereumWalletGenerator = new EthereumWalletGenerator(gun, APP_KEY_PAIR);
     this.webAuthnManager = new WebAuthnManager(gun, APP_KEY_PAIR);
     this.activityPubManager = new ActivityPubManager(gun, APP_KEY_PAIR);
     this.gun = gun;
@@ -52,16 +52,16 @@ export class Shogun {
 
    * @returns {EthereumManager} The EthereumManager instance
    */
-  public getEthereumManager(): EthereumManager {
-    return this.ethereumManager;
+  public getEthereumConnector(): EthereumConnector {
+    return this.ethereumConnector;
   }
 
   /**
    * Returns the StealthManager instance
    * @returns {StealthManager} The StealthManager instance
    */
-  public getStealthChain(): StealthManager {
-    return this.stealthManager;
+  public getStealthChain(): StealthChain {
+    return this.stealthChain;
   }
 
   /**
@@ -92,8 +92,8 @@ export class Shogun {
    * Returns the WalletManager instance
    * @returns {WalletManager} The WalletManager instance
    */
-  public getWalletManager(): WalletManager {
-    return this.walletManager;
+  public getEthereumWalletGenerator(): EthereumWalletGenerator {
+    return this.ethereumWalletGenerator;
   }
 
   /**
@@ -104,8 +104,8 @@ export class Shogun {
    */
   public async createUser(alias: string, password: string): Promise<UserKeys> {
     const pair = await this.gunAuthManager.createAccount(alias, password);
-    const wallet = await this.walletManager.getWallet();
-    const stealthKey = await this.stealthManager.createAccount();
+    const wallet = await this.ethereumWalletGenerator.getWallet();
+    const stealthKey = await this.stealthChain.createAccount();
     const activityPubKey = await this.activityPubManager.createAccount();
 
     return {
@@ -123,8 +123,8 @@ export class Shogun {
   public async getUser(): Promise<UserKeys> {
     const user = await this.gunAuthManager.getUser();
     const pair = user._.sea;
-    const wallet = await this.walletManager.getWallet();
-    const stealthKey = await this.stealthManager.getPair();
+    const wallet = await this.ethereumWalletGenerator.getWallet();
+    const stealthKey = await this.stealthChain.getPair();
     const activityPubKey = await this.activityPubManager.getKeys();
 
     return {

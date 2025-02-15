@@ -2,12 +2,7 @@ import { IGunInstance, ISEAPair, SEA } from "gun";
 import { GunKeyPair } from "../interfaces";
 import { WalletData } from "../interfaces/WalletResult";
 import { Wallet } from "ethers";
-import { ValidationError } from "../utils/gun/errors";
-import {
-  validateEthereumAddress,
-  validatePrivateKey,
-} from "../utils/validation";
-import { BaseManager } from "./BaseManager";
+import { BaseManager } from "../managers/BaseManager";
 
 // Import crypto only for Node.js
 let cryptoModule: any;
@@ -29,7 +24,7 @@ interface WalletDataContainer {
   wallets: WalletData[];
 }
 
-export class WalletManager extends BaseManager<WalletData> {
+export class EthereumWalletGenerator extends BaseManager<WalletData> {
   protected storagePrefix = "wallets";
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {

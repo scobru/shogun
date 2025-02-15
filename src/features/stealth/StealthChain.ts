@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 import Gun from "gun";
-import { BaseManager } from "./BaseManager";
-import type { StealthKeyPair } from "../interfaces/StealthKeyPair";
+import { BaseManager } from "../../managers/BaseManager";
+import type { StealthKeyPair } from "../../interfaces/StealthKeyPair";
 import { IGunInstance, ISEAPair } from "gun";
 
 const SEA = Gun.SEA;
@@ -9,7 +9,7 @@ const SEA = Gun.SEA;
 /**
  * Gestisce la logica stealth usando Gun e SEA
  */
-export class StealthManager extends BaseManager<StealthKeyPair> {
+export class StealthChain extends BaseManager<StealthKeyPair> {
   protected storagePrefix = "stealth";
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
@@ -202,7 +202,7 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
     if (!publicKey) {
       throw new Error("Invalid public key");
     }
-    const data = await this.getPublicData(publicKey, "stealth");
+    const data = await this.getPublicData(publicKey, this.storagePrefix);
     return data?.epub || null;
 
   }
@@ -219,7 +219,7 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
     }
 
     try {
-      const rawData = await this.getPrivateData("stealth");
+      const rawData = await this.getPrivateData(this.storagePrefix);
       if (!rawData) {
         console.log("No stealth keys found");
         return null;
@@ -257,8 +257,8 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
       throw new Error("Invalid stealth keys: missing or incomplete parameters");
     }
 
-    await this.savePrivateData(stealthKeyPair, "stealth");
-    await this.savePublicData({ epub: stealthKeyPair.epub }, "stealth");
+    await this.savePrivateData(stealthKeyPair, this.storagePrefix);
+    await this.savePublicData({ epub: stealthKeyPair.epub }, this.storagePrefix);
   }
 
   /**
@@ -267,7 +267,7 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
    * @throws {Error} - If the keys are not found
    */
   public async getPair(): Promise<StealthKeyPair> {
-    const keys = await this.getPrivateData("stealth");
+    const keys = await this.getPrivateData(this.storagePrefix);
     if (!keys || !keys.pub || !keys.priv || !keys.epub || !keys.epriv) {
       throw new Error("Stealth keys not found");
     }
@@ -291,7 +291,7 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
    */
   public async getPub(publicKey: string): Promise<string | null> {
     const formattedPubKey = this.formatPublicKey(publicKey);
-    const data = await this.getPublicData(formattedPubKey, "stealth");
+    const data = await this.getPublicData(formattedPubKey, this.storagePrefix);
     return data?.epub || null;
 
   }

@@ -2,11 +2,11 @@ const chai = require("chai");
 const { expect } = chai;
 const Gun = require("gun");
 require("gun/sea");
-const { WalletManager } = require("../dist/managers/WalletManager");
+const { EthereumWalletGenerator } = require("../dist/generator/EthereumWalletGenerator");
 const { ethers } = require("ethers");
 
-describe("WalletManager", function () {
-  let walletManager;
+describe("EthereumWalletGenerator", function () {
+  let ethereumWalletGenerator;
   let APP_KEY_PAIR;
   let gun;
   let testUser;
@@ -56,8 +56,8 @@ describe("WalletManager", function () {
         retry: 2500,
       });
 
-      // Inizializza WalletManager
-      walletManager = new WalletManager(gun, APP_KEY_PAIR);
+      // Inizializza EthereumWalletGenerator
+      ethereumWalletGenerator = new EthereumWalletGenerator(gun, APP_KEY_PAIR);
 
       // Crea un utente di test
       testUser = gun.user();
@@ -142,7 +142,7 @@ describe("WalletManager", function () {
       console.log("Starting create wallet test");
       console.log("Checking authentication status:", !!testUser.is);
       
-      const walletData = await walletManager.createAccount();
+      const walletData = await ethereumWalletGenerator.createAccount();
       await waitForSync();
       console.log("Wallet created, verifying data...");
 
@@ -164,19 +164,19 @@ describe("WalletManager", function () {
       // Prima creiamo un nuovo wallet
       console.log("Creating new wallet for retrieval test...");
       const newWallet = ethers.Wallet.createRandom();
-      await walletManager.saveWallet(newWallet);
+      await ethereumWalletGenerator.saveWallet(newWallet);
       await waitForSync();
       console.log("Test wallet saved with address:", newWallet.address.toLowerCase());
 
       console.log("Creating new wallet for retrieval test...");
       const newWallet2 = ethers.Wallet.createRandom();
-      await walletManager.saveWallet(newWallet2);
+      await ethereumWalletGenerator.saveWallet(newWallet2);
       await waitForSync();
       console.log("Test wallet saved with address:", newWallet2.address.toLowerCase());
 
       await ensureAuthenticated();
       console.log("Retrieving wallets...");
-      const wallets = await walletManager.getWallets();
+      const wallets = await ethereumWalletGenerator.getWallets();
       console.log(`Retrieved ${wallets.length} wallets`);
 
       expect(wallets).to.be.an("array");
@@ -196,7 +196,7 @@ describe("WalletManager", function () {
       const gunKeyPair = testUser._.sea;
       const salt = `test_salt_${Date.now()}`;
 
-      const wallet = await walletManager.createWalletFromSalt(gunKeyPair, salt);
+      const wallet = await ethereumWalletGenerator.createWalletFromSalt(gunKeyPair, salt);
 
       expect(wallet).to.have.property("address").that.is.a("string");
       expect(wallet).to.have.property("privateKey").that.is.a("string");
@@ -208,7 +208,7 @@ describe("WalletManager", function () {
       const gunKeyPair = testUser._.sea;
 
       try {
-        await walletManager.createWalletFromSalt(gunKeyPair, "");
+        await ethereumWalletGenerator.createWalletFromSalt(gunKeyPair, "");
         throw new Error("Should have failed with invalid salt");
       } catch (error) {
         expect(error.message).to.include("Invalid salt provided");
@@ -217,7 +217,7 @@ describe("WalletManager", function () {
 
     it("should convert Gun private key to Ethereum private key", function () {
       const gunPrivateKey = testUser._.sea.priv;
-      const ethPrivateKey = walletManager.convertToEthPk(gunPrivateKey);
+      const ethPrivateKey = ethereumWalletGenerator.convertToEthPk(gunPrivateKey);
 
       expect(ethPrivateKey).to.be.a("string");
       expect(ethPrivateKey).to.match(/^0x[0-9a-f]{64}$/i);
@@ -236,13 +236,13 @@ describe("WalletManager", function () {
       const wallet = ethers.Wallet.createRandom();
       
       console.log("Saving wallet...");
-      await walletManager.saveWallet(wallet);
+      await ethereumWalletGenerator.saveWallet(wallet);
 
       // Attendiamo un po' per assicurarci che i dati siano sincronizzati
       await new Promise(resolve => setTimeout(resolve, 5000));
 
       console.log("Retrieving all wallets...");
-      const wallets = await walletManager.getWallets();
+      const wallets = await ethereumWalletGenerator.getWallets();
       console.log(`Retrieved ${wallets.length} wallets`);
       
       console.log("Looking for saved wallet...");
