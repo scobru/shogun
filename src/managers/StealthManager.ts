@@ -202,8 +202,7 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
     if (!publicKey) {
       throw new Error("Invalid public key");
     }
-    const formattedPubKey = this.formatPublicKey(publicKey);
-    const data = await this.getPublicData(formattedPubKey, "stealth");
+    const data = await this.getPublicData(publicKey, "stealth");
     return data?.epub || null;
 
   }

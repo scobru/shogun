@@ -267,7 +267,7 @@ export class WalletManager extends BaseManager<WalletData[]> {
         // Usa il pattern set di Gun per gestire la collezione di wallet
         return new Promise<void>((resolve, reject) => {
             // Crea un nodo per il nuovo wallet
-            const walletNode = this.user.get('private')
+            const walletNode = this.user
                 .get(this.storagePrefix)
                 .get('wallets')
                 .set(walletData, (ack: any) => {
@@ -279,7 +279,7 @@ export class WalletManager extends BaseManager<WalletData[]> {
                     }
 
                     // Verifica il salvataggio
-                    this.user.get('private')
+                    this.user
                         .get(this.storagePrefix)
                         .get('wallets')
                         .once((data) => {
@@ -290,7 +290,7 @@ export class WalletManager extends BaseManager<WalletData[]> {
 
                             // Verifica che il wallet sia stato salvato correttamente
                             let found = false;
-                            this.user.get('private')
+                            this.user
                                 .get(this.storagePrefix)
                                 .get('wallets')
                                 .map()
@@ -313,6 +313,7 @@ export class WalletManager extends BaseManager<WalletData[]> {
                         });
                 });
         });
+
 
     } catch (error) {
         console.error("Error saving wallet:", error);

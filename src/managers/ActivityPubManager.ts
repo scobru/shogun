@@ -69,7 +69,7 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
   public async saveKeys(keys: ActivityPubKeys): Promise<void> {
     this.checkAuthentication();
     await this.savePrivateData(keys, "activitypub/keys");
-    await this.savePublicData({ publicKey: keys.publicKey }, "activitypub/publicKey");
+    await this.savePublicData({ publicKey: keys.publicKey }, "activitypub");
   }
 
   /**
@@ -90,7 +90,7 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
   public async getPub(): Promise<string> {
     this.checkAuthentication();
     const publicKey = this.getCurrentPublicKey();
-    const data = await this.getPublicData(publicKey, "activitypub/publicKey");
+    const data = await this.getPublicData(publicKey, "activitypub");
     return data?.publicKey;
   }
 

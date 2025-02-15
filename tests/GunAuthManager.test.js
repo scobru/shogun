@@ -275,10 +275,9 @@ describe("GunAuthManager", function () {
       expect(result).to.be.true;
 
       const retrievedData = await gunAuthManager.getPrivateData(path);
-      expect(retrievedData).to.be.an("object");
+      expect(retrievedData).to.be.an("string");
+      expect(retrievedData).to.equal(JSON.stringify(data));
 
-      // Verifica solo il contenuto effettivo ignorando i metadati GUN
-      expect(retrievedData).to.have.nested.property("secret", data.secret);
 
       // Opzione alternativa: pulizia dei metadati
       const cleanData = JSON.parse(JSON.stringify(retrievedData));

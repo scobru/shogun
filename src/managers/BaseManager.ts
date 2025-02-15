@@ -40,7 +40,9 @@ export abstract class BaseManager<T> {
             return acc;
           }, {}),
         }
-      : data;
+      : typeof data === 'number' || typeof data === 'string'
+        ? data
+        : JSON.stringify(data);
 
     return new Promise<boolean>((resolve, reject) => {
       const node = this.getPrivateNode(path);
@@ -94,9 +96,22 @@ export abstract class BaseManager<T> {
       throw new Error("Public key not found");
     }
 
+    const processedData = Array.isArray(data)
+      ? {
+          _isArray: true,
+          length: data.length,
+          ...data.reduce((acc: any, item: any, index: number) => {
+            acc[index.toString()] = item;
+            return acc;
+          }, {}),
+        }
+      : typeof data === 'number' || typeof data === 'string'
+        ? data
+        : JSON.stringify(data);
+
     return new Promise((resolve, reject) => {
       const node = this.getPublicNode(path);
-      node.put(data, (ack: any) => {
+      node.put(processedData, (ack: any) => {
         if (ack.err) {
           reject(new Error(ack.err));
         } else {
@@ -116,7 +131,6 @@ export abstract class BaseManager<T> {
 
     return new Promise((resolve, reject) => {
       this.user
-        .get("private")
         .get(this.storagePrefix)
         .get(path)
         .once((data: any) => {
@@ -193,13 +207,14 @@ export abstract class BaseManager<T> {
 
   protected cleanGunMetadata<T>(data: any): T {
     if (!data) return data;
-    if (typeof data === "object") {
-      const cleaned = { ...data };
-      delete cleaned._;
-      delete cleaned['#'];
-      return cleaned;
+    if (typeof data === "string") {
+      try {
+        return JSON.parse(data);
+      } catch (error) {
+        return data as T;
+      }
     }
-    return data;
+    return data as T;
   }
 
   /**
@@ -209,7 +224,6 @@ export abstract class BaseManager<T> {
     return new Promise((resolve, reject) => {
       this.gun
         .get(`~${publicKey}`)
-        .get("public")
         .get(this.storagePrefix)
         .get(path)
         .once((data: any) => {
@@ -415,7 +429,7 @@ export abstract class BaseManager<T> {
    */
   protected getPrivateNode(path: string = ''): IGunChain<any, any, IGunInstance, string> {
     this.setPrivateNodePath(path);
-    return this.user.get('private').get(this.storagePrefix).get(path);
+    return this.user.get(this.storagePrefix).get(path);
   }
 
   /**
@@ -425,6 +439,6 @@ export abstract class BaseManager<T> {
     this.setPublicNodePath(path);
     const publicKey = this.user.is?.pub;
     if (!publicKey) throw new Error('Public key not found');
-    return this.gun.get(`~${publicKey}`).get('public').get(this.storagePrefix).get(path);
+    return this.gun.get(`~${publicKey}`).get(this.storagePrefix).get(path);
   }
 }
