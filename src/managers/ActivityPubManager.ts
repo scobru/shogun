@@ -1,6 +1,7 @@
 import { IGunInstance, ISEAPair } from "gun";
 import type { ActivityPubKeys } from "../interfaces/ActivityPubKeys";
 import { BaseManager } from "./BaseManager";
+import { GunAuthManager } from "./GunAuthManager";
 
 let cryptoModule: any;
 try {
@@ -14,6 +15,7 @@ try {
 
 export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
   protected storagePrefix = "activitypub";
+  protected authManager: GunAuthManager;
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
     super(gun, APP_KEY_PAIR);
@@ -68,8 +70,40 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
    */
   public async saveKeys(keys: ActivityPubKeys): Promise<void> {
     this.checkAuthentication();
-    await this.savePrivateData(keys, "activitypub/keys");
-    await this.savePublicData({ publicKey: keys.publicKey }, "activitypub");
+    
+    try {
+      // Salva i dati privati con retry
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        try {
+          await this.savePrivateData(keys, "activitypub/keys");
+          await this.savePublicData({ publicKey: keys.publicKey }, "activitypub");
+          
+          // Verifica il salvataggio
+          const savedKeys = await this.getPrivateData("activitypub/keys");
+          if (savedKeys && savedKeys.publicKey === keys.publicKey && savedKeys.privateKey === keys.privateKey) {
+            return;
+          }
+          
+          retryCount++;
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (error) {
+          console.error(`Retry ${retryCount + 1} failed:`, error);
+          retryCount++;
+          if (retryCount === maxRetries) {
+            throw error;
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      throw new Error("Failed to verify saved keys");
+    } catch (error) {
+      console.error("Error saving keys:", error);
+      throw error;
+    }
   }
 
   /**
@@ -78,10 +112,19 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
   public async getKeys(): Promise<ActivityPubKeys> {
     this.checkAuthentication();
     const keys = await this.getPrivateData("activitypub/keys");
-    if (!keys) {
+    
+    if (!keys || !keys.publicKey || !keys.privateKey) {
       throw new Error("Keys not found");
     }
-    return keys;
+
+    // Rimuovi i metadati di Gun
+    const cleanKeys: ActivityPubKeys = {
+      publicKey: keys.publicKey,
+      privateKey: keys.privateKey,
+      createdAt: keys.createdAt || Date.now()
+    };
+
+    return cleanKeys;
   }
 
   /**
@@ -99,8 +142,50 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
    */
   public async deleteKeys(): Promise<void> {
     this.checkAuthentication();
-    await this.deletePrivateData("activitypub/keys");
-    await this.deletePublicData("activitypub/publicKey");
+    
+    try {
+      // Prima eliminiamo i dati pubblici
+      await this.deletePublicData("activitypub");
+      
+      // Poi eliminiamo i dati privati
+      await this.deletePrivateData("activitypub/keys");
+      
+      // Verifica con timeout più breve e intervalli più frequenti
+      const startTime = Date.now();
+      const timeout = 10000; // Ridotto a 10 secondi
+      
+      const verifyDeletion = async (): Promise<boolean> => {
+        try {
+          const privateData = await this.getPrivateData("activitypub/keys");
+          const publicKey = this.getCurrentPublicKey();
+          const publicData = await this.getPublicData(publicKey, "activitypub");
+          
+          return !privateData && !publicData;
+        } catch (error) {
+          if (error.message === "Keys not found") {
+            return true;
+          }
+          return false;
+        }
+      };
+
+      while (Date.now() - startTime < timeout) {
+        if (await verifyDeletion()) {
+          return;
+        }
+        await new Promise(resolve => setTimeout(resolve, 500)); // Ridotto a 500ms
+      }
+      
+      // Verifica finale
+      if (await verifyDeletion()) {
+        return;
+      }
+      
+      throw new Error("Failed to verify keys deletion");
+    } catch (error) {
+      console.error("Error deleting keys:", error);
+      throw error;
+    }
   }
 
   /**
@@ -199,14 +284,11 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
    * @returns {Promise<{ signature: string; signatureHeader: string }>}
    * @throws {Error} - If the private key is not found or signing fails.
    */
-  public async sign(
-    stringToSign: string,
-    username: string
-  ): Promise<{ signature: string; signatureHeader: string }> {
+  public async sign(stringToSign: string, username: string): Promise<{ signature: string; signatureHeader: string }> {
     try {
       // Recupera la chiave privata
       const privateKey = await this.getPk(username);
-
+      
       if (!privateKey) {
         throw new Error("Private key not found for user " + username);
       }
@@ -215,61 +297,36 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
 
       // Se siamo in Node.js
       if (typeof window === "undefined" && cryptoModule) {
-        try {
-          const signer = cryptoModule.createSign("RSA-SHA256");
-          signer.update(stringToSign);
-          signature = signer.sign(privateKey, "base64");
-        } catch (error) {
-          throw new Error(`Private key not found or invalid: ${error instanceof Error ? error.message : "unknown error"}`);
-        }
-      }
-      // Se siamo nel browser
-      else if (typeof window !== "undefined" && window.crypto?.subtle) {
-        try {
-          // Converti la chiave PEM in formato utilizzabile
-          const cryptoKey = await this.importPk(privateKey);
-          
-          if (typeof cryptoKey === 'string') {
-            throw new Error("Private key not found or invalid format for browser environment");
-          }
-
-          // Codifica la stringa da firmare
-          const encoder = new TextEncoder();
-          const dataBuffer = encoder.encode(stringToSign);
-
-          // Firma i dati
-          const signatureBuffer = await window.crypto.subtle.sign(
-            {
-              name: "RSASSA-PKCS1-v1_5",
-              hash: { name: "SHA-256" },
-            },
-            cryptoKey,
-            dataBuffer
-          );
-
-          // Converti la firma in base64
-          signature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)));
-        } catch (error) {
-          throw new Error(`Private key not found or invalid: ${error instanceof Error ? error.message : "unknown error"}`);
-        }
+        const signer = cryptoModule.createSign("RSA-SHA256");
+        signer.update(stringToSign);
+        signature = signer.sign(privateKey, "base64");
       } else {
-        throw new Error("No cryptographic implementation available");
+        // Se siamo nel browser
+        const privateKeyObject = await this.importPk(privateKey);
+        const encoder = new TextEncoder();
+        const data = encoder.encode(stringToSign);
+        const signatureBuffer = await window.crypto.subtle.sign(
+          {
+            name: "RSASSA-PKCS1-v1_5",
+            hash: { name: "SHA-256" },
+          },
+          privateKeyObject as CryptoKey,
+          data
+        );
+        signature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)));
       }
 
-      // Genera l'header della firma
       const signatureHeader = `keyId="${username}",algorithm="rsa-sha256",signature="${signature}"`;
-
-      return { signature, signatureHeader };
+      
+      return {
+        signature,
+        signatureHeader,
+      };
     } catch (error) {
-      if (error instanceof Error && error.message.includes("Private key not found")) {
-        throw error; // Rilanciamo l'errore originale se riguarda la chiave privata mancante
+      if (error instanceof Error) {
+        throw error;
       }
-      console.error("Error signing ActivityPub data:", error);
-      throw new Error(
-        `ActivityPub signing failed: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
+      throw new Error("Error signing data: " + error);
     }
   }
 

@@ -122,7 +122,7 @@ export class Shogun {
    */
   public async getUser(): Promise<UserKeys> {
     const user = await this.gunAuthManager.getUser();
-    const pair = user.pair();
+    const pair = user._.sea;
     const wallet = await this.walletManager.getWallet();
     const stealthKey = await this.stealthManager.getPair();
     const activityPubKey = await this.activityPubManager.getKeys();
@@ -133,6 +133,22 @@ export class Shogun {
       stealthKey,
       activityPubKey,
     };
+  }
+  
+  /**
+   * Returns the Gun user instance
+   * @returns {IGunUserInstance} The Gun user instance
+   */
+  public async getGunUser(): Promise<IGunUserInstance> {
+    return this.user;
+  }
+
+  /**
+   * Returns the Gun instance
+   * @returns {IGunInstance} The Gun instance
+   */
+  public async getGun(): Promise<IGunInstance> {
+    return this.gun;
   }
 
   /**

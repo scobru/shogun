@@ -219,22 +219,27 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
     }
 
     try {
-      // Otteniamo i dati grezzi da Gun
       const rawData = await this.getPrivateData("stealth");
       if (!rawData) {
         console.log("No stealth keys found");
         return null;
       }
 
-
-      // Verifichiamo che i dati contengano le chiavi necessarie
+      // Verifica e pulisci i dati
       if (!rawData.pub || !rawData.priv || !rawData.epub || !rawData.epriv) {
         console.error("Invalid stealth keys format:", rawData);
         return null;
       }
 
-      // Restituiamo i dati completi, inclusi i metadati di Gun
-      return rawData;
+      // Crea un nuovo oggetto pulito
+      const cleanKeys: StealthKeyPair = {
+        pub: rawData.pub,
+        priv: rawData.priv,
+        epub: rawData.epub,
+        epriv: rawData.epriv
+      };
+
+      return cleanKeys;
     } catch (error) {
       console.error("Error retrieving stealth keys:", error);
       return null;
@@ -266,7 +271,16 @@ export class StealthManager extends BaseManager<StealthKeyPair> {
     if (!keys || !keys.pub || !keys.priv || !keys.epub || !keys.epriv) {
       throw new Error("Stealth keys not found");
     }
-    return keys as StealthKeyPair;
+
+    // Rimuovi i metadati di Gun e crea un nuovo oggetto pulito
+    const cleanKeys: StealthKeyPair = {
+      pub: keys.pub,
+      priv: keys.priv,
+      epub: keys.epub,
+      epriv: keys.epriv
+    };
+
+    return cleanKeys;
   }
 
 

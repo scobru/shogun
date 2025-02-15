@@ -443,14 +443,20 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
         .get(this.storagePrefix)
         .get(path)
         .once((data: any) => {
-          if (data === undefined) {
+          if (data === undefined || data === null) {
             resolve(null);
           } else {
-            // Rimuoviamo i metadati di Gun e processiamo i dati
+            // Rimuoviamo i metadati di Gun
             const cleanedData = this.cleanGunMetadata(data);
-            const processedData = this.processRetrievedData(cleanedData);
-            // Se i dati sono nulli dopo il processing, restituiamo un oggetto vuoto
-            resolve(processedData || {});
+            
+            // Se i dati sono un oggetto, convertiamoli in stringa JSON
+            if (typeof cleanedData === 'object') {
+              resolve(JSON.stringify(cleanedData));
+            } else if (typeof cleanedData === 'string') {
+              resolve(cleanedData);
+            } else {
+              resolve(JSON.stringify(cleanedData));
+            }
           }
         });
     });

@@ -146,13 +146,13 @@ describe("WalletManager", function () {
       await waitForSync();
       console.log("Wallet created, verifying data...");
 
-      expect(walletData).to.be.an("array");
-      expect(walletData[0]).to.have.property("address").that.is.a("string");
-      expect(walletData[0]).to.have.property("privateKey").that.is.a("string");
-      expect(walletData[0]).to.have.property("entropy").that.is.a("string");
-      expect(walletData[0]).to.have.property("timestamp").that.is.a("number");
+      expect(walletData).to.be.an("object");
+      expect(walletData).to.have.property("address").that.is.a("string");
+      expect(walletData).to.have.property("privateKey").that.is.a("string");
+      expect(walletData).to.have.property("entropy").that.is.a("string");
+      expect(walletData).to.have.property("timestamp").that.is.a("number");
 
-      expect(ethers.isAddress(walletData[0].address)).to.be.true;
+      expect(ethers.isAddress(walletData.address)).to.be.true;
       console.log("Wallet creation test completed successfully");
     });
 

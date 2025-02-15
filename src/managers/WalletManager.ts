@@ -20,19 +20,16 @@ try {
   cryptoModule = null;
 }
 
-// Aggiungiamo alcune interfacce di supporto
-interface WalletDataArray {
-  _isArray: boolean;
-  length: number;
-  [index: number]: WalletData;
-}
-
 interface ExtendedWallet extends Wallet {
   entropy: string;
   timestamp: number;
 }
 
-export class WalletManager extends BaseManager<WalletData[]> {
+interface WalletDataContainer {
+  wallets: WalletData[];
+}
+
+export class WalletManager extends BaseManager<WalletData> {
   protected storagePrefix = "wallets";
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
@@ -41,10 +38,10 @@ export class WalletManager extends BaseManager<WalletData[]> {
 
   /**
    * Creates a new wallet from the Gun user
-   * @returns {Promise<WalletData[]>} - The result object of the created wallet
+   * @returns {Promise<WalletData>} - The result object of the created wallet
    * @throws {Error} - If the user is not authenticated or if wallet creation fails
    */
-  public async createAccount(): Promise<WalletData[]> {
+  public async createAccount(): Promise<WalletData> {
     try {
       const gunKeyPair = this.user._.sea;
 
@@ -92,7 +89,7 @@ export class WalletManager extends BaseManager<WalletData[]> {
       }
 
       console.log("Wallet saved successfully");
-      return [walletData];
+      return walletData;
     } catch (error: any) {
       console.error("Error in createAccount:", error);
       throw new Error(`Error creating wallet: ${error.message}`);
@@ -191,34 +188,51 @@ export class WalletManager extends BaseManager<WalletData[]> {
     try {
       await this.ensureAuthenticated();
 
-      return new Promise<ExtendedWallet[]>((resolve) => {
+      return new Promise<ExtendedWallet[]>((resolve, reject) => {
         const wallets: ExtendedWallet[] = [];
+        let resolved = false;
+        const timeout = setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            resolve(wallets);
+          }
+        }, 5000);
 
-        this.user.get('private')
-          .get(this.storagePrefix)
-          .get('wallets')
+        // Leggi l'indice dei wallet
+        this.getPrivateNode('wallets_index')
           .map()
-          .once((walletData: WalletData) => {
-            if (walletData && walletData.address && walletData.privateKey) {
-              try {
-                const wallet = new Wallet(walletData.privateKey);
-                if (wallet.address.toLowerCase() === walletData.address.toLowerCase()) {
-                  const extendedWallet: ExtendedWallet = Object.assign(wallet, {
-                    entropy: walletData.entropy || "",
-                    timestamp: walletData.timestamp || Date.now()
-                  });
-                  wallets.push(extendedWallet);
-                }
-              } catch (error) {
-                console.error("Error creating wallet instance:", error);
-              }
+          .once((data: any, key: string) => {
+            if (key && !key.startsWith('_')) {
+              // Per ogni riferimento, leggi il wallet completo
+              this.getPrivateNode(`wallet_${key}`)
+                .once((walletData: any) => {
+                  if (walletData && walletData.address && walletData.privateKey) {
+                    try {
+                      const wallet = new Wallet(walletData.privateKey);
+                      if (wallet.address.toLowerCase() === walletData.address.toLowerCase()) {
+                        const extendedWallet = Object.assign(wallet, {
+                          entropy: walletData.entropy || "",
+                          timestamp: walletData.timestamp || Date.now()
+                        });
+                        wallets.push(extendedWallet);
+                      }
+                    } catch (error) {
+                      console.error("Error creating wallet instance:", error);
+                    }
+                  }
+                });
             }
           });
 
-        // Diamo tempo a Gun di recuperare tutti i dati
-        setTimeout(() => {
-          resolve(wallets);
-        }, 1000);
+        // Verifica periodica
+        const checkInterval = setInterval(() => {
+          if (wallets.length > 0 && !resolved) {
+            clearInterval(checkInterval);
+            clearTimeout(timeout);
+            resolved = true;
+            resolve(wallets);
+          }
+        }, 500);
       });
     } catch (error) {
       console.error("Error retrieving wallets:", error);
@@ -249,75 +263,68 @@ export class WalletManager extends BaseManager<WalletData[]> {
    */
   public async saveWallet(wallet: Wallet): Promise<void> {
     if (!wallet?.address || !wallet.privateKey) {
-        throw new Error("Invalid wallet data");
+      throw new Error("Invalid wallet data");
     }
 
     try {
-        await this.ensureAuthenticated();
+      await this.ensureAuthenticated();
 
-        const walletData: WalletData = {
-            address: wallet.address.toLowerCase(),
-            privateKey: wallet.privateKey,
-            entropy: (wallet as ExtendedWallet).entropy || "",
-            timestamp: Date.now()
-        };
+      const walletData: WalletData = {
+        address: wallet.address.toLowerCase(),
+        privateKey: wallet.privateKey,
+        entropy: (wallet as ExtendedWallet).entropy || "",
+        timestamp: Date.now()
+      };
 
-        console.log("Saving wallet:", walletData.address);
+      // Salva con retry
+      let retryCount = 0;
+      const maxRetries = 3;
 
-        // Usa il pattern set di Gun per gestire la collezione di wallet
-        return new Promise<void>((resolve, reject) => {
-            // Crea un nodo per il nuovo wallet
-            const walletNode = this.user
-                .get(this.storagePrefix)
-                .get('wallets')
-                .set(walletData, (ack: any) => {
-                    if (ack.err) {
-                        console.error("Error creating wallet node:", ack.err);
-                        reject(new Error(ack.err));
-                        return;
+      while (retryCount < maxRetries) {
+        try {
+          // Salva il wallet nel suo nodo specifico
+          const walletNode = this.getPrivateNode(`wallet_${walletData.address}`);
+          await new Promise<void>((resolve, reject) => {
+            walletNode.put(walletData, (ack: any) => {
+              if (ack.err) reject(new Error(ack.err));
+              else resolve();
+            });
+          });
 
-                    }
+          // Aggiungi il riferimento al wallet nel nodo principale dei wallet
+          const walletsNode = this.getPrivateNode('wallets_index');
+          await new Promise<void>((resolve, reject) => {
+            walletsNode.get(walletData.address).put(
+              this.getPrivateNode(`wallet_${walletData.address}`),
+              (ack: any) => {
+                if (ack.err) reject(new Error(ack.err));
+                else resolve();
+              }
+            );
+          });
 
-                    // Verifica il salvataggio
-                    this.user
-                        .get(this.storagePrefix)
-                        .get('wallets')
-                        .once((data) => {
-                            if (!data) {
-                                reject(new Error("Failed to verify wallet was saved"));
-                                return;
-                            }
+          // Verifica il salvataggio
+          const saved = await this.getPrivateData(`wallet_${walletData.address}`);
+          if (saved && saved.address === walletData.address) {
+            return;
+          }
 
-                            // Verifica che il wallet sia stato salvato correttamente
-                            let found = false;
-                            this.user
-                                .get(this.storagePrefix)
-                                .get('wallets')
-                                .map()
-                                .once((savedWallet: WalletData) => {
-                                    if (savedWallet && 
-                                        savedWallet.address && 
-                                        savedWallet.address.toLowerCase() === walletData.address.toLowerCase()) {
-                                        found = true;
-                                    }
-                                });
+          retryCount++;
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (error) {
+          console.error(`Retry ${retryCount + 1} failed:`, error);
+          retryCount++;
+          if (retryCount === maxRetries) {
+            throw error;
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
 
-                            setTimeout(() => {
-                                if (found) {
-                                    console.log("Wallet verified:", walletData.address);
-                                    resolve();
-                                } else {
-                                    reject(new Error("Failed to verify wallet was saved"));
-                                }
-                            }, 1000);
-                        });
-                });
-        });
-
-
+      throw new Error("Failed to verify wallet was saved");
     } catch (error) {
-        console.error("Error saving wallet:", error);
-        throw error;
+      console.error("Error saving wallet:", error);
+      throw error;
     }
   }
 
@@ -361,6 +368,34 @@ export class WalletManager extends BaseManager<WalletData[]> {
   private async ensureAuthenticated(): Promise<void> {
     if (!this.user.is) {
       throw new Error("User not authenticated");
+    }
+  }
+
+  public async deleteWallet(address: string): Promise<void> {
+    try {
+      await this.ensureAuthenticated();
+      
+      // Rimuovi il riferimento dall'indice
+      await new Promise<void>((resolve, reject) => {
+        this.getPrivateNode('wallets_index')
+          .get(address)
+          .put(null, (ack: any) => {
+            if (ack.err) reject(new Error(ack.err));
+            else resolve();
+          });
+      });
+
+      // Rimuovi i dati del wallet
+      await new Promise<void>((resolve, reject) => {
+        this.getPrivateNode(`wallet_${address}`)
+          .put(null, (ack: any) => {
+            if (ack.err) reject(new Error(ack.err));
+            else resolve();
+          });
+      });
+    } catch (error) {
+      console.error("Error deleting wallet:", error);
+      throw error;
     }
   }
 }

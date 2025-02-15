@@ -1,5 +1,4 @@
 import { IGunChain, IGunInstance, IGunUserInstance, ISEAPair } from "gun";
-import { IGunStaticNode } from "gun-util";
 
 /**
  * Classe base astratta per i manager che utilizzano Gun
@@ -9,7 +8,10 @@ export abstract class BaseManager<T> {
   protected user: IGunUserInstance;
   protected abstract storagePrefix: string;
   protected APP_KEY_PAIR: ISEAPair;
-  protected nodesPath: { private: string; public: string } = { private: '', public: '' };
+  protected nodesPath: { private: string; public: string } = {
+    private: "",
+    public: "",
+  };
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
     this.gun = gun;
@@ -25,28 +27,19 @@ export abstract class BaseManager<T> {
   /**
    * Salva i dati in modo privato
    */
-  protected async savePrivateData(data: T, path: string = ""): Promise<boolean> {
+  protected async savePrivateData(
+    data: T,
+    path: string = ""
+  ): Promise<boolean> {
     if (!this.user.is) {
       throw new Error("User not authenticated");
     }
 
-    // Se i dati sono un array, li convertiamo in un oggetto speciale
-    const processedData = Array.isArray(data)
-      ? {
-          _isArray: true,
-          length: data.length,
-          ...data.reduce((acc: any, item: any, index: number) => {
-            acc[index.toString()] = item;
-            return acc;
-          }, {}),
-        }
-      : typeof data === 'number' || typeof data === 'string'
-        ? data
-        : JSON.stringify(data);
+    const processedData = data;
 
     return new Promise<boolean>((resolve, reject) => {
       const node = this.getPrivateNode(path);
-      
+
       // Prima puliamo i dati esistenti
       node.put(null, (ack: any) => {
         if (ack.err) {
@@ -54,7 +47,7 @@ export abstract class BaseManager<T> {
           reject(new Error(ack.err));
           return;
         }
-        
+
         // Aumentiamo il tempo di attesa tra la pulizia e il salvataggio
         setTimeout(() => {
           // Poi salviamo i nuovi dati con un callback di conferma
@@ -71,7 +64,7 @@ export abstract class BaseManager<T> {
                 reject(new Error("Data verification failed - no data found"));
                 return;
               }
-              
+
               // Aggiungiamo un ulteriore ritardo per assicurare la propagazione
               setTimeout(() => {
                 resolve(true);
@@ -86,7 +79,10 @@ export abstract class BaseManager<T> {
   /**
    * Salva i dati in modo pubblico
    */
-  protected async savePublicData(data: any, path: string = ""): Promise<boolean> {
+  protected async savePublicData(
+    data: any,
+    path: string = ""
+  ): Promise<boolean> {
     if (!this.user.is) {
       throw new Error("User not authenticated");
     }
@@ -105,9 +101,7 @@ export abstract class BaseManager<T> {
             return acc;
           }, {}),
         }
-      : typeof data === 'number' || typeof data === 'string'
-        ? data
-        : JSON.stringify(data);
+      : data;
 
     return new Promise((resolve, reject) => {
       const node = this.getPublicNode(path);
@@ -130,97 +124,60 @@ export abstract class BaseManager<T> {
     }
 
     return new Promise((resolve, reject) => {
-      this.user
-        .get(this.storagePrefix)
-        .get(path)
-        .once((data: any) => {
-          console.log("Raw data from Gun:", data);
-          if (!data) {
-            resolve(null);
-            return;
-          }
+      this.getPrivateNode(path).once((data: any) => {
+        if (!data) {
+          resolve(null);
+          return;
+        }
 
-          try {
-            const cleanedData = this.cleanGunMetadata<any>(data);
-            console.log("Cleaned data:", cleanedData);
-
-            // Se i dati sono un array speciale, li convertiamo in un array normale
-            if (cleanedData && cleanedData._isArray) {
-              const length = cleanedData.length;
-              const array = [];
-              for (let i = 0; i < length; i++) {
-                const item = cleanedData[i.toString()];
-                if (item !== undefined && item !== null) {
-                  array.push(this.cleanGunMetadata(item));
-                }
-              }
-              console.log("Processed array data:", array);
-              resolve(array as T);
+        try {
+          // Se i dati sono una stringa, proviamo a parsarli come JSON
+          if (typeof data === "string") {
+            try {
+              const parsed = JSON.parse(data);
+              resolve(this.cleanGunMetadata(parsed) as T);
+              return;
+            } catch {
+              // Se non è JSON valido, restituiamo la stringa così com'è
+              resolve(data as T);
               return;
             }
-
-            const processedData = this.processRetrievedData<T>(cleanedData);
-            console.log("Processed data:", processedData);
-            resolve(processedData);
-          } catch (error) {
-            console.error("Error processing data:", error);
-            reject(error);
           }
-        });
+
+          // Rimuoviamo i metadati di Gun
+          const cleanedData = this.cleanGunMetadata(data);
+          resolve(cleanedData as T);
+        } catch (error) {
+          console.error("Error processing data:", error);
+          reject(error);
+        }
+      });
     });
-  }
-
-  /**
-   * Processa i dati recuperati convertendo il formato speciale degli array nel formato originale
-   */
-  protected processRetrievedData<T>(data: any): T {
-    if (!data) return data as T;
-
-    // Se i dati hanno il flag _isArray, convertiamo in array
-    if (data._isArray) {
-      const length = data.length;
-      const array: any[] = [];
-      for (let i = 0; i < length; i++) {
-        if (data[i] !== undefined) {
-          const item = this.cleanGunMetadata(data[i]);
-          if (item && Object.keys(item).length > 0) {
-            array.push(item);
-          }
-        }
-      }
-      return array as T;
-    }
-
-    // Se è un oggetto, processiamo ricorsivamente le sue proprietà
-    if (typeof data === "object") {
-      const processed = { ...data };
-      for (const key in processed) {
-        if (processed[key] && typeof processed[key] === "object") {
-          processed[key] = this.processRetrievedData<any>(processed[key]);
-        }
-      }
-      return processed as T;
-    }
-
-    return data as T;
   }
 
   protected cleanGunMetadata<T>(data: any): T {
     if (!data) return data;
-    if (typeof data === "string") {
-      try {
-        return JSON.parse(data);
-      } catch (error) {
-        return data as T;
-      }
+
+    // Se è una stringa, restituiscila così com'è
+    if (typeof data === "string") return data as T;
+
+    // Se è un oggetto, rimuovi i metadati di Gun
+    if (typeof data === "object") {
+      const cleaned = { ...data };
+      delete cleaned._;
+      return cleaned as T;
     }
+
     return data as T;
   }
 
   /**
    * Recupera i dati pubblici
    */
-  protected async getPublicData(publicKey: string, path: string = ""): Promise<any> {
+  protected async getPublicData(
+    publicKey: string,
+    path: string = ""
+  ): Promise<any> {
     return new Promise((resolve, reject) => {
       this.gun
         .get(`~${publicKey}`)
@@ -280,7 +237,9 @@ export abstract class BaseManager<T> {
             verifyAttempts++;
             if (verifyAttempts > maxVerifyAttempts) {
               cleanup();
-              reject(new Error("Data verification failed - max attempts reached"));
+              reject(
+                new Error("Data verification failed - max attempts reached")
+              );
               return;
             }
 
@@ -293,7 +252,9 @@ export abstract class BaseManager<T> {
                   resolve();
                 }
               } else {
-                console.warn(`Attempt ${verifyAttempts}: Data still exists, waiting...`);
+                console.warn(
+                  `Attempt ${verifyAttempts}: Data still exists, waiting...`
+                );
               }
             });
           }, 2000); // Verifica ogni 2 secondi
@@ -350,7 +311,9 @@ export abstract class BaseManager<T> {
             verifyAttempts++;
             if (verifyAttempts > maxVerifyAttempts) {
               cleanup();
-              reject(new Error("Data verification failed - max attempts reached"));
+              reject(
+                new Error("Data verification failed - max attempts reached")
+              );
               return;
             }
 
@@ -363,7 +326,9 @@ export abstract class BaseManager<T> {
                   resolve();
                 }
               } else {
-                console.warn(`Attempt ${verifyAttempts}: Data still exists, waiting...`);
+                console.warn(
+                  `Attempt ${verifyAttempts}: Data still exists, waiting...`
+                );
               }
             });
           }, 2000); // Verifica ogni 2 secondi
@@ -374,7 +339,11 @@ export abstract class BaseManager<T> {
 
   protected isNullOrEmpty(data: any): boolean {
     if (data === null || data === undefined) return true;
-    if (typeof data === "object" && Object.keys(data).filter(k => k !== "_").length === 0) return true;
+    if (
+      typeof data === "object" &&
+      Object.keys(data).filter((k) => k !== "_").length === 0
+    )
+      return true;
     return false;
   }
 
@@ -414,20 +383,28 @@ export abstract class BaseManager<T> {
    * Imposta il percorso del nodo privato
    */
   protected setPrivateNodePath(path: string): void {
-    this.nodesPath.private = `private/${this.storagePrefix}/${path}`.replace(/\/+/g, '/');
+    this.nodesPath.private = `private/${this.storagePrefix}/${path}`.replace(
+      /\/+/g,
+      "/"
+    );
   }
 
   /**
    * Imposta il percorso del nodo pubblico
    */
   protected setPublicNodePath(path: string): void {
-    this.nodesPath.public = `public/${this.storagePrefix}/${path}`.replace(/\/+/g, '/');
+    this.nodesPath.public = `public/${this.storagePrefix}/${path}`.replace(
+      /\/+/g,
+      "/"
+    );
   }
 
   /**
    * Ottiene il nodo Gun per il percorso privato specificato
    */
-  protected getPrivateNode(path: string = ''): IGunChain<any, any, IGunInstance, string> {
+  protected getPrivateNode(
+    path: string = ""
+  ): IGunChain<any, any, IGunInstance, string> {
     this.setPrivateNodePath(path);
     return this.user.get(this.storagePrefix).get(path);
   }
@@ -435,10 +412,12 @@ export abstract class BaseManager<T> {
   /**
    * Ottiene il nodo Gun per il percorso pubblico specificato
    */
-  protected getPublicNode(path: string = ''): IGunChain<any, any, IGunInstance, string> {
+  protected getPublicNode(
+    path: string = ""
+  ): IGunChain<any, any, IGunInstance, string> {
     this.setPublicNodePath(path);
     const publicKey = this.user.is?.pub;
-    if (!publicKey) throw new Error('Public key not found');
+    if (!publicKey) throw new Error("Public key not found");
     return this.gun.get(`~${publicKey}`).get(this.storagePrefix).get(path);
   }
 }

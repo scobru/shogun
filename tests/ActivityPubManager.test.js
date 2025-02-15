@@ -130,24 +130,34 @@ describe("ActivityPubManager", function () {
     it("should delete keys", async function () {
       const keys = await activityPubManager.createAccount();
       await activityPubManager.saveKeys(keys);
-      await waitForOperation(2000);
+      await waitForOperation(3000);
+
+      // Verifica che le chiavi esistano prima della cancellazione
+      const keysBeforeDelete = await activityPubManager.getKeys();
+      expect(keysBeforeDelete).to.deep.equal(keys);
 
       await activityPubManager.deleteKeys();
-      await waitForOperation(2000);
+      await waitForOperation(5000);
 
       // Verifica che le chiavi siano state eliminate
+      let deletionVerified = false;
       try {
         await activityPubManager.getKeys();
-        throw new Error("Keys should have been deleted, but were found");
       } catch (error) {
         expect(error.message).to.equal("Keys not found");
+        deletionVerified = true;
       }
+      expect(deletionVerified, "Keys were not properly deleted").to.be.true;
 
+      // Verifica aggiuntiva con getPub
+      let pubKeyDeleted = false;
       try {
         await activityPubManager.getPub();
       } catch (error) {
         expect(error.message).to.equal("Cannot read properties of undefined (reading 'publicKey')");
+        pubKeyDeleted = true;
       }
+      expect(pubKeyDeleted, "Public key was not properly deleted").to.be.true;
     });
 
     it("should fail to sign with invalid username", async function () {
@@ -156,7 +166,7 @@ describe("ActivityPubManager", function () {
         await activityPubManager.sign(testData, "invalid_user");
         throw new Error("Expected an error but none was thrown");
       } catch (error) {
-        expect(error.message).to.include("Private key not found");
+        expect(error.message).to.equal('Username "invalid_user" non valido');
       }
     });
   });
