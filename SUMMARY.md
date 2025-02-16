@@ -2,29 +2,26 @@
 
 * [SHOGUN - Decentralized Wallet Manager](README.md)
 
-## CORE
+## API
 
-* [Auth](core/gunstorage/README.md)
-  * [GunAuth](core/gunstorage/gunauth.md)
-  * [WebauthnAuth](core/gunstorage/webauthnauth.md)
-* [Storage](core/storage/README.md)
-  * [GunStorage](core/storage/gunstorage.md)
-
-## BLOCKCHAIN
-
-* [Wallets](blockchain/wallets/README.md)
-  * [EthereumHDKeyVault](blockchain/wallets/ethereumhdkeyvault.md)
-* [Contracts](blockchain/contracts.md)
-* [Connectors](blockchain/connectors/README.md)
-  * [JsonRpcConnector](blockchain/connectors/jsonrpcconnector.md)
-
-## PROTOCOLS
-
-* [Stealth](protocols/stealth/README.md)
-  * [StealthChain](protocols/stealth/stealthchain.md)
-* [Micro Payments](protocols/micro-payments/README.md)
-  * [Micropayments System](protocols/micro-payments/micropayments.md)
-* [Messages](protocols/messages/README.md)
-  * [UnstoppableChat](protocols/messages/unstoppablechat.md)
-* [Activity Pub](protocols/activity-pub/README.md)
-  * [ActivityPub](protocols/activity-pub/activitypub.md)
+* [Core](api/core/README.md)
+  * [Storage](api/core/storage/README.md)
+    * [GunStorage](api/core/storage/gunstorage.md)
+  * [Auth](api/core/gunstorage/README.md)
+    * [GunAuth](api/core/gunstorage/gunauth.md)
+    * [WebauthnAuth](api/core/gunstorage/webauthnauth.md)
+* [Blockchain](api/blockchain/README.md)
+  * [Wallets](api/blockchain/wallets/README.md)
+    * [EthereumHDKeyVault](api/blockchain/wallets/ethereumhdkeyvault.md)
+  * [Contracts](api/blockchain/contracts.md)
+  * [Connectors](api/blockchain/connectors/README.md)
+    * [JsonRpcConnector](api/blockchain/connectors/jsonrpcconnector.md)
+* [Protocols](api/protocols/README.md)
+  * [Stealth](api/protocols/stealth/README.md)
+    * [StealthChain](api/protocols/stealth/stealthchain.md)
+  * [Micro Payments](api/protocols/micro-payments/README.md)
+    * [Micropayments System](api/protocols/micro-payments/micropayments.md)
+  * [Messages](api/protocols/messages/README.md)
+    * [UnstoppableChat](api/protocols/messages/unstoppablechat.md)
+  * [Activity Pub](api/protocols/activity-pub/README.md)
+    * [ActivityPub](api/protocols/activity-pub/activitypub.md)

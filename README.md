@@ -12,14 +12,6 @@ A decentralized wallet manager that uses Gun.js to handle wallets and private ke
 [Broken link](broken-reference)
 {% endcontent-ref %}
 
-{% content-ref url="broken-reference" %}
-[Broken link](broken-reference)
-{% endcontent-ref %}
-
-{% content-ref url="broken-reference" %}
-[Broken link](broken-reference)
-{% endcontent-ref %}
-
 ## ✨ Key Features
 
 * 🔐 **Advanced Security**
@@ -124,12 +116,12 @@ await chat.join('username', 'password', 'Display Name');
 
 See individual module documentation for detailed examples:
 
-* [JsonRpcConnector Examples](blockchain/connectors/jsonrpcconnector.md#examples)
-* [EthereumHDKeyVault Examples](blockchain/wallets/ethereumhdkeyvault.md#examples)
-* [StealthChain Examples](protocols/stealth/stealthchain.md#examples)
-* [ActivityPub Examples](protocols/activity-pub/activitypub.md#examples)
-* [UnstoppableChat Examples](protocols/messages/unstoppablechat.md#examples)
-* [Micropayments Examples](protocols/micro-payments/micropayments.md#examples)
+* [JsonRpcConnector Examples](api/blockchain/connectors/jsonrpcconnector.md#examples)
+* [EthereumHDKeyVault Examples](api/blockchain/wallets/ethereumhdkeyvault.md#examples)
+* [StealthChain Examples](api/protocols/stealth/stealthchain.md#examples)
+* [ActivityPub Examples](api/protocols/activity-pub/activitypub.md#examples)
+* [UnstoppableChat Examples](api/protocols/messages/unstoppablechat.md#examples)
+* [Micropayments Examples](api/protocols/micro-payments/micropayments.md#examples)
 
 ## 🔒 Security
 
