@@ -1,5 +1,5 @@
 // relay.js
-import { MicropaymentAPI } from "./MicropaymentAPI";
+import { MicropaymentAPI } from "./micro";
 import { ethers } from "ethers";
 import Gun from "gun";
 import "gun/sea"; // Importa il modulo SEA per le firme off-chain

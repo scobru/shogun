@@ -1,18 +1,29 @@
 import Gun, { IGunInstance, ISEAPair } from "gun";
-import type { GunKeyPair } from "../interfaces/GunKeyPair";
-import { BaseManager } from "./BaseManager";
-import { log } from "../utils/log";
+import type { GunKeyPair } from "../../types/GunKeyPair";
+import { GunStorage } from "../storage/GunStorage";
+import { log } from "../../utils/log";
 
 /**
- * Main authentication manager handling GUN.js user operations and SEA (Security, Encryption, Authorization)
- * @class
- * @classdesc Manages decentralized user authentication, data encryption, and secure operations using GUN.js and SEA
+ * Gestore avanzato dell'autenticazione GunDB
+ * 
+ * Fornisce un layer sicuro per la gestione di utenti, sessioni e crittografia
+ * integrato con il sistema SEA (Security, Encryption, Authorization) di GunDB.
  */
-export class GunAuthManager extends BaseManager<GunKeyPair> {
-  private isAuthenticating = false;
-  private pub: string = "";
-  protected storagePrefix = "auth";
+export class GunAuth extends GunStorage<GunKeyPair> {
+  /** @internal Timer per il refresh delle credenziali */
+  private refreshTimer?: NodeJS.Timeout;
+  
+  /** @internal Chiave pubblica dell'utente corrente */
+  private pub: string = '';
+  
+  /** @internal Flag di stato dell'autenticazione */
+  private isAuthenticating: boolean = false;
 
+  /**
+   * Inizializza il gestore di autenticazione
+   * @param gun - Istanza GunDB
+   * @param APP_KEY_PAIR - Coppia di chiavi SEA dell'applicazione
+   */
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
     super(gun, APP_KEY_PAIR);
     this.pub = "";
@@ -20,17 +31,14 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
   }
 
   private async resetGunState(): Promise<void> {
-    // Reset completo dello stato di Gun
     this.isAuthenticating = false;
     this.pub = "";
     this.user.leave();
     await new Promise((r) => setTimeout(r, 2000));
 
-    // Creiamo una nuova istanza di Gun.user()
     this.user = this.gun.user();
     await new Promise((r) => setTimeout(r, 1000));
 
-    // Verifichiamo che lo stato sia effettivamente resettato
     if (this.user.is) {
       log("User still authenticated after reset, retrying...");
       await new Promise((r) => setTimeout(r, 2000));
@@ -39,13 +47,6 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     }
   }
 
-  /**
-   * Checks username availability and creates user if available.
-   * @param username Desired username.
-   * @param password User password.
-   * @returns Public key of created user.
-   * @throws Error if username is already taken or user creation fails.
-   */
   public async checkUser(username: string, password: string): Promise<string> {
     log("Check User...");
 
@@ -63,7 +64,6 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     const maxRetries = 3;
 
     const attemptUserCreation = async (): Promise<string> => {
-      // Reset dello stato prima di ogni tentativo
       await this.resetGunState();
 
       return new Promise((resolve, reject) => {
@@ -85,10 +85,8 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
             log("User creation in progress, waiting...");
 
             try {
-              // Reset dello stato prima di verificare
               await this.resetGunState();
 
-              // Verifichiamo se l'utente esiste dopo l'attesa
               const userExists = await this.exists(username);
               if (userExists) {
                 const pub = await this.getPubFromAlias(username);
@@ -98,7 +96,6 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
                 }
               }
 
-              // Se siamo qui e abbiamo ancora tentativi, ritentiamo
               if (retryCount < maxRetries) {
                 retryCount++;
                 log(`Retry attempt ${retryCount}/${maxRetries}`);
@@ -131,7 +128,6 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
               return resolve(ack.pub);
             }
 
-            // Attendiamo brevemente per assicurarci che la creazione sia completata
             log("Waiting for user creation to complete...");
 
             if (this.user.is?.pub) {
@@ -141,7 +137,6 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
               return resolve(this.user.is.pub);
             }
 
-            // Verifica se l'utente esiste dopo la creazione
             log("Checking if user exists after creation...");
             const userExists = await this.exists(username);
             if (userExists) {
@@ -158,7 +153,6 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
               log("User not found after creation");
             }
 
-            // Se siamo qui e abbiamo ancora tentativi, ritentiamo
             if (retryCount < maxRetries) {
               retryCount++;
               log(`Retry attempt ${retryCount}/${maxRetries}`);
@@ -194,21 +188,14 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     });
   }
 
-  /**
-   * Creates a new user account with GUN/SEA.
-   * @param alias User's username.
-   * @param passphrase User's password.
-   * @returns Generated SEA key pair for the user.
-   */
+  
   public async createAccount(
     alias: string,
     passphrase: string
   ): Promise<GunKeyPair> {
     try {
-      // Reset completo dello stato prima di ogni tentativo
       await this._hardReset();
 
-      // Verifica esistenza utente con timeout
       const userExists = await Promise.race([
         this.exists(alias),
         new Promise<boolean>((_, reject) =>
@@ -217,16 +204,13 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
       ]);
 
       if (userExists) {
-        // Se l'utente esiste, non ritentiamo - è un errore legittimo
         throw new Error("Username already taken");
       }
 
-      // Creazione account con timeout
       const result = await Promise.race([
         new Promise<GunKeyPair>((resolve, reject) => {
           this.user.create(alias, passphrase, (ack: any) => {
             if (ack.err) {
-              // Se l'errore indica che l'utente esiste, non ritentiamo
               if (
                 ack.err.includes("already created") ||
                 ack.err.includes("already taken")
@@ -242,7 +226,6 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
 
       return result;
     } catch (error) {
-      // Se l'errore è "Username already taken", non ritentiamo
       if (
         error instanceof Error &&
         error.message === "Username already taken"
@@ -256,13 +239,11 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
 
   private async _hardReset(): Promise<void> {
     try {
-      // Modifica qui: usa l'istanza originale invece di gun.back
       const peers = ["http://localhost:8765/gun"];
 
       await this._safeLogout();
       this.user.leave();
 
-      // Ricarica l'istanza GUN con i peer originali
       this.gun = Gun({
         peers: peers, // Usa la lista peers salvata
         localStorage: false,
@@ -275,14 +256,6 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     }
   }
 
-  /**
-   * Authenticates user with provided credentials.
-   * @param alias User's username.
-   * @param passphrase User's password.
-   * @param attempt (Optional) Current attempt number (for retry).
-   * @returns User's public key.
-   * @throws Error on authentication failure or timeout.
-   */
   public async login(
     alias: string,
     passphrase: string
@@ -330,20 +303,14 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     }
   }
 
-  /**
-   * Terminates the current user session.
-   */
+ 
   public logout(): void {
     console.log("*** Logout...");
     this.user.leave();
     this.isAuthenticating = false;
   }
 
-  /**
-   * Gets current user's public key.
-   * @returns User's public key.
-   * @throws Error if user is not authenticated.
-   */
+  
   public getPublicKey(): string {
     if (this.pub) return this.pub;
     if (this.user.is?.pub) {
@@ -353,16 +320,12 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     throw new Error("Utente non autenticato");
   }
 
-  /**
-   * Gets current user's SEA key pair.
-   */
+  
   public getPair(): GunKeyPair {
     return this.user._.sea as GunKeyPair;
   }
 
-  /**
-   * Gets the GUN instance reference.
-   */
+  
   public getGun(): any {
     return this.gun;
   }
@@ -371,11 +334,7 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     return this.gun.user();
   }
 
-  /**
-   * Exports the current user's key pair as JSON.
-   * @returns Stringified key pair.
-   * @throws Error if user is not authenticated.
-   */
+  
   public async exportGunKeyPair(): Promise<string> {
     if (!this.user._.sea) {
       throw new Error("User not authenticated");
@@ -383,12 +342,7 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     return JSON.stringify(this.user._.sea);
   }
 
-  /**
-   * Imports and authenticates with a key pair.
-   * @param keyPairJson Stringified key pair.
-   * @returns Public key of authenticated user.
-   * @throws Error if key pair is invalid or authentication fails.
-   */
+ 
   public async importGunKeyPair(keyPairJson: string): Promise<string> {
     let keyPair: any;
     try {
@@ -413,24 +367,74 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
     }
   }
 
-  /**
-   * Saves private user data.
-   * @param data Data to store.
-   * @param path Storage path.
-   * @returns True if data was saved successfully, false otherwise.
-   * @throws Error if user is not authenticated.
-   */
   public async savePrivateData(data: any, path: string): Promise<boolean> {
-    if (!this.user.is) throw new Error("Utente non autenticato");
-    return await super.savePrivateData(data, path);
+    const maxAttempts = 5;
+    let attempts = 0;
+    let lastError: Error | null = null;
+    
+    const verifyAuthentication = async (): Promise<void> => {
+      if (!this.user.is) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        if (!this.user.is) {
+          throw new Error("User authentication lost during operation");
+        }
+      }
+    };
+    
+    while (attempts < maxAttempts) {
+      try {
+        await verifyAuthentication();
+        
+        if (!this.user._.sea) {
+          await this._hardReset();
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+
+        const processedData = data === undefined || data === null ? {} : data;
+        
+        await super.savePrivateData(processedData, path);
+        
+        const savedData = await this.getPrivateData(path);
+        
+        if (processedData && Object.keys(processedData).length === 0) {
+          if (!savedData || Object.keys(savedData).length === 0) {
+            return true;
+          }
+        } else if (this.compareData(savedData, processedData)) {
+          return true;
+        }
+        
+        attempts++;
+        if (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      } catch (error) {
+        lastError = error;
+        attempts++;
+        console.error(`Save attempt ${attempts} failed:`, error);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    }
+    
+    throw lastError || new Error("Failed to save private data after multiple attempts");
   }
 
-  /**
-   * Retrieves private user data.
-   * @param path Storage path.
-   * @returns Stored data.
-   * @throws Error if user is not authenticated.
-   */
+  private compareData(a: any, b: any): boolean {
+    if (a === b) return true;
+    if (a === null || b === null) return false;
+    if (typeof a !== typeof b) return false;
+    
+    if (typeof a === 'object') {
+      const aKeys = Object.keys(a);
+      const bKeys = Object.keys(b);
+      if (aKeys.length !== bKeys.length) return false;
+      
+      return aKeys.every(key => this.compareData(a[key], b[key]));
+    }
+    
+    return false;
+  }
+
   public async getPrivateData(path: string): Promise<any> {
     if (!this.user._.sea) throw new Error("Utente non autenticato");
     const user = this.gun.user();
@@ -443,10 +447,8 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
           if (data === undefined || data === null) {
             resolve(null);
           } else {
-            // Rimuoviamo i metadati di Gun
             const cleanedData = this.cleanGunMetadata(data);
             
-            // Se i dati sono un oggetto, convertiamoli in stringa JSON
             if (typeof cleanedData === 'object') {
               resolve(JSON.stringify(cleanedData));
             } else if (typeof cleanedData === 'string') {

@@ -3,6 +3,12 @@ export interface WalletData {
   privateKey: string;
   entropy: string;
   timestamp: number;
+  index?: number;
+}
+
+export interface MnemonicData {
+  phrase: string;
+  timestamp: number;
 }
 
 export interface WalletResult {

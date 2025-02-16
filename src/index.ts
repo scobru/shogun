@@ -1,12 +1,11 @@
 import { Shogun } from "./Shogun";
-import { StealthChain } from "./features/stealth/StealthChain";
-import { EthereumConnector } from "./connector/EthereumConnector";
-import { GunAuthManager } from "./managers/GunAuthManager";
-import { ActivityPubManager } from "./managers/ActivityPubManager";
-import { WebAuthnManager } from "./managers/WebAuthnManager";
-import { EthereumWalletGenerator } from "./generator/EthereumWalletGenerator";
-import UnstoppableChat from "./features/unstoppable";
-
+import { StealthChain } from "./protocol/stealth/StealthChain";
+import { JsonRpcConnector } from "./blockchain/connectors/JsonRpcConnector";
+import { GunAuth } from "./core/auth/GunAuth";
+import { ActivityPub } from "./protocol/activitypub/ActivityPub";
+import { WebauthnAuth } from "./core/auth/WebauthnAuth";
+import { EthereumHDKeyVault } from "./blockchain/wallets/EthereumHDKeyVault";
+import UnstoppableChat from "./protocol/messages/unstoppable";
 
 import {
   EthereumProvider,
@@ -23,7 +22,7 @@ import {
   UserKeys,
   StealthAddressResult,
   StealthKeyPairWrapper,
-} from "./interfaces";
+} from "./types";
 import { SEA } from "gun";
 
 export { Shogun };
@@ -32,12 +31,12 @@ export { Shogun };
 
 // export managers
 export {
-  EthereumConnector,
-  GunAuthManager,
-  ActivityPubManager,
-  WebAuthnManager,
   StealthChain,
-  EthereumWalletGenerator,
+  JsonRpcConnector,
+  GunAuth,
+  ActivityPub,
+  WebauthnAuth,
+  EthereumHDKeyVault,
   UnstoppableChat,
 };
 

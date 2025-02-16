@@ -5,15 +5,15 @@
 
 import Gun, { IGunInstance, IGunUserInstance } from "gun";
 import "gun/sea";
-import { EthereumConnector } from "./connector/EthereumConnector";
-import { StealthChain } from "./features/stealth/StealthChain";
-import type { GunKeyPair } from "./interfaces/GunKeyPair";
-import { GunAuthManager } from "./managers/GunAuthManager";
-import { ActivityPubManager } from "./managers/ActivityPubManager";
-import { WebAuthnManager } from "./managers/WebAuthnManager";
-import { EthereumWalletGenerator } from "./generator/EthereumWalletGenerator";
-import { UserKeys } from "./interfaces/UserKeys";
-import { StealthKeyPair } from "./interfaces/StealthKeyPair";
+import { JsonRpcConnector } from "./blockchain/connectors/JsonRpcConnector";
+import { StealthChain } from "./protocol/stealth/StealthChain";
+import type { GunKeyPair } from "./types/GunKeyPair";
+import { GunAuth } from "./core/auth/GunAuth";
+import { ActivityPub } from "./protocol/activitypub/ActivityPub";
+import { WebauthnAuth } from "./core/auth/WebauthnAuth";
+import { EthereumHDKeyVault } from "./blockchain/wallets/EthereumHDKeyVault";
+import { UserKeys } from "./types/UserKeys";
+import { Wallet } from "ethers";
 
 // Extend Gun type definitions
 declare module "gun" {
@@ -27,24 +27,24 @@ declare module "gun" {
  * Main class for managing wallet and related functionality
  */
 export class Shogun {
-  private gunAuthManager: GunAuthManager;
-  private ethereumConnector: EthereumConnector;
-    private stealthChain: StealthChain;
-  private activityPubManager: ActivityPubManager;
-  private ethereumWalletGenerator: EthereumWalletGenerator;
-  private webAuthnManager: WebAuthnManager;
+  private gunAuth: GunAuth;
+  private ethereumConnector: JsonRpcConnector;
+  private stealthChain: StealthChain;
+  private activityPub: ActivityPub;
+  private ethereumWalletGenerator: EthereumHDKeyVault;
+  private webAuthnManager: WebauthnAuth;
   private gun: IGunInstance;
   private user: IGunUserInstance
 
-  constructor(gun: IGunInstance, APP_KEY_PAIR: any) {    
-    this.gunAuthManager = new GunAuthManager(gun, APP_KEY_PAIR);
-    this.ethereumConnector = new EthereumConnector(gun, APP_KEY_PAIR);
+  constructor(gun: IGunInstance, APP_KEY_PAIR: any) {
+    this.gunAuth = new GunAuth(gun, APP_KEY_PAIR);
+    this.ethereumConnector = new JsonRpcConnector(gun, APP_KEY_PAIR);
     this.stealthChain = new StealthChain(gun, APP_KEY_PAIR);
-    this.ethereumWalletGenerator = new EthereumWalletGenerator(gun, APP_KEY_PAIR);
-    this.webAuthnManager = new WebAuthnManager(gun, APP_KEY_PAIR);
-    this.activityPubManager = new ActivityPubManager(gun, APP_KEY_PAIR);
+    this.ethereumWalletGenerator = new EthereumHDKeyVault(gun, APP_KEY_PAIR);
+    this.webAuthnManager = new WebauthnAuth(gun, APP_KEY_PAIR);
+    this.activityPub = new ActivityPub(gun, APP_KEY_PAIR);
     this.gun = gun;
-    this.user = gun.user().recall({sessionStorage: true})
+    this.user = gun.user().recall({ sessionStorage: true })
   }
 
   /**
@@ -52,7 +52,7 @@ export class Shogun {
 
    * @returns {EthereumManager} The EthereumManager instance
    */
-  public getEthereumConnector(): EthereumConnector {
+  public getEthereumConnector(): JsonRpcConnector {
     return this.ethereumConnector;
   }
 
@@ -68,15 +68,15 @@ export class Shogun {
    * Returns the GunAuthManager instance
    * @returns {GunAuthManager} The GunAuthManager instance
    */
-  public getGunAuthManager(): GunAuthManager {
-    return this.gunAuthManager;
+  public getGunAuth(): GunAuth {
+    return this.gunAuth;
   }
 
   /**
    * Returns the WebAthnManager instance
    * @returns {WebAuthnManager} The WebAuthnManager instance
    */
-  public getWebAuthnManager(): WebAuthnManager {
+  public getWebAuthnManager(): WebauthnAuth {
     return this.webAuthnManager;
   }
 
@@ -84,16 +84,50 @@ export class Shogun {
    * Returns the ActivityPubManager instance
    * @returns {ActivityPubManager} The ActivityPubManager instance
    */
-  public getActivityPubManager(): ActivityPubManager {
-    return this.activityPubManager;
+  public getActivityPub(): ActivityPub {
+    return this.activityPub;
   }
 
   /**
    * Returns the WalletManager instance
    * @returns {WalletManager} The WalletManager instance
    */
-  public getEthereumWalletGenerator(): EthereumWalletGenerator {
+  public getEthereumWalletGenerator(): EthereumHDKeyVault {
     return this.ethereumWalletGenerator;
+  }
+
+  /**
+   * Returns the legacy wallet instance
+   * @returns {Promise<Wallet>} The legacy wallet instance
+   */
+  public async getLegacyWallet(): Promise<Wallet> {
+    return this.ethereumWalletGenerator.getLegacyWallet();
+  }
+
+  /**
+   * Returns the wallet instance
+   * @returns {Promise<Wallet>} The wallet instance
+   */
+  public async getWallet(): Promise<Wallet> {
+    return this.ethereumWalletGenerator.getWallet();
+  }
+
+  /**
+   * Returns the wallet instance by address
+   * @param {string} address - The address of the wallet
+   * @returns {Promise<Wallet>} The wallet instance
+   */
+  public async getWalletByAddress(address: string): Promise<Wallet | null> {
+    return this.ethereumWalletGenerator.getWalletByAddress(address);
+  }
+
+  /**
+   * Returns the wallet instance by index
+   * @param {number} index - The index of the wallet
+   * @returns {Promise<Wallet>} The wallet instance
+   */
+  public async getWalletByIndex(index: number): Promise<Wallet> {
+    return this.ethereumWalletGenerator.getWalletByIndex(index);
   }
 
   /**
@@ -103,10 +137,10 @@ export class Shogun {
    * @returns {Promise<UserKeys>} The created user keys
    */
   public async createUser(alias: string, password: string): Promise<UserKeys> {
-    const pair = await this.gunAuthManager.createAccount(alias, password);
+    const pair = await this.gunAuth.createAccount(alias, password);
     const wallet = await this.ethereumWalletGenerator.getWallet();
     const stealthKey = await this.stealthChain.createAccount();
-    const activityPubKey = await this.activityPubManager.createAccount();
+    const activityPubKey = await this.activityPub.createAccount();
 
     return {
       pair,
@@ -121,11 +155,11 @@ export class Shogun {
    * @returns {Promise<UserKeys>} The user keys
    */
   public async getUser(): Promise<UserKeys> {
-    const user = await this.gunAuthManager.getUser();
+    const user = await this.gunAuth.getUser();
     const pair = user._.sea;
     const wallet = await this.ethereumWalletGenerator.getWallet();
     const stealthKey = await this.stealthChain.getPair();
-    const activityPubKey = await this.activityPubManager.getKeys();
+    const activityPubKey = await this.activityPub.getKeys();
 
     return {
       pair,
@@ -134,7 +168,7 @@ export class Shogun {
       activityPubKey,
     };
   }
-  
+
   /**
    * Returns the Gun user instance
    * @returns {IGunUserInstance} The Gun user instance
@@ -198,7 +232,7 @@ export class Shogun {
         callback(data);
       }
     });
-    
+
     return () => {
       if (subscription && typeof subscription.off === 'function') {
         subscription.off();
@@ -231,12 +265,12 @@ export class Shogun {
    * @returns Promise con array dei risultati mappati
    */
   public async mapList<T>(
-    listPath: string, 
+    listPath: string,
     mapFn?: (data: any, key: string) => T
   ): Promise<T[]> {
     return new Promise((resolve) => {
       const results: T[] = [];
-      
+
       this.gun.get(listPath).map().once((data, key) => {
         if (data) {
           results.push(mapFn ? mapFn(data, key) : data);

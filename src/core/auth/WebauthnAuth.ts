@@ -4,10 +4,10 @@ import type {
   WebAuthnVerifyResult,
   WebAuthnCredentials,
   DeviceCredential,
-} from "../interfaces/WebAuthnResult";
-import { BaseManager } from "./BaseManager";
+} from "../../types/WebAuthnResult";
+import { GunStorage } from "../storage/GunStorage";
 import jsSha256 from "js-sha256";
-import { GunKeyPair } from "../interfaces/GunKeyPair";
+import { GunKeyPair } from "../../types/GunKeyPair";
 import "gun/sea";
 
 const sha256 = jsSha256.sha256;
@@ -22,7 +22,7 @@ try {
   cryptoModule = null;
 }
 
-const TIMEOUT_MS = 60000; // 60 secondi
+const TIMEOUT_MS = 60000;
 const MIN_USERNAME_LENGTH = 3;
 const MAX_USERNAME_LENGTH = 64;
 
@@ -132,7 +132,7 @@ const generateCredentialsFromSalt = (
   };
 };
 
-export class WebAuthnManager extends BaseManager<Record<string, any>> {
+export class WebauthnAuth extends GunStorage<Record<string, any>> {
   protected storagePrefix = "webauthn";
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {

@@ -1,25 +1,47 @@
 import { ethers } from "ethers";
-import { AuthenticationError, ValidationError } from "../utils/gun/errors";
-import { BaseManager } from "../managers/BaseManager";
-import { EthereumProvider, GunKeyPair } from "../interfaces";
+import { AuthenticationError, ValidationError } from "../../utils/gun/errors";
+import { GunStorage } from "../../core/storage/GunStorage";
+import { EthereumProvider, GunKeyPair } from "../../types";
 import { IGunInstance, ISEAPair } from "gun";
 
 /**
- * Gestisce le operazioni Ethereum inclusa la creazione dell'account e il login
+ * JSON-RPC Connector for Ethereum Blockchain Integration
+ * 
+ * Provides secure Ethereum interaction layer with GunDB storage integration.
+ * Handles wallet management, authentication, and cryptographic operations.
  */
-export class EthereumConnector extends BaseManager<GunKeyPair> {
+export class JsonRpcConnector extends GunStorage<GunKeyPair> {
+  /** @internal Storage namespace for Ethereum data */
   protected storagePrefix = "ethereum";
+  
+  /** @internal Custom JSON-RPC provider instance */
   private customProvider: ethers.JsonRpcProvider | null = null;
+  
+  /** @internal Wallet instance for custom provider */
   private customWallet: ethers.Wallet | null = null;
+  
+  /** @internal Fixed message for cryptographic signing */
   private MESSAGE_TO_SIGN = "I Love Shogun!";
-  private readonly OPERATION_TIMEOUT = 60000; // 60 secondi
+  
+  /** @internal Operation timeout in milliseconds */
+  private readonly OPERATION_TIMEOUT = 60000;
 
+  /**
+   * Initialize JSON-RPC connector
+   * @param gun - GunDB instance
+   * @param APP_KEY_PAIR - SEA cryptographic pair for GunDB
+   */
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
     super(gun, APP_KEY_PAIR);
   }
 
   /**
-   * Imposta un provider Ethereum personalizzato
+   * Configure custom JSON-RPC provider
+   * @param rpcUrl - RPC endpoint URL
+   * @param privateKey - Wallet private key
+   * @throws {ValidationError} For invalid parameters
+   * @example
+   * connector.setCustomProvider("https://mainnet.infura.io/v3/KEY", "0x...");
    */
   public setCustomProvider(rpcUrl: string, privateKey: string): void {
     try {
@@ -42,7 +64,12 @@ export class EthereumConnector extends BaseManager<GunKeyPair> {
   }
 
   /**
-   * Ottiene il signer Ethereum
+   * Get active signer instance
+   * @returns {Promise<ethers.Signer>} Ethers.js Signer
+   * @throws {AuthenticationError} If no signer available
+   * @example
+   * const signer = await connector.getSigner();
+   * const address = await signer.getAddress();
    */
   public async getSigner(): Promise<ethers.Signer> {
     try {
@@ -64,7 +91,12 @@ export class EthereumConnector extends BaseManager<GunKeyPair> {
   }
 
   /**
-   * Crea un nuovo account Ethereum
+   * Create new Ethereum account
+   * @returns {Promise<GunKeyPair>} Generated key pair
+   * @throws {AuthenticationError} On authentication failure
+   * @throws {Error} On operation timeout
+   * @example
+   * const account = await connector.createAccount();
    */
   public async createAccount(): Promise<GunKeyPair> {
     return new Promise(async (resolve, reject) => {
@@ -86,7 +118,7 @@ export class EthereumConnector extends BaseManager<GunKeyPair> {
 
         this.user.create(username, password, async (ack: any) => {
           clearTimeout(timeoutId);
-          
+
           if (ack.err) {
             reject(new Error(ack.err));
             return;
@@ -110,7 +142,12 @@ export class EthereumConnector extends BaseManager<GunKeyPair> {
   }
 
   /**
-   * Effettua il login con un account Ethereum
+   * Authenticate with Ethereum wallet
+   * @returns {Promise<string>} Public key of authenticated user
+   * @throws {ValidationError} For invalid Ethereum address
+   * @throws {AuthenticationError} On auth failure
+   * @example
+   * const pubKey = await connector.login();
    */
   public async login(): Promise<string> {
     try {
@@ -135,7 +172,10 @@ export class EthereumConnector extends BaseManager<GunKeyPair> {
         });
       });
     } catch (error) {
-      if (error instanceof AuthenticationError || error instanceof ValidationError) {
+      if (
+        error instanceof AuthenticationError ||
+        error instanceof ValidationError
+      ) {
         throw error;
       }
       throw new AuthenticationError(
@@ -147,7 +187,12 @@ export class EthereumConnector extends BaseManager<GunKeyPair> {
   }
 
   /**
-   * Genera una password da una firma
+   * Generate deterministic password from signature
+   * @param signature - Cryptographic signature
+   * @returns {Promise<string>} 64-character hex string
+   * @throws {Error} For invalid signature
+   * @example
+   * const password = await connector.generatePassword(signature);
    */
   public async generatePassword(signature: string): Promise<string> {
     if (!signature) {
@@ -158,9 +203,18 @@ export class EthereumConnector extends BaseManager<GunKeyPair> {
   }
 
   /**
-   * Verifica una firma Ethereum
+   * Verify message signature
+   * @param message - Original signed message
+   * @param signature - Cryptographic signature
+   * @returns {Promise<string>} Recovered Ethereum address
+   * @throws {Error} For invalid inputs
+   * @example
+   * const signer = await connector.verifySignature(msg, sig);
    */
-  public async verifySignature(message: string, signature: string): Promise<string> {
+  public async verifySignature(
+    message: string,
+    signature: string
+  ): Promise<string> {
     try {
       if (!message || !signature) {
         throw new Error("Messaggio o firma non validi");
@@ -172,11 +226,17 @@ export class EthereumConnector extends BaseManager<GunKeyPair> {
   }
 
   /**
-   * Ottiene un'istanza del signer Ethereum
+   * Get browser-based Ethereum signer
+   * @returns {Promise<ethers.Signer>} Browser provider signer
+   * @throws {Error} If MetaMask not detected
+   * @example
+   * const signer = await connector.getEthereumSigner();
    */
   public async getEthereumSigner(): Promise<ethers.Signer> {
-    if (!EthereumConnector.isMetaMaskAvailable()) {
-      throw new Error("Metamask non trovato. Installa Metamask per continuare.");
+    if (!JsonRpcConnector.isMetaMaskAvailable()) {
+      throw new Error(
+        "Metamask non trovato. Installa Metamask per continuare."
+      );
     }
 
     try {

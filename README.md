@@ -2,6 +2,16 @@
 
 A decentralized wallet manager that uses Gun.js to handle wallets and private keys directly in the browser. It provides a complete authentication and key management system with support for stealth addresses and ActivityPub integration.
 
+## 📚 Documentation
+
+- [JsonRpcConnector](docs/JsonRpcConnector.md) - Ethereum JSON-RPC integration
+- [EthereumHDKeyVault](docs/EthereumHDKeyVault.md) - HD wallet management
+- [StealthChain](docs/StealthChain.md) - Stealth address implementation
+- [ActivityPub](docs/ActivityPub.md) - ActivityPub protocol integration
+- [UnstoppableChat](docs/UnstoppableChat.md) - Decentralized messaging
+- [GunStorage](docs/GunStorage.md) - Secure data storage
+- [Micropayments](docs/Micropayments.md) - Off-chain payment channels
+
 ## ✨ Key Features
 
 - 🔐 **Advanced Security**
@@ -10,18 +20,37 @@ A decentralized wallet manager that uses Gun.js to handle wallets and private ke
   - End-to-end encryption
   - Secure entropy management
   - ActivityPub key management
+  - HD wallet derivation
+  - Off-chain payment channels
 
 - 🌐 **Decentralization**
   - Distributed storage with Gun.js
   - P2P synchronization
   - No central server
   - ActivityPub federation support
+  - Decentralized messaging
+  - Stealth transactions
 
 - 🔄 **Portability**
   - Complete data import/export
   - Encrypted backups
   - Multi-device support
   - Cross-platform compatibility
+  - HD wallet recovery
+
+- 💰 **Payment Features**
+  - HD wallet management
+  - Stealth addresses
+  - Off-chain micropayments
+  - Payment channels
+  - Transaction privacy
+
+- 💬 **Communication**
+  - Decentralized chat
+  - Private messaging
+  - Group channels
+  - Announcement channels
+  - RSS integration
 
 ## 🛠️ Requirements
 
@@ -55,6 +84,8 @@ const shogun = new Shogun({
 const walletManager = shogun.getWalletManager();
 const webAuthnService = shogun.getWebAuthnService();
 const activityPubManager = shogun.getActivityPubManager();
+const micropaymentManager = shogun.getMicropaymentManager();
+const chatManager = shogun.getChatManager();
 
 // Create account
 try {
@@ -66,223 +97,115 @@ try {
 // Login
 const pubKey = await walletManager.login('username', 'password');
 
-// Create wallet
-const gunKeyPair = walletManager.getCurrentUserKeyPair();
-const { walletObj, entropy } = await WalletManager.createWalletObj(gunKeyPair);
-
-console.log('Address:', walletObj.address);
-console.log('Private Key:', walletObj.privateKey);
-console.log('Entropy:', entropy);
-
-// Save wallet
-await walletManager.saveWallet(walletObj);
-
-// Retrieve wallet
-const wallet = await walletManager.getWallet();
-
-// Export all data
-const backup = await shogun.exportAllData();
-
-// Import data
-await shogun.importAllData(backup);
-```
-
-### ActivityPub Integration
-
-```typescript
-// Get ActivityPub manager
-const activityPubManager = shogun.getActivityPubManager();
-
-// Generate and save ActivityPub keys
-const keys = {
-  publicKey: 'public_key_data',
-  privateKey: 'private_key_data'
-};
-await activityPubManager.saveActivityPubKeys(keys);
-
-// Retrieve keys
-const storedKeys = await activityPubManager.getActivityPubKeys();
-
-// Sign ActivityPub data
-const { signature, signatureHeader } = await activityPubManager.signActivityPubData(
-  stringToSign,
-  username
-);
-```
-
-### Error Handling
-
-```typescript
-try {
-  const walletManager = shogun.getWalletManager();
-  
-  // Create account
-  await walletManager.createAccount('username', 'password');
-  
-  // Login
-  const pubKey = await walletManager.login('username', 'password');
-  
-  // Create and save wallet
-  const { walletObj } = await WalletManager.createWalletObj(walletManager.getCurrentUserKeyPair());
-  await walletManager.saveWallet(walletObj);
-  
-} catch (error) {
-  if (error instanceof ValidationError) {
-    console.error('Validation error:', error);
-  } else if (error instanceof WebAuthnError) {
-    console.error('WebAuthn error:', error);
-  } else if (error instanceof NetworkError) {
-    console.error('Network error:', error);
-  } else {
-    console.error('Unknown error:', error);
-  }
-}
-```
-
-### Wallet Management with Entropy
-
-```typescript
-// Create wallet from specific salt
-const salt = 'my_custom_salt';
-const wallet = await WalletManager.createWalletFromSalt(gunKeyPair, salt);
+// Create HD wallet
+const hdVault = walletManager.getHDKeyVault();
+const wallet = await hdVault.createAccount();
 
 console.log('Address:', wallet.address);
-console.log('Entropy:', wallet.entropy);
+console.log('HD Path:', wallet.entropy);
 
-// Verify different wallets are created from different salts
-const wallet1 = await WalletManager.createWalletFromSalt(gunKeyPair, 'salt1');
-const wallet2 = await WalletManager.createWalletFromSalt(gunKeyPair, 'salt2');
-console.log(wallet1.address !== wallet2.address); // true
+// Create stealth address
+const stealth = walletManager.getStealthChain();
+const stealthAddress = await stealth.generateStAdd(recipientPubKey);
+
+// Setup payment channel
+const payments = micropaymentManager.createChannel(relayAddress, deposit);
+
+// Start chat
+const chat = chatManager.createInstance();
+await chat.join('username', 'password', 'Display Name');
 ```
 
-### Import/Export
+### Module-specific Examples
 
-```typescript
-// Export all data
-const backup = await manager.exportAllData();
-
-// Import data
-await manager.importAllData(backup);
-
-// Export Gun keypair
-const keypair = await manager.exportGunKeyPair();
-
-// Import Gun keypair
-const pubKey = await manager.importGunKeyPair(keypairJson);
-```
-
-### WebAuthn Authentication
-
-```typescript
-// Initialize WalletManager
-const manager = new WalletManager(gunOptions, APP_KEY_PAIR);
-
-// Check if WebAuthn is supported
-if (manager.webAuthnService.isSupported()) {
-  // Create account with WebAuthn
-  try {
-    const result = await manager.createAccountWithWebAuthn('username');
-    console.log('Account created:', result);
-  } catch (error) {
-    console.error('Error:', error);
-  }
-}
-```
-
-WebAuthn provides:
-- 🔐 Biometric authentication
-- 🔑 Platform-specific secure key storage
-- 🌐 Passwordless authentication
-- 🔒 Enhanced phishing protection
-- ⚡ Seamless user experience
+See individual module documentation for detailed examples:
+- [JsonRpcConnector Examples](docs/JsonRpcConnector.md#examples)
+- [EthereumHDKeyVault Examples](docs/EthereumHDKeyVault.md#examples)
+- [StealthChain Examples](docs/StealthChain.md#examples)
+- [ActivityPub Examples](docs/ActivityPub.md#examples)
+- [UnstoppableChat Examples](docs/UnstoppableChat.md#examples)
+- [Micropayments Examples](docs/Micropayments.md#examples)
 
 ## 🔒 Security
 
 ### Key Management
 
-- Private keys are never stored in plain text
-- Entropy is used for deterministic wallet derivation
-- Web Crypto API used in browser
-- Node crypto used in Node.js
-- Private key and address validation
+- HD wallet support with BIP32/BIP39
+- Stealth address generation
+- Private key encryption
+- Secure key derivation
+- Multi-layer encryption
 
 ### Secure Storage
 
-```typescript
-// Example of secure storage
-const walletData = {
-  address: wallet.address,
-  entropy: wallet.entropy  // Private key is derived when needed
-};
-
-// Data is stored encrypted
-await manager.saveWallet(wallet);
-```
+- Encrypted GunDB storage
+- Distributed data storage
+- No plain text private keys
+- Secure key backup
+- State verification
 
 ## 🐛 Debugging
 
-For debugging purposes:
+Enable debug logs for different components:
 
-1. Enable Gun.js debug logs:
-```bash
+```typescript
+// Gun.js debugging
 GUN_ENV=debug
+
+// Shogun debugging
+SHOGUN_DEBUG=true
+
+// Component-specific debugging
+WALLET_DEBUG=true
+CHAT_DEBUG=true
+MICROPAYMENT_DEBUG=true
 ```
 
-2. Use browser developer tools to inspect:
-   - Gun data synchronization
-   - Network requests
-
-3. Monitor Gun events:
-```typescript
-const gun = manager.gunAuthManager.getGun();
-
-gun.on('out', data => {
-  console.log('Gun out:', data);
-});
-
-gun.on('in', data => {
-  console.log('Gun in:', data);
-});
-```
-
-## 📦 Interfaces
+## 📦 Core Interfaces
 
 ```typescript
-interface WalletResult {
-  walletObj: {
-    address: string;
-    privateKey: string;
-    entropy: string;
-  };
-  entropy: string;
+interface ShogunConfig {
+  peers: string[];
+  localStorage?: boolean;
+  radisk?: boolean;
+  multicast?: boolean;
+  debug?: boolean;
 }
 
-interface ActivityPubKeys {
-  publicKey: string;
-  privateKey: string;
+interface WalletConfig {
+  hdPath?: string;
+  strength?: number;
+  network?: string;
 }
 
-interface GunKeyPair {
-  pub: string;
-  priv: string;
-  epub?: string;
-  epriv?: string;
+interface PaymentChannelConfig {
+  challengePeriod: number;
+  deposit: string;
+  relay: string;
+}
+
+interface ChatConfig {
+  superpeers: string[];
+  encryption?: boolean;
+  rssEnabled?: boolean;
 }
 ```
 
 ## 🧪 Testing
 
 ```bash
-# Run tests
+# Run all tests
 npm test
 
-# Run specific test
-npm test -- -g "Wallet Creation"
+# Test specific modules
+npm test -- --grep "Wallet"
+npm test -- --grep "Micropayments"
+npm test -- --grep "Chat"
 ```
 
 ## 💻 Compatibility
 
-- **Browser**: 
+- **Browsers**: 
   - Chrome >= 80
   - Firefox >= 78
   - Safari >= 14
@@ -295,13 +218,19 @@ npm test -- -g "Wallet Creation"
 
 ## 🤝 Contributing
 
-Pull requests are welcome! For major changes:
-
 1. 🍴 Fork the repository
-2. 🔧 Create a branch
+2. 🔧 Create feature branch
 3. 💾 Commit changes
 4. 🚀 Push branch
-5. 📝 Open a Pull Request
+5. 📝 Create Pull Request
+
+### Development Guidelines
+
+- Follow TypeScript best practices
+- Add unit tests for new features
+- Update documentation
+- Follow semantic versioning
+- Add JSDoc comments
 
 ## 📄 License
 
@@ -309,71 +238,98 @@ Pull requests are welcome! For major changes:
 
 ## 🗺️ Roadmap
 
-- [ ] Enhanced ActivityPub integration
-- [ ] Improved WebAuthn support
-- [ ] Additional wallet types support
+### Version 1.x
+- [x] Basic wallet management
+- [x] HD wallet support
+- [x] Stealth addresses
+- [x] ActivityPub integration
+- [x] Basic chat functionality
 
-## 🏗️ Project Structure
+### Version 2.x
+- [ ] Enhanced privacy features
+- [ ] Improved chat capabilities
+- [ ] Advanced payment channels
+- [ ] Cross-chain support
+- [ ] Enhanced security features
+
+### Version 3.x
+- [ ] DAO integration
+- [ ] Smart contract templates
+- [ ] Advanced federation
+- [ ] AI-powered features
+- [ ] Mobile optimization
+
+## 🏗️ Architecture
 
 ### Core Components
 
 ```typescript
 Shogun (Main Class)
 ├── WalletManager
-│   └── Wallet operations and management
-├── WebAuthnService
-│   └── Biometric authentication
-├── ActivityPubManager
-│   └── ActivityPub integration
-├── EthereumManager
-│   └── Ethereum operations
-├── StealthChain
-│   └── Stealth address operations
-└── GunAuthManager
-    └── Gun.js authentication
-
+│   ├── EthereumHDKeyVault
+│   ├── StealthChain
+│   └── JsonRpcConnector
+├── CommunicationManager
+│   ├── UnstoppableChat
+│   └── ActivityPub
+├── PaymentManager
+│   ├── MicropaymentAPI
+│   └── PaymentChannel
+└── StorageManager
+    └── GunStorage
 ```
 
-### Key Features by Component
+### Data Flow
 
-#### 🏰 Shogun
-- Central orchestrator
-- Manages all components
-- Handles data import/export
-- Provides access to all services
+```mermaid
+graph TD
+    A[User] --> B[Shogun]
+    B --> C[WalletManager]
+    B --> D[CommunicationManager]
+    B --> E[PaymentManager]
+    C --> F[GunStorage]
+    D --> F
+    E --> F
+    F --> G[GunDB]
+```
 
-#### 🔑 WalletManager
-- Account creation and login
-- Wallet creation and storage
-- Key pair management
-- Secure storage
+## 📱 Mobile Support
 
-#### 🔐 WebAuthnService
+- React Native compatibility
+- Mobile-optimized storage
 - Biometric authentication
-- Platform authenticator support
-- Passwordless login
-- Security key support
+- Push notifications
+- Offline support
 
-#### 🌐 ActivityPubManager
-- Federation support
-- Key management
-- Data signing
-- Protocol integration
+## 🔧 Configuration
 
-#### ⛓️ EthereumManager
-- Ethereum wallet operations
-- Transaction management
-- Smart contract interaction
-- Network configuration
-
-#### 🕶️ StealthChain
-- Stealth address generation
-- Private transactions
-- Key management
-- Privacy features
-
-#### 🔫 GunAuthManager
-- Gun.js integration
-- P2P data sync
-- User authentication
-- Secure storage
+```typescript
+const config = {
+  // Gun.js configuration
+  gun: {
+    peers: ['https://peer1.com/gun', 'https://peer2.com/gun'],
+    localStorage: false,
+    radisk: true
+  },
+  
+  // Wallet configuration
+  wallet: {
+    hdPath: "m/44'/60'/0'/0",
+    network: 'mainnet',
+    strength: 256
+  },
+  
+  // Chat configuration
+  chat: {
+    encryption: true,
+    rssEnabled: true,
+    superpeers: ['https://superpeer1.com']
+  },
+  
+  // Payment configuration
+  payment: {
+    challengePeriod: 86400,
+    minDeposit: '0.1'
+  }
+};
+```

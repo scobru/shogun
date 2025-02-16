@@ -1,6 +1,6 @@
 export * from './types';
 export * from './const';
-export * from './encryption';
+export * from '../../core/crypto/encryption';
 export * from './errors'; 
 export * from './filter';
 export * from './iterate';

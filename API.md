@@ -405,7 +405,7 @@ gun/
             │       ├── address
             │       └── reference
             └── wallet_[walletId]/
-                ├── address
+            ├── address
                 ├── privateKey (cifrata)
                 ├── entropy
                 └── timestamp

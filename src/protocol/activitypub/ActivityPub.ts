@@ -1,7 +1,7 @@
 import { IGunInstance, ISEAPair } from "gun";
-import type { ActivityPubKeys } from "../interfaces/ActivityPubKeys";
-import { BaseManager } from "./BaseManager";
-import { GunAuthManager } from "./GunAuthManager";
+import type { ActivityPubKeys } from "../../types/ActivityPubKeys";
+import { GunStorage } from "../../core/storage/GunStorage";
+import { GunAuth } from "../../core/auth/GunAuth";
 
 let cryptoModule: any;
 try {
@@ -13,9 +13,9 @@ try {
   cryptoModule = null;
 }
 
-export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
+export class ActivityPub extends GunStorage<ActivityPubKeys> {
   protected storagePrefix = "activitypub";
-  protected authManager: GunAuthManager;
+  protected authManager: GunAuth;
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
     super(gun, APP_KEY_PAIR);
@@ -159,52 +159,37 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
     try {
       const publicKey = this.getCurrentPublicKey();
       
-      // Prima eliminiamo i dati pubblici
-      await this.deletePublicData(this.storagePrefix);
-      
-      // Poi eliminiamo i dati privati
-      await this.deletePrivateData(this.storagePrefix);
-      
-      // Attendi un po' prima di iniziare la verifica
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
-      const verifyDeletion = async (): Promise<boolean> => {
+      // Aumentiamo i tentativi di eliminazione
+      const maxRetries = 5;
+      let retryCount = 0;
+
+      while (retryCount < maxRetries) {
         try {
-          // Verifica dati privati
-          const privateData = await this.getPrivateData(this.storagePrefix);
-          if (privateData && Object.keys(privateData).length > 0) {
-            return false;
+          await this.deletePublicData(this.storagePrefix);
+          await this.deletePrivateData(this.storagePrefix);
+          
+          // Aumentiamo il tempo di attesa per la propagazione
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          
+          // Verifica più robusta
+          const [publicData, privateData] = await Promise.all([
+            this.getPublicData(publicKey, this.storagePrefix),
+            this.getKeys()
+          ]);
+
+          if (!publicData && !privateData?.privateKey) {
+            return;
           }
           
-          // Verifica dati pubblici
-          const publicData = await this.getPublicData(publicKey, this.storagePrefix);
-          if (publicData && Object.keys(publicData).length > 0) {
-            return false;
-          }
-          
-          return true;
+          retryCount++;
         } catch (error) {
-          // Se otteniamo un errore "Keys not found", consideriamo la cancellazione riuscita
-          if (error.message === "Keys not found") {
-            return true;
-          }
-          return false;
+          console.error(`Delete attempt ${retryCount + 1} failed:`, error);
+          retryCount++;
+          await new Promise(resolve => setTimeout(resolve, 3000));
         }
-      };
-
-      // Verifica con timeout più lungo
-      const startTime = Date.now();
-      const timeout = 60000; // 60 secondi
-      const interval = 2000; // 2 secondi tra i tentativi
-
-      while (Date.now() - startTime < timeout) {
-        if (await verifyDeletion()) {
-          return;
-        }
-        await new Promise(resolve => setTimeout(resolve, interval));
       }
       
-      throw new Error("Failed to verify keys deletion");
+      throw new Error("Failed to verify keys deletion after multiple attempts");
     } catch (error) {
       console.error("Error deleting keys:", error);
       throw error;
