@@ -11,7 +11,7 @@ interface ExtendedWallet extends Wallet {
 
 export class EthereumHDKeyVault extends GunStorage<WalletData> {
   protected storagePrefix = "wallets";
-  private hdNode?: HDNodeWallet;
+  private hdNode?: HDNodeWallet; // Nodo master (depth 0)
   private static readonly MNEMONIC_PATH = 'hd_mnemonic';
   private static readonly ACCOUNTS_PATH = 'hd_accounts';
 
@@ -45,10 +45,8 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
         await this.savePrivateDataWithRetry(mnemonicData, EthereumHDKeyVault.MNEMONIC_PATH);
       }
       
-      // Ottieni il nodo master (root) a partire dalla seed phrase, specificando "m"
-      const master = HDNodeWallet.fromPhrase(phrase, "m");
-      // Deriva il nodo base per gli account Ethereum: "m/44'/60'/0'/0"
-      this.hdNode = master.derivePath("m/44'/60'/0'/0");
+      // Salva il nodo master ottenuto dalla seed phrase (depth 0)
+      this.hdNode = HDNodeWallet.fromPhrase(phrase);
       return this.hdNode;
     } catch (error) {
       console.error("Error in getHdRoot:", error);
@@ -58,8 +56,8 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
 
   private deriveHDPath(root: HDNodeWallet, index: number): HDNodeWallet {
     try {
-      // Deriva il nodo utilizzando un percorso relativo (non iniziare con "m")
-      return root.derivePath(`${index}`);
+      // Deriva il nodo usando il percorso assoluto completo a partire dal nodo master
+      return root.derivePath(`m/44'/60'/0'/0/${index}`);
     } catch (error) {
       console.error("Error deriving HD path:", error);
       throw error;
@@ -98,11 +96,11 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
     await this.ensureAuthenticated();
     
     try {
-      const root = await this.getHdRoot(password);
+      const master = await this.getHdRoot(password);
       const index = await this.getNextAccountIndex();
       
-      // Deriva il wallet all'indice specificato dal nodo base
-      const hdWallet = this.deriveHDPath(root, index);
+      // Deriva il wallet all'indice specificato (es. "m/44'/60'/0'/0/0")
+      const hdWallet = this.deriveHDPath(master, index);
       
       const walletData: WalletData = {
         address: hdWallet.address,
@@ -131,11 +129,11 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
     await this.ensureAuthenticated();
 
     try {
-      const root = await this.getHdRoot();
+      const master = await this.getHdRoot();
       const accounts = (await this.getPrivateData(EthereumHDKeyVault.ACCOUNTS_PATH)) || {};
 
       return Object.values(accounts).map((a: any) => {
-        const hdWallet = this.deriveHDPath(root, a.index);
+        const hdWallet = this.deriveHDPath(master, a.index);
         return this.extendWallet(hdWallet, a.index, a.timestamp);
       });
     } catch (error) {
@@ -155,8 +153,8 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
 
   public async getWallet(): Promise<Wallet> {
     await this.ensureAuthenticated();
-    const root = await this.getHdRoot();
-    const hdWallet = this.deriveHDPath(root, 0);
+    const master = await this.getHdRoot();
+    const hdWallet = this.deriveHDPath(master, 0);
     return new Wallet(hdWallet.privateKey);
   }
 
@@ -167,8 +165,8 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
   }
 
   public async getWalletByIndex(index: number): Promise<Wallet> {
-    const root = await this.getHdRoot();
-    const hdWallet = this.deriveHDPath(root, index);
+    const master = await this.getHdRoot();
+    const hdWallet = this.deriveHDPath(master, index);
     return new Wallet(hdWallet.privateKey);
   }
 

@@ -68,7 +68,7 @@ npm install @scobru/shogun
 ```typescript
 import { Shogun } from '@scobru/shogun'
 
-// Initialize Shogun with Gun configuration
+// Inizializza Shogun con la configurazione Gun
 const shogun = new Shogun({
   peers: ['https://your-gun-peer.com/gun'],
   localStorage: false,
@@ -76,40 +76,30 @@ const shogun = new Shogun({
   multicast: false
 }, APP_KEY_PAIR);
 
-// Get required managers and services
-const walletManager = shogun.getWalletManager();
-const webAuthnService = shogun.getWebAuthnService();
-const activityPubManager = shogun.getActivityPubManager();
-const micropaymentManager = shogun.getMicropaymentManager();
-const chatManager = shogun.getChatManager();
-
-// Create account
+// Crea account
 try {
-  await walletManager.createAccount('username', 'password');
+  await shogun.createAccount('username', 'password');
 } catch (error) {
   console.error('Account creation failed:', error);
 }
 
 // Login
-const pubKey = await walletManager.login('username', 'password');
+const pubKey = await shogun.login('username', 'password');
 
-// Create HD wallet
-const hdVault = walletManager.getHDKeyVault();
-const wallet = await hdVault.createAccount();
+// Crea HD wallet
+const wallet = await shogun.createHDWallet();
 
 console.log('Address:', wallet.address);
 console.log('HD Path:', wallet.entropy);
 
-// Create stealth address
-const stealth = walletManager.getStealthChain();
-const stealthAddress = await stealth.generateStAdd(recipientPubKey);
+// Crea stealth address
+const stealthAddress = await shogun.generateStealthAddress(recipientPubKey);
 
-// Setup payment channel
-const payments = micropaymentManager.createChannel(relayAddress, deposit);
+// Configura canale di pagamento
+const channel = await shogun.createPaymentChannel(relayAddress, deposit);
 
-// Start chat
-const chat = chatManager.createInstance();
-await chat.join('username', 'password', 'Display Name');
+// Avvia chat
+await shogun.joinChat('username', 'password', 'Display Name');
 ```
 
 ### Module-specific Examples
@@ -247,17 +237,20 @@ npm test -- --grep "Chat"
 
 ```typescript
 Shogun (Main Class)
-├── WalletManager
-│   ├── EthereumHDKeyVault
-│   ├── StealthChain
+├── Authentication
+│   ├── WebAuthn
+│   └── GunAuth
+├── Wallet
+│   ├── HDWallet
+│   ├── StealthAddresses
 │   └── JsonRpcConnector
-├── CommunicationManager
-│   ├── UnstoppableChat
+├── Communication
+│   ├── Chat
 │   └── ActivityPub
-├── PaymentManager
-│   ├── MicropaymentAPI
-│   └── PaymentChannel
-└── StorageManager
+├── Payments
+│   ├── Micropayments
+│   └── PaymentChannels
+└── Storage
     └── GunStorage
 ```
 
@@ -266,10 +259,10 @@ Shogun (Main Class)
 ```mermaid
 graph TD
     A[User] --> B[Shogun]
-    B --> C[WalletManager]
-    B --> D[CommunicationManager]
-    B --> E[PaymentManager]
-    C --> F[GunStorage]
+    B --> C[Wallet]
+    B --> D[Communication]
+    B --> E[Payments]
+    C --> F[Storage]
     D --> F
     E --> F
     F --> G[GunDB]
