@@ -1,6 +1,6 @@
 import { IGunInstance, ISEAPair, SEA } from "gun";
 import { WalletData, MnemonicData } from "../../types/WalletResult";
-import { ethers, Wallet, HDNodeWallet, Mnemonic, getIndexedAccountPath } from "ethers";
+import { ethers, Wallet, HDNodeWallet, Mnemonic } from "ethers";
 import { GunStorage } from "../../core/storage/GunStorage";
 
 interface ExtendedWallet extends Wallet {
@@ -9,15 +9,9 @@ interface ExtendedWallet extends Wallet {
   timestamp: number;
 }
 
-/**
- * EthereumHDKeyVault gestisce un HD wallet Ethereum utilizzando ethers.js e Gun come storage.
- * - Salva il mnemonic in Gun
- * - Deriva account HD in stile BIP44 (oppure in stile MetaMask, se vuoi usare getIndexedAccountPath)
- */
 export class EthereumHDKeyVault extends GunStorage<WalletData> {
   protected storagePrefix = "wallets";
-  // hdNode ora sarà il nodo root (depth=0)
-  private hdNode?: HDNodeWallet;
+  private hdNode?: HDNodeWallet; // Nodo master (depth=0)
   private static readonly MNEMONIC_PATH = "hd_mnemonic";
   private static readonly ACCOUNTS_PATH = "hd_accounts";
 
@@ -26,7 +20,8 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
   }
 
   /**
-   * Recupera o genera il mnemonic e restituisce il nodo root (depth=0)
+   * Recupera o genera il mnemonic e restituisce il nodo HD master (depth=0).
+   * Se il nodo creato non è a depth 0, risale fino a raggiungere il nodo master.
    */
   private async getHdRoot(password?: string): Promise<HDNodeWallet> {
     if (this.hdNode) return this.hdNode;
@@ -53,8 +48,14 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
         await this.savePrivateDataWithRetry(mnemonicData, EthereumHDKeyVault.MNEMONIC_PATH);
       }
 
-      // Creiamo il nodo root specificando il path "m" per avere depth=0
-      this.hdNode = HDNodeWallet.fromPhrase(phrase, "m");
+      // Creiamo il nodo HD specificando "m" per forzare il nodo master
+      let node = HDNodeWallet.fromPhrase(phrase, "m");
+
+      // Se il nodo non è a depth 0, risaliamo tramite .parent fino a raggiungere la radice
+      while (node.depth > 0 && node.parent) {
+        node = node.parent;
+      }
+      this.hdNode = node;
       return this.hdNode;
     } catch (error) {
       console.error("Error in getHdRoot:", error);
@@ -103,9 +104,6 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
     }
   }
 
-  /**
-   * Crea un nuovo account HD all'indice successivo.
-   */
   public async createAccount(password?: string): Promise<WalletData> {
     await this.ensureAuthenticated();
 
@@ -113,7 +111,7 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
       const master = await this.getHdRoot(password);
       const index = await this.getNextAccountIndex();
 
-      // Deriva il wallet all'indice specificato (es. "m/44'/60'/0'/0/0")
+      // Deriviamo il wallet all'indice specificato (es. "m/44'/60'/0'/0/0")
       const hdWallet = this.deriveHDPath(master, index);
 
       const walletData: WalletData = {
@@ -124,7 +122,7 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
         timestamp: Date.now()
       };
 
-      // Salva i dati dell'account
+      // Salviamo i dati dell'account
       const accounts = (await this.getPrivateData(EthereumHDKeyVault.ACCOUNTS_PATH)) || {};
       accounts[walletData.address.toLowerCase()] = walletData;
       await this.savePrivateDataWithRetry(accounts, EthereumHDKeyVault.ACCOUNTS_PATH);
@@ -132,16 +130,11 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
       return walletData;
     } catch (error) {
       console.error("Error creating account:", error);
-      if (error instanceof Error) {
-        throw error;
-      }
+      if (error instanceof Error) throw error;
       throw new Error("Failed to create account");
     }
   }
 
-  /**
-   * Restituisce un array di tutti i wallet HD (ExtendedWallet) salvati.
-   */
   public async getWallets(): Promise<ExtendedWallet[]> {
     await this.ensureAuthenticated();
 
@@ -155,9 +148,7 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
       });
     } catch (error) {
       console.error("Error getting wallets:", error);
-      if (error instanceof Error) {
-        throw error;
-      }
+      if (error instanceof Error) throw error;
       throw new Error("Failed to retrieve wallets");
     }
   }
@@ -168,9 +159,6 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
     return new Wallet(pk);
   }
 
-  /**
-   * Restituisce il primo wallet HD (indice 0).
-   */
   public async getWallet(): Promise<Wallet> {
     await this.ensureAuthenticated();
     const master = await this.getHdRoot();
@@ -192,17 +180,11 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
     return new Wallet(hdWallet.privateKey);
   }
 
-  /**
-   * Restituisce l'indice successivo per derivare un nuovo account HD.
-   */
   private async getNextAccountIndex(): Promise<number> {
     const accounts = (await this.getPrivateData(EthereumHDKeyVault.ACCOUNTS_PATH)) || {};
     return Object.keys(accounts).length;
   }
 
-  /**
-   * Estende un HDNodeWallet in un ExtendedWallet aggiungendo index, timestamp e il percorso (entropy).
-   */
   private extendWallet(wallet: HDNodeWallet, index: number, timestamp: number): ExtendedWallet {
     const baseWallet = new Wallet(wallet.privateKey);
     return {
@@ -219,9 +201,6 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
     await this.savePrivateDataWithRetry(accounts, EthereumHDKeyVault.ACCOUNTS_PATH);
   }
 
-  /**
-   * Salva i dati in Gun con retry, in caso di errori temporanei.
-   */
   private async savePrivateDataWithRetry(
     data: any,
     path: string,
@@ -241,18 +220,12 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
     throw lastError || new Error(`Failed to save data after ${maxRetries} attempts`);
   }
 
-  /**
-   * Garantisce che l'utente sia autenticato.
-   */
   private async ensureAuthenticated(): Promise<void> {
     if (!this.user.is) {
       throw new Error("User not authenticated");
     }
   }
 
-  /**
-   * Converte la private key Gun in una chiave Ethereum (usando keccak256).
-   */
   public convertToEthPk(gunPrivateKey: string): string {
     if (!gunPrivateKey || typeof gunPrivateKey !== "string") {
       throw new Error("Chiave privata Gun non valida");
@@ -268,9 +241,6 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
     }
   }
 
-  /**
-   * Elimina un wallet in base all'address dal database Gun.
-   */
   public async deleteWallet(address: string): Promise<void> {
     try {
       await this.ensureAuthenticated();
