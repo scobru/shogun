@@ -1,3 +1,7 @@
+---
+icon: centercode
+---
+
 # Core
 
 {% content-ref url="./" %}

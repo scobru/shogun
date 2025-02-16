@@ -1,5 +1,5 @@
 ---
-icon: hand-wave
+icon: ethereum
 ---
 
 # SHOGUN - Decentralized Wallet Manager
