@@ -20,39 +20,49 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
   }
 
   private async getHdRoot(password?: string): Promise<HDNodeWallet> {
+    // Se abbiamo già salvato (in memoria) il nodo root, restituiamolo
     if (this.hdNode) return this.hdNode;
-
+  
     try {
+      // Recupera eventuale mnemonic salvato
       const rawData = await this.getPrivateData(EthereumHDKeyVault.MNEMONIC_PATH);
       const savedMnemonic = rawData as unknown as MnemonicData;
       let phrase: string;
-
+  
       if (savedMnemonic?.phrase) {
+        // Se abbiamo un mnemonic salvato, controlliamo che sia valido
         if (!Mnemonic.isValidMnemonic(savedMnemonic.phrase)) {
           throw new Error("Invalid saved mnemonic");
         }
         phrase = savedMnemonic.phrase;
+  
       } else {
+        // Altrimenti, ne generiamo uno nuovo
         const entropy = ethers.randomBytes(16);
         const mnemonic = Mnemonic.fromEntropy(entropy, password, ethers.wordlists.en);
         phrase = mnemonic.phrase;
         
+        // Salviamo il mnemonic
         const mnemonicData: MnemonicData = {
-          phrase: phrase,
+          phrase,
           timestamp: Date.now()
         };
-        
         await this.savePrivateDataWithRetry(mnemonicData, EthereumHDKeyVault.MNEMONIC_PATH);
       }
       
-      // Salva il nodo master ottenuto dalla seed phrase (depth 0)
+      // Creiamo il nodo master (root) dalla seed phrase.
+      // Questo nodo avrà depth=0, quindi potremo derivare percorsi assoluti "m/..."
       this.hdNode = HDNodeWallet.fromPhrase(phrase);
+  
+      // Restituiamo il nodo root
       return this.hdNode;
+  
     } catch (error) {
       console.error("Error in getHdRoot:", error);
       throw error;
     }
   }
+  
 
   private deriveHDPath(root: HDNodeWallet, index: number): HDNodeWallet {
     try {
