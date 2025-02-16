@@ -1,53 +1,18 @@
-# WebauthnAuth
+# WebauthnAuth API Reference
 
-The `WebauthnAuth` class provides a secure authentication layer using WebAuthn (Web Authentication) standard, enabling passwordless authentication with biometric and hardware security keys while integrating with GunDB for secure data storage.
+`WebauthnAuth` fornisce un layer di autenticazione sicuro utilizzando lo standard WebAuthn, abilitando l'autenticazione senza password con chiavi biometriche e di sicurezza hardware.
 
-## Table of Contents
-- [Installation](#installation)
-- [Usage](#usage)
-- [API Reference](#api-reference)
-- [Examples](#examples)
-- [Security Features](#security-features)
-
-## Installation
-
-```bash
-npm install @shogun/blockchain
-```
-
-## Usage
-
-```typescript
-import { WebauthnAuth } from '@hedgehog/blockchain';
-import Gun from 'gun';
-
-// Initialize GunDB
-const gun = Gun();
-const APP_KEY_PAIR = {...}; // Your SEA key pair
-
-// Create WebAuthn instance
-const webAuth = new WebauthnAuth(gun, APP_KEY_PAIR);
-
-// Check if WebAuthn is supported
-if (webAuth.isSupported()) {
-  console.log("WebAuthn is supported on this device");
-}
-```
-
-## API Reference
-
-### Constructor
+## Costruttore
 
 ```typescript
 constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair)
 ```
 
-Creates a new instance of WebauthnAuth.
+Crea una nuova istanza di WebauthnAuth.
 
-### Authentication Methods
+## Metodi di Autenticazione
 
-#### createAccount
-
+### createAccount
 ```typescript
 public async createAccount(
   username: string,
@@ -55,31 +20,23 @@ public async createAccount(
   deviceName?: string
 ): Promise<Record<string, any>>
 ```
+Crea un nuovo account WebAuthn o aggiunge un nuovo dispositivo.
+- `username`: Nome utente per l'account
+- `isNewDevice`: Se questo è un nuovo dispositivo per un account esistente
+- `deviceName`: Nome personalizzato opzionale per il dispositivo
+- **Ritorna**: Risultato della creazione dell'account
+- **Errori**: Se il nome utente non è valido o la creazione fallisce
 
-Creates a new WebAuthn account or adds a new device to an existing account.
-
-- **Parameters:**
-  - `username`: Username for the account
-  - `isNewDevice`: Whether this is a new device for an existing account
-  - `deviceName`: Optional custom name for the device
-- **Returns:** Promise with account creation result
-- **Throws:** `Error` if username is invalid or account creation fails
-
-#### authenticateUser
-
+### authenticateUser
 ```typescript
 public async authenticateUser(username: string): Promise<WebAuthnResult>
 ```
+Autentica un utente usando le credenziali WebAuthn.
+- `username`: Nome utente da autenticare
+- **Ritorna**: Risultato dell'autenticazione con credenziali
+- **Errori**: Se l'autenticazione fallisce
 
-Authenticates a user using WebAuthn credentials.
-
-- **Parameters:**
-  - `username`: Username to authenticate
-- **Returns:** Promise with authentication result including credentials
-- **Throws:** `Error` if authentication fails
-
-#### generateCredentials
-
+### generateCredentials
 ```typescript
 public async generateCredentials(
   username: string,
@@ -87,216 +44,58 @@ public async generateCredentials(
   deviceName?: string
 ): Promise<WebAuthnResult>
 ```
+Genera nuove credenziali WebAuthn.
+- `username`: Nome utente per la generazione delle credenziali
+- `isNewDevice`: Se questo è un nuovo dispositivo
+- `deviceName`: Nome dispositivo personalizzato opzionale
+- **Ritorna**: Credenziali generate
+- **Errori**: Se la generazione fallisce
 
-Generates new WebAuthn credentials for a user.
+## Gestione Dispositivi
 
-- **Parameters:**
-  - `username`: Username for credential generation
-  - `isNewDevice`: Whether this is a new device
-  - `deviceName`: Optional custom device name
-- **Returns:** Promise with generated credentials
-- **Throws:** `Error` if credential generation fails
-
-### Device Management Methods
-
-#### getRegisteredDevices
-
+### getRegisteredDevices
 ```typescript
 public async getRegisteredDevices(username: string): Promise<DeviceCredential[]>
 ```
+Recupera tutti i dispositivi registrati per un utente.
+- `username`: Nome utente da controllare
+- **Ritorna**: Array di dispositivi registrati
 
-Retrieves all registered devices for a user.
-
-- **Parameters:**
-  - `username`: Username to check
-- **Returns:** Promise with array of registered devices
-
-#### removeDevice
-
+### removeDevice
 ```typescript
 public async removeDevice(
   username: string,
   credentialId: string
 ): Promise<boolean>
 ```
+Rimuove un dispositivo registrato.
+- `username`: Nome utente dell'account
+- `credentialId`: ID della credenziale da rimuovere
+- **Ritorna**: `true` se il dispositivo è stato rimosso
 
-Removes a registered device.
-
-- **Parameters:**
-  - `username`: Username of the account
-  - `credentialId`: ID of the credential to remove
-- **Returns:** Promise resolving to true if device was removed
-
-#### verifyCredential
-
+### verifyCredential
 ```typescript
 public async verifyCredential(
   credentialId: string
 ): Promise<WebAuthnVerifyResult>
 ```
+Verifica una credenziale WebAuthn.
+- `credentialId`: ID della credenziale da verificare
+- **Ritorna**: Risultato della verifica
+- **Errori**: Se la verifica fallisce
 
-Verifies a WebAuthn credential.
+## Metodi di Utilità
 
-- **Parameters:**
-  - `credentialId`: ID of the credential to verify
-- **Returns:** Promise with verification result
-- **Throws:** `Error` if verification fails
-
-### Utility Methods
-
-#### isSupported
-
+### isSupported
 ```typescript
 public isSupported(): boolean
 ```
+Verifica se WebAuthn è supportato nell'ambiente corrente.
+- **Ritorna**: `true` se WebAuthn è supportato
 
-Checks if WebAuthn is supported in the current environment.
-
-- **Returns:** `true` if WebAuthn is supported
-
-#### getPairFromGun
-
+### getPairFromGun
 ```typescript
 public getPairFromGun(): GunKeyPair
 ```
-
-Gets the current GunDB key pair.
-
-- **Returns:** Current GunDB key pair
-
-## Examples
-
-### Creating a New Account
-
-```typescript
-try {
-  const result = await webAuth.createAccount("username");
-  if (result.success) {
-    console.log("Account created successfully");
-    console.log("Device ID:", result.deviceInfo.deviceId);
-  }
-} catch (error) {
-  console.error("Error creating account:", error);
-}
-```
-
-### Adding a New Device
-
-```typescript
-try {
-  const result = await webAuth.createAccount("username", true, "My iPhone");
-  if (result.success) {
-    console.log("New device added successfully");
-    console.log("Device info:", result.deviceInfo);
-  }
-} catch (error) {
-  console.error("Error adding device:", error);
-}
-```
-
-### Authenticating a User
-
-```typescript
-try {
-  const result = await webAuth.authenticateUser("username");
-  if (result.success) {
-    console.log("Authentication successful");
-    console.log("Credential ID:", result.credentialId);
-  }
-} catch (error) {
-  console.error("Authentication failed:", error);
-}
-```
-
-### Managing Devices
-
-```typescript
-// List devices
-try {
-  const devices = await webAuth.getRegisteredDevices("username");
-  devices.forEach(device => {
-    console.log(`Device: ${device.name} (${device.deviceId})`);
-    console.log(`Platform: ${device.platform}`);
-    console.log(`Last used: ${new Date(device.timestamp)}`);
-  });
-} catch (error) {
-  console.error("Error listing devices:", error);
-}
-
-// Remove device
-try {
-  const removed = await webAuth.removeDevice("username", "credential-id");
-  if (removed) {
-    console.log("Device removed successfully");
-  }
-} catch (error) {
-  console.error("Error removing device:", error);
-}
-```
-
-## Security Features
-
-The WebauthnAuth class implements several security measures:
-
-1. **Strong Authentication**
-   - Biometric authentication support
-   - Hardware security key support
-   - Platform authenticator integration
-   - User verification requirement
-
-2. **Credential Management**
-   - Secure credential generation
-   - Device-specific credentials
-   - Credential verification
-   - Safe credential storage
-
-3. **Device Security**
-   - Device identification
-   - Platform verification
-   - Multiple device support
-   - Device removal capability
-
-4. **Data Protection**
-   - Challenge-based authentication
-   - Secure key generation
-   - Salt-based credential derivation
-   - Encrypted storage integration
-
-5. **Error Handling**
-   - Timeout management
-   - Operation abortion capability
-   - Secure error messaging
-   - Retry mechanisms
-
-6. **Username Security**
-   - Length validation
-   - Character restriction
-   - Existing username verification
-   - Case sensitivity handling
-
-## Technical Details
-
-### WebAuthn Implementation
-
-The implementation follows the WebAuthn Level 2 specification and includes:
-- Platform authenticator preference
-- User verification requirement
-- Resident key requirement
-- ES256 and RS256 algorithm support
-- Attestation direct requirement
-
-### Device Identification
-
-Each device is uniquely identified using:
-- Platform information
-- Timestamp
-- Random component
-- Device name (custom or auto-generated)
-
-### Timeout Handling
-
-All WebAuthn operations have a 60-second timeout with:
-- Automatic operation abortion
-- Resource cleanup
-- Clear error messaging
-- State reset capability 
+Ottiene la coppia di chiavi GunDB corrente.
+- **Ritorna**: Coppia di chiavi GunDB corrente 

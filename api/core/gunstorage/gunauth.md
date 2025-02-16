@@ -1,284 +1,126 @@
-# GunAuth
+# GunAuth API Reference
 
-The `GunAuth` class provides a secure authentication layer for GunDB, handling user management, session control, and cryptographic operations integrated with GunDB's SEA (Security, Encryption, Authorization) system.
+`GunAuth` fornisce un layer di autenticazione sicuro per GunDB, gestendo utenti, sessioni e operazioni crittografiche integrate con il sistema SEA di GunDB.
 
-## Table of Contents
-- [Installation](#installation)
-- [Usage](#usage)
-- [API Reference](#api-reference)
-- [Examples](#examples)
-- [Security Features](#security-features)
-
-## Installation
-
-```bash
-npm install @shogun/blockchain
-```
-
-## Usage
-
-```typescript
-import { GunAuth } from '@hedgehog/blockchain';
-import Gun from 'gun';
-
-// Initialize GunDB
-const gun = Gun();
-const APP_KEY_PAIR = {...}; // Your SEA key pair
-
-// Create auth instance
-const auth = new GunAuth(gun, APP_KEY_PAIR);
-```
-
-## API Reference
-
-### Constructor
+## Costruttore
 
 ```typescript
 constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair)
 ```
 
-Creates a new instance of GunAuth.
+Crea una nuova istanza di GunAuth.
 
-### Authentication Methods
+## Metodi di Autenticazione
 
-#### createAccount
-
+### createAccount
 ```typescript
 public async createAccount(alias: string, passphrase: string): Promise<GunKeyPair>
 ```
+Crea un nuovo account utente.
+- `alias`: Nome utente per il nuovo account
+- `passphrase`: Password per la crittografia dell'account
+- **Ritorna**: Coppia di chiavi GunDB generata
+- **Errori**: Se il nome utente è già in uso o la creazione fallisce
 
-Creates a new user account.
-
-- **Parameters:**
-  - `alias`: Username for the new account
-  - `passphrase`: Password for account encryption
-- **Returns:** Promise with the generated GunDB key pair
-- **Throws:** 
-  - `Error` if username is already taken
-  - `Error` if account creation fails
-
-#### login
-
+### login
 ```typescript
 public async login(alias: string, passphrase: string): Promise<string | null>
 ```
+Autentica un utente con le sue credenziali.
+- `alias`: Nome utente
+- `passphrase`: Password
+- **Ritorna**: Chiave pubblica dell'utente o null
+- **Errori**: Per credenziali non valide o errori di autenticazione
 
-Authenticates a user with their credentials.
-
-- **Parameters:**
-  - `alias`: Username
-  - `passphrase`: Password
-- **Returns:** Promise with user's public key or null
-- **Throws:** `Error` for invalid credentials or authentication failures
-
-#### logout
-
+### logout
 ```typescript
 public logout(): void
 ```
+Disconnette l'utente corrente e cancella la sessione.
 
-Logs out the current user and clears the session.
-
-#### checkUser
-
+### checkUser
 ```typescript
 public async checkUser(username: string, password: string): Promise<string>
 ```
+Verifica se un nome utente è disponibile e crea un account se lo è.
+- `username`: Nome utente da verificare
+- `password`: Password per il nuovo account
+- **Ritorna**: Chiave pubblica dell'utente creato
+- **Errori**: Se il nome utente è già in uso o la creazione fallisce
 
-Verifies if a username is available and creates an account if it is.
+## Gestione Dati
 
-- **Parameters:**
-  - `username`: Username to check
-  - `password`: Password for new account
-- **Returns:** Promise with the public key of created user
-- **Throws:** `Error` if username is taken or creation fails
-
-### Data Management Methods
-
-#### savePrivateData
-
+### savePrivateData
 ```typescript
 public async savePrivateData(data: any, path: string): Promise<boolean>
 ```
+Memorizza dati privati dell'utente in modo sicuro.
+- `data`: Dati da memorizzare
+- `path`: Percorso di memorizzazione
+- **Ritorna**: `true` se il salvataggio ha successo
+- **Errori**: Se l'utente non è autenticato o il salvataggio fallisce
 
-Securely stores private user data.
-
-- **Parameters:**
-  - `data`: Data to store
-  - `path`: Storage path
-- **Returns:** Promise resolving to true if save successful
-- **Throws:** `Error` if user is not authenticated or save fails
-
-#### getPrivateData
-
+### getPrivateData
 ```typescript
 public async getPrivateData(path: string): Promise<any>
 ```
+Recupera dati privati dell'utente.
+- `path`: Percorso di memorizzazione
+- **Ritorna**: Dati recuperati
+- **Errori**: Se l'utente non è autenticato
 
-Retrieves private user data.
-
-- **Parameters:**
-  - `path`: Storage path
-- **Returns:** Promise with retrieved data
-- **Throws:** `Error` if user is not authenticated
-
-#### savePublicData
-
+### savePublicData
 ```typescript
 public async savePublicData(data: any, path: string): Promise<boolean>
 ```
+Memorizza dati pubblici dell'utente.
+- `data`: Dati da memorizzare
+- `path`: Percorso di memorizzazione
+- **Ritorna**: `true` se il salvataggio ha successo
+- **Errori**: Se l'utente non è autenticato
 
-Stores public user data.
-
-- **Parameters:**
-  - `data`: Data to store
-  - `path`: Storage path
-- **Returns:** Promise resolving to true if save successful
-- **Throws:** `Error` if user is not authenticated
-
-#### getPublicData
-
+### getPublicData
 ```typescript
 public async getPublicData(publicKey: string, path: string): Promise<any>
 ```
+Recupera dati pubblici di qualsiasi utente.
+- `publicKey`: Chiave pubblica dell'utente target
+- `path`: Percorso di memorizzazione
+- **Ritorna**: Dati recuperati
+- **Errori**: Se l'utente non è autenticato
 
-Retrieves public data of any user.
+## Gestione Chiavi
 
-- **Parameters:**
-  - `publicKey`: Public key of target user
-  - `path`: Storage path
-- **Returns:** Promise with retrieved data
-- **Throws:** `Error` if user is not authenticated
-
-### Key Management Methods
-
-#### exportGunKeyPair
-
+### exportGunKeyPair
 ```typescript
 public async exportGunKeyPair(): Promise<string>
 ```
+Esporta la coppia di chiavi dell'utente corrente.
+- **Ritorna**: Coppia di chiavi in formato stringa
+- **Errori**: Se l'utente non è autenticato
 
-Exports the current user's key pair.
-
-- **Returns:** Promise with stringified key pair
-- **Throws:** `Error` if user is not authenticated
-
-#### importGunKeyPair
-
+### importGunKeyPair
 ```typescript
 public async importGunKeyPair(keyPairJson: string): Promise<string>
 ```
+Importa e autentica con una coppia di chiavi.
+- `keyPairJson`: Coppia di chiavi in formato stringa
+- **Ritorna**: Chiave pubblica
+- **Errori**: Per coppia di chiavi non valida o errori di importazione
 
-Imports and authenticates with a key pair.
+## Metodi di Utilità
 
-- **Parameters:**
-  - `keyPairJson`: Stringified key pair
-- **Returns:** Promise with public key
-- **Throws:** `Error` for invalid key pair or import failure
-
-### Utility Methods
-
-#### isAuthenticated
-
+### isAuthenticated
 ```typescript
 public isAuthenticated(): boolean
 ```
+Verifica se un utente è attualmente autenticato.
+- **Ritorna**: `true` se l'utente è autenticato, `false` altrimenti
 
-Checks if a user is currently authenticated.
-
-- **Returns:** `true` if user is authenticated, `false` otherwise
-
-#### exists
-
+### exists
 ```typescript
 public async exists(alias: string): Promise<boolean>
 ```
-
-Checks if a username is taken.
-
-- **Parameters:**
-  - `alias`: Username to check
-- **Returns:** Promise resolving to true if username exists
-
-## Examples
-
-### Creating a New Account
-
-```typescript
-try {
-  const keyPair = await auth.createAccount("username", "password123");
-  console.log("Account created successfully:", keyPair.pub);
-} catch (error) {
-  console.error("Error creating account:", error);
-}
-```
-
-### User Login
-
-```typescript
-try {
-  const publicKey = await auth.login("username", "password123");
-  if (publicKey) {
-    console.log("Login successful. Public key:", publicKey);
-  }
-} catch (error) {
-  console.error("Login failed:", error);
-}
-```
-
-### Storing Private Data
-
-```typescript
-try {
-  const data = { secret: "my private data" };
-  await auth.savePrivateData(data, "secrets/personal");
-  console.log("Data saved successfully");
-} catch (error) {
-  console.error("Error saving data:", error);
-}
-```
-
-### Exporting/Importing Keys
-
-```typescript
-// Export keys
-try {
-  const keyPairJson = await auth.exportGunKeyPair();
-  console.log("Exported key pair:", keyPairJson);
-  
-  // Import keys
-  const publicKey = await auth.importGunKeyPair(keyPairJson);
-  console.log("Imported and authenticated with key pair:", publicKey);
-} catch (error) {
-  console.error("Key operation failed:", error);
-}
-```
-
-## Security Features
-
-The GunAuth class implements several security measures:
-
-1. **Session Management**
-   - Automatic session cleanup on logout
-   - Authentication state verification
-   - Timeout handling for operations
-
-2. **Data Protection**
-   - SEA encryption for private data
-   - Public/private data separation
-   - Secure key pair handling
-
-3. **Error Handling**
-   - Retry mechanisms for network issues
-   - Validation of all cryptographic operations
-   - Secure error messages
-
-4. **State Management**
-   - Safe state reset procedures
-   - Authentication state tracking
-   - Concurrent operation handling
-
-5. **Data Integrity**
-   - Verification of saved data
-   - Multiple save attempts for reliability
-   - Data comparison checks 
+Verifica se un nome utente è già in uso.
+- `alias`: Nome utente da verificare
+- **Ritorna**: `true` se il nome utente esiste 

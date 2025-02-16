@@ -1,180 +1,72 @@
-# JsonRpcConnector
+# JsonRpcConnector API Reference
 
-The `JsonRpcConnector` is a JSON-RPC connector for Ethereum blockchain integration that provides a secure interaction layer with GunDB for wallet management, authentication, and cryptographic operations.
+`JsonRpcConnector` fornisce un connettore JSON-RPC per l'integrazione con la blockchain Ethereum, gestendo l'autenticazione e le operazioni crittografiche.
 
-## Table of Contents
-- [Installation](#installation)
-- [Usage](#usage)
-- [API Reference](#api-reference)
-- [Examples](#examples)
-
-## Installation
-
-```bash
-npm install @shogun/blockchain
-```
-
-## Usage
-
-```typescript
-import { JsonRpcConnector } from '@shogun/blockchain';
-import Gun from 'gun';
-
-// Initialize GunDB
-const gun = Gun();
-const APP_KEY_PAIR = {...}; // Your SEA key pair
-
-// Create connector instance
-const connector = new JsonRpcConnector(gun, APP_KEY_PAIR);
-```
-
-## API Reference
-
-### Constructor
+## Costruttore
 
 ```typescript
 constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair)
 ```
 
-Creates a new instance of JsonRpcConnector.
+Crea una nuova istanza di JsonRpcConnector.
 
-### Main Methods
+## Metodi Principali
 
-#### setCustomProvider
-
+### setCustomProvider
 ```typescript
 public setCustomProvider(rpcUrl: string, privateKey: string): void
 ```
+Configura un provider JSON-RPC personalizzato.
+- `rpcUrl`: URL endpoint RPC
+- `privateKey`: Chiave privata del wallet
+- **Errori**: Se i parametri non sono validi
 
-Configures a custom JSON-RPC provider.
-
-- **Parameters:**
-  - `rpcUrl`: RPC endpoint URL
-  - `privateKey`: Wallet private key
-- **Throws:** `ValidationError` if parameters are invalid
-
-#### getSigner
-
+### getSigner
 ```typescript
 public async getSigner(): Promise<ethers.Signer>
 ```
+Ottiene l'istanza del signer attivo.
+- **Ritorna**: Istanza Signer di Ethers.js
+- **Errori**: Se nessun signer è disponibile
 
-Gets the active signer instance.
-
-- **Returns:** Promise with Ethers.js Signer instance
-- **Throws:** `AuthenticationError` if no signer is available
-
-#### createAccount
-
+### createAccount
 ```typescript
 public async createAccount(): Promise<GunKeyPair>
 ```
+Crea un nuovo account Ethereum.
+- **Ritorna**: Coppia di chiavi generata
+- **Errori**: Se l'autenticazione fallisce o l'operazione va in timeout
 
-Creates a new Ethereum account.
-
-- **Returns:** Promise with the generated key pair
-- **Throws:** 
-  - `AuthenticationError` on authentication failure
-  - `Error` on operation timeout
-
-#### login
-
+### login
 ```typescript
 public async login(): Promise<string>
 ```
+Autentica l'utente con il wallet Ethereum.
+- **Ritorna**: Chiave pubblica dell'utente autenticato
+- **Errori**: Se l'autenticazione fallisce
 
-Authenticates user with Ethereum wallet.
-
-- **Returns:** Promise with authenticated user's public key
-- **Throws:**
-  - `ValidationError` for invalid Ethereum addresses
-  - `AuthenticationError` on authentication failure
-
-#### verifySignature
-
+### verifySignature
 ```typescript
 public async verifySignature(message: string, signature: string): Promise<string>
 ```
+Verifica una firma crittografica.
+- `message`: Messaggio originale firmato
+- `signature`: Firma crittografica
+- **Ritorna**: Indirizzo Ethereum recuperato
+- **Errori**: Se gli input non sono validi
 
-Verifies a cryptographic signature.
-
-- **Parameters:**
-  - `message`: Original signed message
-  - `signature`: Cryptographic signature
-- **Returns:** Promise with recovered Ethereum address
-- **Throws:** `Error` for invalid inputs
-
-### Utility Methods
-
-#### generatePassword
-
+### generatePassword
 ```typescript
 public async generatePassword(signature: string): Promise<string>
 ```
+Genera una password deterministica da una firma.
+- `signature`: Firma crittografica
+- **Ritorna**: Stringa esadecimale di 64 caratteri
+- **Errori**: Se la firma non è valida
 
-Generates a deterministic password from a signature.
-
-- **Parameters:**
-  - `signature`: Cryptographic signature
-- **Returns:** Promise with 64-character hex string
-- **Throws:** `Error` for invalid signatures
-
-#### isMetaMaskAvailable
-
+### isMetaMaskAvailable
 ```typescript
 static isMetaMaskAvailable(): boolean
 ```
-
-Checks if MetaMask is available in the browser.
-
-- **Returns:** `true` if MetaMask is installed and available
-
-## Examples
-
-### Setting up a Custom Provider
-
-```typescript
-const connector = new JsonRpcConnector(gun, APP_KEY_PAIR);
-
-// Configure custom provider with Infura
-connector.setCustomProvider(
-  "https://mainnet.infura.io/v3/YOUR-PROJECT-ID",
-  "0xYOUR-PRIVATE-KEY"
-);
-```
-
-### Creating a New Account
-
-```typescript
-try {
-  const account = await connector.createAccount();
-  console.log("New account created:", account);
-} catch (error) {
-  console.error("Error creating account:", error);
-}
-```
-
-### Login with MetaMask
-
-```typescript
-try {
-  const publicKey = await connector.login();
-  console.log("Successfully logged in. Public key:", publicKey);
-} catch (error) {
-  console.error("Error during login:", error);
-}
-```
-
-### Verifying a Signature
-
-```typescript
-const message = "Message to verify";
-const signature = "0x..."; // message signature
-
-try {
-  const signerAddress = await connector.verifySignature(message, signature);
-  console.log("Signer address:", signerAddress);
-} catch (error) {
-  console.error("Error verifying signature:", error);
-}
-``` 
+Verifica se MetaMask è disponibile nel browser.
+- **Ritorna**: `true` se MetaMask è installato e disponibile 

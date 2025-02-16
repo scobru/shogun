@@ -1,53 +1,18 @@
-# UnstoppableChat
+# UnstoppableChat API Reference
 
-A decentralized chat system built on GunDB that provides secure, encrypted messaging with support for private chats, channels, and announcements. Features user authentication, contact management, and real-time updates.
+`UnstoppableChat` fornisce un sistema di chat decentralizzato basato su GunDB con supporto per chat private, canali e annunci.
 
-## Table of Contents
-- [Overview](#overview)
-- [Installation](#installation)
-- [Features](#features)
-- [API Reference](#api-reference)
-- [Examples](#examples)
-- [Technical Details](#technical-details)
-
-## Overview
-
-UnstoppableChat provides three main communication modes:
-1. Private Chats: Direct encrypted messaging between users
-2. Channels: Group chats with multiple participants
-3. Announcements: Broadcast channels with admin controls
-
-## Installation
-
-```bash
-npm install @hedgehog/blockchain
-```
-
-## Features
-
-- End-to-end encryption
-- Contact management
-- Group channels
-- Announcement channels
-- Real-time updates
-- Offline support
-- RSS feed integration
-- Invite system
-
-## API Reference
-
-### Constructor
+## Costruttore
 
 ```typescript
 constructor(superpeers: any)
 ```
 
-Creates a new UnstoppableChat instance.
+Crea una nuova istanza di UnstoppableChat.
 
-### Authentication Methods
+## Metodi di Autenticazione
 
-#### join
-
+### join
 ```typescript
 async join(
   username: string,
@@ -55,26 +20,20 @@ async join(
   publicName: string
 ): Promise<void>
 ```
+Autentica un utente e configura il suo profilo.
+- `username`: Identificatore unico dell'utente
+- `password`: Password dell'utente
+- `publicName`: Nome visualizzato dell'utente
 
-Authenticates a user and sets up their profile.
-
-- **Parameters:**
-  - `username`: User's unique identifier
-  - `password`: User's password
-  - `publicName`: User's display name
-
-#### logout
-
+### logout
 ```typescript
 async logout(): Promise<void>
 ```
+Disconnette l'utente corrente.
 
-Logs out the current user.
+## Gestione Contatti
 
-### Contact Management
-
-#### addContact
-
+### addContact
 ```typescript
 async addContact(
   username: string,
@@ -82,42 +41,42 @@ async addContact(
   publicName: string
 ): Promise<Contact>
 ```
+Aggiunge un nuovo contatto.
+- `username`: Nome utente del contatto
+- `pubKey`: Chiave pubblica del contatto
+- `publicName`: Nome visualizzato del contatto
+- **Ritorna**: Oggetto contatto
 
-Adds a new contact.
-
-#### removeContact
-
+### removeContact
 ```typescript
 removeContact(pubKey: string): void
 ```
+Rimuove un contatto.
+- `pubKey`: Chiave pubblica del contatto da rimuovere
 
-Removes a contact.
-
-#### loadContacts
-
+### loadContacts
 ```typescript
 async loadContacts(): Promise<{
   on: (cb: (contacts: Contact[]) => void) => void
 }>
 ```
+Carica e sottoscrive agli aggiornamenti dei contatti.
+- **Ritorna**: Sottoscrizione agli aggiornamenti dei contatti
 
-Loads and subscribes to contact updates.
+## Chat Private
 
-### Private Chat Methods
-
-#### sendMessageToContact
-
+### sendMessageToContact
 ```typescript
 async sendMessageToContact(
   pubKey: string,
   msg: string
 ): Promise<void>
 ```
+Invia un messaggio criptato a un contatto.
+- `pubKey`: Chiave pubblica del destinatario
+- `msg`: Messaggio da inviare
 
-Sends an encrypted message to a contact.
-
-#### loadMessagesOfContact
-
+### loadMessagesOfContact
 ```typescript
 async loadMessagesOfContact(
   pubKey: string,
@@ -126,42 +85,42 @@ async loadMessagesOfContact(
   on: (cb: (messages: Message[]) => void) => void
 }>
 ```
+Carica la cronologia chat con un contatto.
+- `pubKey`: Chiave pubblica del contatto
+- `publicName`: Nome visualizzato del contatto
+- **Ritorna**: Sottoscrizione ai messaggi
 
-Loads chat history with a contact.
+## Gestione Canali
 
-### Channel Methods
-
-#### createChannel
-
+### createChannel
 ```typescript
 async createChannel(
   channelName: string,
   isPrivate: boolean
 ): Promise<Channel>
 ```
+Crea un nuovo canale.
+- `channelName`: Nome del canale
+- `isPrivate`: Se il canale è privato
+- **Ritorna**: Oggetto canale
 
-Creates a new channel.
-
-#### leaveChannel
-
+### leaveChannel
 ```typescript
 leaveChannel(channel: Channel): void
 ```
+Abbandona un canale.
+- `channel`: Canale da abbandonare
 
-Leaves a channel.
-
-#### loadChannels
-
+### loadChannels
 ```typescript
 async loadChannels(): Promise<{
   on: (cb: (channels: Channel[]) => void) => void
 }>
 ```
+Carica e sottoscrive agli aggiornamenti dei canali.
+- **Ritorna**: Sottoscrizione ai canali
 
-Loads and subscribes to channel updates.
-
-#### sendMessageToChannel
-
+### sendMessageToChannel
 ```typescript
 async sendMessageToChannel(
   channel: Channel,
@@ -169,13 +128,14 @@ async sendMessageToChannel(
   peerInfo: any
 ): Promise<void>
 ```
+Invia un messaggio a un canale.
+- `channel`: Canale destinatario
+- `msg`: Messaggio da inviare
+- `peerInfo`: Informazioni sul mittente
 
-Sends a message to a channel.
+## Gestione Annunci
 
-### Announcement Methods
-
-#### createAnnouncement
-
+### createAnnouncement
 ```typescript
 async createAnnouncement(
   announcementName: string,
@@ -183,21 +143,22 @@ async createAnnouncement(
   rssLink?: string
 ): Promise<Announcement>
 ```
+Crea un nuovo canale di annunci.
+- `announcementName`: Nome del canale
+- `isPrivate`: Se il canale è privato
+- `rssLink`: Link RSS opzionale
+- **Ritorna**: Oggetto annuncio
 
-Creates a new announcement channel.
-
-#### loadAnnouncements
-
+### loadAnnouncements
 ```typescript
 async loadAnnouncements(): Promise<{
   on: (cb: (announcements: Announcement[]) => void) => void
 }>
 ```
+Carica e sottoscrive agli aggiornamenti degli annunci.
+- **Ritorna**: Sottoscrizione agli annunci
 
-Loads and subscribes to announcement updates.
-
-#### sendMessageToAnnouncement
-
+### sendMessageToAnnouncement
 ```typescript
 async sendMessageToAnnouncement(
   announcement: Announcement,
@@ -205,140 +166,7 @@ async sendMessageToAnnouncement(
   peerInfo: any
 ): Promise<void>
 ```
-
-Sends a message to an announcement channel.
-
-## Examples
-
-### User Authentication
-
-```typescript
-const chat = new UnstoppableChat(['https://your-superpeers.com']);
-
-// Join chat
-await chat.join('username', 'password', 'Display Name');
-
-// Monitor contacts
-chat.loadContacts().then(subscription => {
-  subscription.on(contacts => {
-    console.log('Updated contacts:', contacts);
-  });
-});
-```
-
-### Private Messaging
-
-```typescript
-// Add contact
-await chat.addContact('friend', 'friendPubKey', 'Friend Name');
-
-// Send message
-await chat.sendMessageToContact('friendPubKey', 'Hello!');
-
-// Load chat history
-const messages = await chat.loadMessagesOfContact('friendPubKey', 'Friend Name');
-messages.on(msgs => {
-  console.log('New messages:', msgs);
-});
-```
-
-### Channel Management
-
-```typescript
-// Create channel
-const channel = await chat.createChannel('My Channel', true);
-
-// Send channel message
-await chat.sendMessageToChannel(channel, 'Welcome everyone!', {
-  pubKey: chat.gun.user().is.pub,
-  name: chat.publicName
-});
-
-// Monitor channel messages
-const messages = await chat.loadMessagesOfChannel(channel);
-messages.on(msgs => {
-  console.log('Channel updates:', msgs);
-});
-```
-
-### Announcement Channels
-
-```typescript
-// Create announcement channel
-const announcement = await chat.createAnnouncement(
-  'News Channel',
-  false,
-  'https://news-feed.com/rss'
-);
-
-// Send announcement
-await chat.sendMessageToAnnouncement(announcement, 'Important update!', {
-  pubKey: chat.gun.user().is.pub,
-  name: chat.publicName,
-  action: 'announce'
-});
-```
-
-## Technical Details
-
-### Security Features
-
-1. **Encryption**
-   - End-to-end encryption for private chats
-   - Channel-specific encryption
-   - Secure key management
-   - Public/private key separation
-
-2. **Authentication**
-   - Username validation
-   - Password hashing
-   - Session management
-   - Public key verification
-
-3. **Data Protection**
-   - Message encryption
-   - Metadata protection
-   - Key rotation
-   - Secure storage
-
-### Real-time Features
-
-1. **Subscriptions**
-   - Contact status
-   - Message delivery
-   - Channel updates
-   - Announcement broadcasts
-
-2. **State Management**
-   - Local caching
-   - Conflict resolution
-   - State synchronization
-   - Offline support
-
-### Performance Optimization
-
-1. **Data Loading**
-   - Lazy loading
-   - Pagination support
-   - Cache management
-   - Batch updates
-
-2. **Network Efficiency**
-   - Delta updates
-   - Message compression
-   - Connection pooling
-   - Retry mechanisms
-
-### Best Practices
-
-1. **Error Handling**
-   - Connection recovery
-   - Message retry
-   - State validation
-   - Error reporting
-
-2. **Resource Management**
-   - Memory optimization
-   - Connection pooling
-   - Cache cleanup
-   - Session management 
+Invia un messaggio a un canale di annunci.
+- `announcement`: Canale destinatario
+- `msg`: Messaggio da inviare
+- `peerInfo`: Informazioni sul mittente 
