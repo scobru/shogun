@@ -567,4 +567,191 @@ gun/
                 ├── privateKey (cifrata)
                 ├── entropy
                 └── timestamp
+```
+
+## 🔐 Autenticazione Gun.js
+
+### GunAuthManager
+
+```typescript
+class GunAuthManager extends BaseManager<GunKeyPair>
+```
+
+#### Autenticazione
+
+```typescript
+async createAccount(alias: string, password: string): Promise<GunKeyPair>
+```
+Crea un nuovo account Gun.js.
+- Parametri:
+  - `alias`: Nome utente
+  - `password`: Password dell'utente
+- Ritorna: Coppia di chiavi Gun
+- Lancia: Errore se la creazione fallisce
+
+```typescript
+async login(alias: string, password: string): Promise<string>
+```
+Effettua il login con credenziali.
+- Parametri:
+  - `alias`: Nome utente
+  - `password`: Password dell'utente
+- Ritorna: Chiave pubblica dell'utente
+- Lancia: Errore se l'autenticazione fallisce
+
+```typescript
+logout(): void
+```
+Termina la sessione utente corrente.
+
+#### Gestione Stato
+
+```typescript
+isAuthenticated(): boolean
+```
+Verifica se l'utente è autenticato.
+- Ritorna: `true` se autenticato, `false` altrimenti
+
+```typescript
+getPair(): GunKeyPair
+```
+Ottiene la coppia di chiavi SEA dell'utente corrente.
+- Ritorna: Coppia di chiavi Gun
+
+```typescript
+getUser(): IGunUserInstance
+```
+Ottiene l'istanza utente Gun.js.
+- Ritorna: Istanza utente Gun.js
+
+## 🔧 Infrastruttura
+
+### BaseManager
+
+```typescript
+abstract class BaseManager<T>
+```
+Classe base astratta per tutti i manager che utilizzano Gun.js.
+
+#### Proprietà Protette
+
+```typescript
+protected gun: IGunInstance;              // Istanza Gun
+protected user: IGunUserInstance;         // Utente Gun
+protected abstract storagePrefix: string; // Prefisso storage
+protected APP_KEY_PAIR: ISEAPair;        // Chiavi app
+```
+
+#### Metodi Astratti
+
+```typescript
+abstract createAccount(...args: any[]): Promise<T>
+```
+Metodo astratto per creare un nuovo account/coppia di chiavi.
+
+#### Gestione Dati
+
+```typescript
+protected async savePrivateData(data: T, path?: string): Promise<void>
+```
+Salva dati in modo privato (cifrati).
+- Parametri:
+  - `data`: Dati da salvare
+  - `path`: Percorso opzionale
+- Lancia: Errore se il salvataggio fallisce
+
+```typescript
+protected async savePublicData(data: any, path?: string): Promise<void>
+```
+Salva dati in modo pubblico.
+- Parametri:
+  - `data`: Dati da salvare
+  - `path`: Percorso opzionale
+- Lancia: Errore se il salvataggio fallisce
+
+```typescript
+protected async getPrivateData(path?: string): Promise<T | null>
+```
+Recupera dati privati.
+- Parametri:
+  - `path`: Percorso opzionale
+- Ritorna: Dati recuperati o null
+
+```typescript
+protected async getPublicData(publicKey: string, path?: string): Promise<any>
+```
+Recupera dati pubblici.
+- Parametri:
+  - `publicKey`: Chiave pubblica
+  - `path`: Percorso opzionale
+- Ritorna: Dati pubblici
+
+#### Utilità
+
+```typescript
+protected cleanGunMetadata<T>(data: any): T
+```
+Pulisce i metadati Gun da un oggetto.
+- Parametri:
+  - `data`: Dati da pulire
+- Ritorna: Dati puliti
+
+```typescript
+protected checkAuthentication(): void
+```
+Verifica l'autenticazione dell'utente.
+- Lancia: Errore se non autenticato
+
+## 💬 Chat Decentralizzata
+
+### UnstoppableChat
+
+```typescript
+class UnstoppableChat
+```
+Implementazione di chat decentralizzata usando Gun.js.
+
+#### Inizializzazione
+
+```typescript
+constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair)
+```
+Crea una nuova istanza di chat.
+- Parametri:
+  - `gun`: Istanza Gun
+  - `APP_KEY_PAIR`: Chiavi dell'applicazione
+
+#### Messaggistica
+
+```typescript
+async sendMessage(recipient: string, message: string): Promise<void>
+```
+Invia un messaggio cifrato a un destinatario.
+- Parametri:
+  - `recipient`: Chiave pubblica del destinatario
+  - `message`: Messaggio da inviare
+- Lancia: Errore se l'invio fallisce
+
+```typescript
+async getMessages(): Promise<Array<{
+  from: string;
+  message: string;
+  timestamp: number;
+}>>
+```
+Recupera i messaggi dell'utente.
+- Ritorna: Array di messaggi con mittente e timestamp
+- Lancia: Errore se il recupero fallisce
+
+### Struttura Dati Gun
+
+```
+gun/
+└── chat/
+    └── messages/
+        └── [recipientPub]/
+            └── [messageId]/
+                ├── from
+                ├── message (cifrato)
+                └── timestamp
 ``` 
