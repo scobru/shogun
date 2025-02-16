@@ -1,63 +1,67 @@
+---
+icon: hand-wave
+---
+
 # SHOGUN - Decentralized Wallet Manager
 
 A decentralized wallet manager that uses Gun.js to handle wallets and private keys directly in the browser. It provides a complete authentication and key management system with support for stealth addresses and ActivityPub integration.
 
-## 📚 Documentation
 
-- [JsonRpcConnector](docs/JsonRpcConnector.md) - Ethereum JSON-RPC integration
-- [EthereumHDKeyVault](docs/EthereumHDKeyVault.md) - HD wallet management
-- [StealthChain](docs/StealthChain.md) - Stealth address implementation
-- [ActivityPub](docs/ActivityPub.md) - ActivityPub protocol integration
-- [UnstoppableChat](docs/UnstoppableChat.md) - Decentralized messaging
-- [GunStorage](docs/GunStorage.md) - Secure data storage
-- [Micropayments](docs/Micropayments.md) - Off-chain payment channels
+
+{% content-ref url="broken-reference" %}
+[Broken link](broken-reference)
+{% endcontent-ref %}
+
+{% content-ref url="broken-reference" %}
+[Broken link](broken-reference)
+{% endcontent-ref %}
+
+{% content-ref url="broken-reference" %}
+[Broken link](broken-reference)
+{% endcontent-ref %}
 
 ## ✨ Key Features
 
-- 🔐 **Advanced Security**
-  - Secure private key management with Web Crypto API
-  - Stealth address support
-  - End-to-end encryption
-  - Secure entropy management
-  - ActivityPub key management
-  - HD wallet derivation
-  - Off-chain payment channels
-
-- 🌐 **Decentralization**
-  - Distributed storage with Gun.js
-  - P2P synchronization
-  - No central server
-  - ActivityPub federation support
-  - Decentralized messaging
-  - Stealth transactions
-
-- 🔄 **Portability**
-  - Complete data import/export
-  - Encrypted backups
-  - Multi-device support
-  - Cross-platform compatibility
-  - HD wallet recovery
-
-- 💰 **Payment Features**
-  - HD wallet management
-  - Stealth addresses
-  - Off-chain micropayments
-  - Payment channels
-  - Transaction privacy
-
-- 💬 **Communication**
-  - Decentralized chat
-  - Private messaging
-  - Group channels
-  - Announcement channels
-  - RSS integration
+* 🔐 **Advanced Security**
+  * Secure private key management with Web Crypto API
+  * Stealth address support
+  * End-to-end encryption
+  * Secure entropy management
+  * ActivityPub key management
+  * HD wallet derivation
+  * Off-chain payment channels
+* 🌐 **Decentralization**
+  * Distributed storage with Gun.js
+  * P2P synchronization
+  * No central server
+  * ActivityPub federation support
+  * Decentralized messaging
+  * Stealth transactions
+* 🔄 **Portability**
+  * Complete data import/export
+  * Encrypted backups
+  * Multi-device support
+  * Cross-platform compatibility
+  * HD wallet recovery
+* 💰 **Payment Features**
+  * HD wallet management
+  * Stealth addresses
+  * Off-chain micropayments
+  * Payment channels
+  * Transaction privacy
+* 💬 **Communication**
+  * Decentralized chat
+  * Private messaging
+  * Group channels
+  * Announcement channels
+  * RSS integration
 
 ## 🛠️ Requirements
 
-- Node.js >= 16.0.0
-- npm >= 7.0.0
-- Modern browser with Web Crypto API support
-- For Node.js: crypto module support
+* Node.js >= 16.0.0
+* npm >= 7.0.0
+* Modern browser with Web Crypto API support
+* For Node.js: crypto module support
 
 ## 🚀 Installation
 
@@ -119,47 +123,31 @@ await chat.join('username', 'password', 'Display Name');
 ### Module-specific Examples
 
 See individual module documentation for detailed examples:
-- [JsonRpcConnector Examples](docs/JsonRpcConnector.md#examples)
-- [EthereumHDKeyVault Examples](docs/EthereumHDKeyVault.md#examples)
-- [StealthChain Examples](docs/StealthChain.md#examples)
-- [ActivityPub Examples](docs/ActivityPub.md#examples)
-- [UnstoppableChat Examples](docs/UnstoppableChat.md#examples)
-- [Micropayments Examples](docs/Micropayments.md#examples)
+
+* [JsonRpcConnector Examples](blockchain/connectors/jsonrpcconnector.md#examples)
+* [EthereumHDKeyVault Examples](blockchain/wallets/ethereumhdkeyvault.md#examples)
+* [StealthChain Examples](protocols/stealth/stealthchain.md#examples)
+* [ActivityPub Examples](protocols/activity-pub/activitypub.md#examples)
+* [UnstoppableChat Examples](protocols/messages/unstoppablechat.md#examples)
+* [Micropayments Examples](protocols/micro-payments/micropayments.md#examples)
 
 ## 🔒 Security
 
 ### Key Management
 
-- HD wallet support with BIP32/BIP39
-- Stealth address generation
-- Private key encryption
-- Secure key derivation
-- Multi-layer encryption
+* HD wallet support with BIP32/BIP39
+* Stealth address generation
+* Private key encryption
+* Secure key derivation
+* Multi-layer encryption
 
 ### Secure Storage
 
-- Encrypted GunDB storage
-- Distributed data storage
-- No plain text private keys
-- Secure key backup
-- State verification
-
-## 🐛 Debugging
-
-Enable debug logs for different components:
-
-```typescript
-// Gun.js debugging
-GUN_ENV=debug
-
-// Shogun debugging
-SHOGUN_DEBUG=true
-
-// Component-specific debugging
-WALLET_DEBUG=true
-CHAT_DEBUG=true
-MICROPAYMENT_DEBUG=true
-```
+* Encrypted GunDB storage
+* Distributed data storage
+* No plain text private keys
+* Secure key backup
+* State verification
 
 ## 📦 Core Interfaces
 
@@ -205,16 +193,15 @@ npm test -- --grep "Chat"
 
 ## 💻 Compatibility
 
-- **Browsers**: 
-  - Chrome >= 80
-  - Firefox >= 78
-  - Safari >= 14
-  - Edge >= 80
-  - Web Crypto API support required
-
-- **Node.js**:
-  - Version >= 16.0.0
-  - crypto module support
+* **Browsers**:
+  * Chrome >= 80
+  * Firefox >= 78
+  * Safari >= 14
+  * Edge >= 80
+  * Web Crypto API support required
+* **Node.js**:
+  * Version >= 16.0.0
+  * crypto module support
 
 ## 🤝 Contributing
 
@@ -226,38 +213,41 @@ npm test -- --grep "Chat"
 
 ### Development Guidelines
 
-- Follow TypeScript best practices
-- Add unit tests for new features
-- Update documentation
-- Follow semantic versioning
-- Add JSDoc comments
+* Follow TypeScript best practices
+* Add unit tests for new features
+* Update documentation
+* Follow semantic versioning
+* Add JSDoc comments
 
 ## 📄 License
 
-[MIT](LICENSE)
+[MIT](LICENSE/)
 
 ## 🗺️ Roadmap
 
 ### Version 1.x
-- [x] Basic wallet management
-- [x] HD wallet support
-- [x] Stealth addresses
-- [x] ActivityPub integration
-- [x] Basic chat functionality
+
+* [x] Basic wallet management
+* [x] HD wallet support
+* [x] Stealth addresses
+* [x] ActivityPub integration
+* [x] Basic chat functionality
 
 ### Version 2.x
-- [ ] Enhanced privacy features
-- [ ] Improved chat capabilities
-- [ ] Advanced payment channels
-- [ ] Cross-chain support
-- [ ] Enhanced security features
+
+* [ ] Enhanced privacy features
+* [ ] Improved chat capabilities
+* [ ] Advanced payment channels
+* [ ] Cross-chain support
+* [ ] Enhanced security features
 
 ### Version 3.x
-- [ ] DAO integration
-- [ ] Smart contract templates
-- [ ] Advanced federation
-- [ ] AI-powered features
-- [ ] Mobile optimization
+
+* [ ] DAO integration
+* [ ] Smart contract templates
+* [ ] Advanced federation
+* [ ] AI-powered features
+* [ ] Mobile optimization
 
 ## 🏗️ Architecture
 
@@ -295,11 +285,11 @@ graph TD
 
 ## 📱 Mobile Support
 
-- React Native compatibility
-- Mobile-optimized storage
-- Biometric authentication
-- Push notifications
-- Offline support
+* React Native compatibility
+* Mobile-optimized storage
+* Biometric authentication
+* Push notifications
+* Offline support
 
 ## 🔧 Configuration
 
