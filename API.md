@@ -702,47 +702,6 @@ protected checkAuthentication(): void
 Verifica l'autenticazione dell'utente.
 - Lancia: Errore se non autenticato
 
-## 💬 Chat Decentralizzata
-
-### UnstoppableChat
-
-```typescript
-class UnstoppableChat
-```
-Implementazione di chat decentralizzata usando Gun.js.
-
-#### Inizializzazione
-
-```typescript
-constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair)
-```
-Crea una nuova istanza di chat.
-- Parametri:
-  - `gun`: Istanza Gun
-  - `APP_KEY_PAIR`: Chiavi dell'applicazione
-
-#### Messaggistica
-
-```typescript
-async sendMessage(recipient: string, message: string): Promise<void>
-```
-Invia un messaggio cifrato a un destinatario.
-- Parametri:
-  - `recipient`: Chiave pubblica del destinatario
-  - `message`: Messaggio da inviare
-- Lancia: Errore se l'invio fallisce
-
-```typescript
-async getMessages(): Promise<Array<{
-  from: string;
-  message: string;
-  timestamp: number;
-}>>
-```
-Recupera i messaggi dell'utente.
-- Ritorna: Array di messaggi con mittente e timestamp
-- Lancia: Errore se il recupero fallisce
-
 ### Struttura Dati Gun
 
 ```
