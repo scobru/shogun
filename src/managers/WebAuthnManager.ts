@@ -137,6 +137,7 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
 
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
     super(gun, APP_KEY_PAIR);
+    
   }
 
   private validateUsername(username: string): void {
@@ -174,7 +175,7 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
   private async saveWebAuthnPrivateData(
     data: WebAuthnCredentials
   ): Promise<void> {
-    await this.savePrivateData(data, "webauthn");
+    await this.savePrivateData(data, this.storagePrefix);
   }
 
   /**
@@ -183,7 +184,7 @@ export class WebAuthnManager extends BaseManager<Record<string, any>> {
   private async saveWebAuthnPublicData(
     data: Record<string, any>
   ): Promise<void> {
-    await this.savePublicData(data, "webauthn");
+    await this.savePublicData(data, this.storagePrefix);
   }
 
   /**

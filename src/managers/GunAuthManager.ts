@@ -417,15 +417,12 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    * Saves private user data.
    * @param data Data to store.
    * @param path Storage path.
+   * @returns True if data was saved successfully, false otherwise.
    * @throws Error if user is not authenticated.
    */
   public async savePrivateData(data: any, path: string): Promise<boolean> {
     if (!this.user.is) throw new Error("Utente non autenticato");
-    const result = await super.savePrivateData(data, path);
-    if (result) {
-      return true;
-    }
-    return false;
+    return await super.savePrivateData(data, path);
   }
 
   /**
@@ -470,11 +467,7 @@ export class GunAuthManager extends BaseManager<GunKeyPair> {
    */
   public async savePublicData(data: any, path: string): Promise<boolean> {
     if (!this.user.is) throw new Error("Utente non autenticato");
-    const result = await this.savePublicData(data, path);
-    if (result) {
-      return true;
-    }
-    return false;
+    return await super.savePublicData(data, path);
   }
 
   /**

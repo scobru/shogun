@@ -267,7 +267,7 @@ describe("GunAuthManager", function () {
     });
 
     it("should save and retrieve private data", async function () {
-      this.timeout(300000); // Aumentato a 5 minuti
+      this.timeout(300000); // 5 minuti
       
       const data = { secret: "This is private data" };
       const path = "secrets/data1";
@@ -293,8 +293,15 @@ describe("GunAuthManager", function () {
       while (!saved && saveAttempts < maxSaveAttempts) {
         try {
           console.log(`Save attempt ${saveAttempts + 1}...`);
+          
+          // Reset dello stato prima di ogni tentativo
+          if (saveAttempts > 0) {
+            await gunAuthManager._hardReset();
+            await new Promise(resolve => setTimeout(resolve, 5000));
+          }
+          
           await gunAuthManager.savePrivateData(data, path);
-          await new Promise(resolve => setTimeout(resolve, 5000));
+          await new Promise(resolve => setTimeout(resolve, 8000));
           
           // Verifica immediata del salvataggio
           const verifyData = await gunAuthManager.getPrivateData(path);
@@ -310,12 +317,12 @@ describe("GunAuthManager", function () {
           if (saveAttempts === maxSaveAttempts) {
             throw error;
           }
-          await new Promise(resolve => setTimeout(resolve, 5000));
+          await new Promise(resolve => setTimeout(resolve, 8000));
         }
       }
       
       console.log("Waiting for data synchronization...");
-      await new Promise(resolve => setTimeout(resolve, 10000));
+      await new Promise(resolve => setTimeout(resolve, 15000));
 
       // Recuperiamo i dati con retry
       let retrieveAttempts = 0;
@@ -325,6 +332,13 @@ describe("GunAuthManager", function () {
       while (retrieveAttempts < maxRetrieveAttempts && !retrievedData) {
         try {
           console.log(`Retrieve attempt ${retrieveAttempts + 1}...`);
+          
+          // Reset dello stato prima di ogni tentativo di recupero
+          if (retrieveAttempts > 0) {
+            await gunAuthManager._hardReset();
+            await new Promise(resolve => setTimeout(resolve, 5000));
+          }
+          
           const result = await gunAuthManager.getPrivateData(path);
           
           if (result && result.secret === data.secret) {
@@ -334,14 +348,14 @@ describe("GunAuthManager", function () {
           }
           
           console.log("Retrieved data verification failed, retrying...");
-          await new Promise(resolve => setTimeout(resolve, 5000));
+          await new Promise(resolve => setTimeout(resolve, 8000));
         } catch (error) {
           console.log(`Retrieve attempt ${retrieveAttempts + 1} failed:`, error);
           retrieveAttempts++;
           if (retrieveAttempts === maxRetrieveAttempts) {
             throw error;
           }
-          await new Promise(resolve => setTimeout(resolve, 5000));
+          await new Promise(resolve => setTimeout(resolve, 8000));
         }
       }
       

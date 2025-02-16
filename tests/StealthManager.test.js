@@ -191,10 +191,13 @@ describe("StealthManager", function () {
 
     it("should format public key correctly", async function () {
       const publicKey = "~testPublicKey";
+      
+      // Prima verifichiamo che la chiave non esista
+      await stealthChain.deletePublicData(publicKey);
+      await waitForOperation(5000);
+      
       const formattedKey = await stealthChain.retrieveKeys(publicKey);
-
-      // Il metodo retrieveKeys internamente usa formatPublicKey
-      expect(formattedKey).to.be.null; // Poiché la chiave di test non esiste
+      expect(formattedKey).to.be.null;
     });
 
     it("should retrieve stealth keys for specific user", async function () {

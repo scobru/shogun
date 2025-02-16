@@ -1,349 +1,133 @@
-# SHOGUN API Reference
+# Documentazione API SHOGUN
 
-## 🏰 Shogun Core
+## 🏰 Core di Shogun
 
-### Constructor
-
-```typescript
-constructor(gunOptions: any, APP_KEY_PAIR: any)
-```
-Creates a new Shogun instance. Initializes Gun, and all required managers and services.
-
-**Parameters:**
-- `gunOptions`: Gun configuration object
-  - `peers`: Array of Gun peer URLs
-  - `localStorage`: Enable/disable localStorage
-  - `radisk`: Enable/disable radisk storage
-  - `multicast`: Enable/disable multicast
-- `APP_KEY_PAIR`: Application key pair for Gun authentication
-
-### Core Methods
+### Costruttore
 
 ```typescript
-getWalletManager(): WalletManager
+constructor(gunOptions: IGunInstance, APP_KEY_PAIR: any)
 ```
-Returns the WalletManager instance for wallet operations.
+Crea una nuova istanza di Shogun. Inizializza Gun e tutti i manager e servizi necessari.
+
+**Parametri:**
+- `gunOptions`: Istanza di Gun configurata
+  - `peers`: Array di URL dei peer Gun
+  - `localStorage`: Abilita/disabilita localStorage
+  - `radisk`: Abilita/disabilita storage radisk
+  - `multicast`: Abilita/disabilita multicast
+- `APP_KEY_PAIR`: Coppia di chiavi dell'applicazione per l'autenticazione Gun
+
+### Metodi Core
 
 ```typescript
-getWebAuthnService(): WebAuthnService
+getEthereumConnector(): EthereumConnector
 ```
-Returns the WebAuthnService instance for biometric authentication.
+Restituisce l'istanza di EthereumConnector per le operazioni con Ethereum.
+
+```typescript
+getWebAuthnManager(): WebAuthnManager
+```
+Restituisce l'istanza di WebAuthnManager per l'autenticazione biometrica.
 
 ```typescript
 getActivityPubManager(): ActivityPubManager
 ```
-Returns the ActivityPubManager instance for ActivityPub operations.
-
-```typescript
-getEthereumManager(): EthereumManager
-```
-Returns the EthereumManager instance for Ethereum operations.
+Restituisce l'istanza di ActivityPubManager per le operazioni ActivityPub.
 
 ```typescript
 getStealthChain(): StealthChain
 ```
-Returns the StealthChain instance for stealth address operations.
+Restituisce l'istanza di StealthChain per le operazioni con indirizzi stealth.
 
 ```typescript
 getGunAuthManager(): GunAuthManager
 ```
-Returns the GunAuthManager instance for Gun.js authentication.
+Restituisce l'istanza di GunAuthManager per l'autenticazione Gun.js.
 
-### Data Management
+### Gestione Utenti
 
 ```typescript
-async exportAllData(): Promise<string>
+async createUser(alias: string, password: string): Promise<UserKeys>
 ```
-Exports all user data as JSON, including:
-- Wallet data
-- Stealth keys
-- Gun key pair
-- Timestamp
-- Version
-Throws error if user not authenticated
+Crea un nuovo utente con account Gun, wallet, chiavi stealth e chiavi ActivityPub.
+- Parametri:
+  - `alias`: Nome utente
+  - `password`: Password dell'utente
+- Ritorna: Oggetto UserKeys contenente tutte le chiavi generate
 
 ```typescript
-async importAllData(jsonData: string): Promise<void>
+async getUser(): Promise<UserKeys>
 ```
-Imports user data from JSON export:
-- Validates data format and version
-- Imports Gun pair
-- Imports wallet data
-- Imports stealth keys
-Throws error if import fails
+Recupera i dati dell'utente dal database.
+- Ritorna: Oggetto UserKeys contenente tutte le chiavi dell'utente
 
-### Key Management
+## 🔑 Interfacce Principali
 
+### UserKeys
 ```typescript
-async exportGunKeyPair(): Promise<string>
-```
-Exports current user's Gun key pair.
-
-```typescript
-async importGunKeyPair(keyPairJson: string): Promise<string>
-```
-Imports a Gun key pair.
-
-## 🔑 WalletManager
-
-### Constructor
-
-```typescript
-constructor(gunOptions: any, APP_KEY_PAIR: any)
-```
-Creates a new WalletManager instance. Initializes Gun, user authentication, and various managers.
-
-**Parameters:**
-- `gunOptions`: Gun configuration object
-  - `peers`: Array of Gun peer URLs
-  - `localStorage`: Enable/disable localStorage
-  - `radisk`: Enable/disable radisk storage
-  - `multicast`: Enable/disable multicast
-- `APP_KEY_PAIR`: Application key pair for Gun authentication
-
-### Core Methods
-
-#### Account Management
-
-```typescript
-async createAccount(alias: string, passphrase: string): Promise<void>
-```
-Creates a new account with the specified credentials.
-- `alias`: Username (must be valid)
-- `passphrase`: Account password
-- Throws `ValidationError` if alias is invalid
-
-```typescript
-async login(alias: string, passphrase: string): Promise<string>
-```
-Performs login with specified credentials.
-- `alias`: Username
-- `passphrase`: Account password
-- Returns: Public key of authenticated user
-- Throws `ValidationError` if alias is invalid
-
-```typescript
-logout(): void
-```
-Logs out the current user.
-
-#### Wallet Operations
-
-```typescript
-static async createWalletObj(gunKeyPair: GunKeyPair): Promise<WalletResult>
-```
-Creates a new wallet from a Gun key pair.
-- `gunKeyPair`: Gun key pair with public key
-- Returns: Object containing wallet data and entropy
-- Throws error if wallet creation fails
-
-```typescript
-static async createWalletFromSalt(gunKeyPair: GunKeyPair, salt: string): Promise<Wallet>
-```
-Creates a deterministic wallet from salt and Gun key pair.
-- `gunKeyPair`: Gun key pair
-- `salt`: Salt for wallet derivation
-- Returns: Ethereum wallet instance
-- Throws error if wallet creation fails
-
-```typescript
-async saveWallet(wallet: Wallet): Promise<void>
-```
-Saves a wallet to Gun storage.
-- `wallet`: Ethereum wallet to save
-- Validates Ethereum address and private key
-- Throws `ValidationError` if validation fails
-
-```typescript
-async getWallet(): Promise<Wallet | null>
-```
-Retrieves the stored wallet.
-- Returns: Ethereum wallet or null if not found
-
-### Data Management
-
-```typescript
-async exportAllData(): Promise<string>
-```
-Exports all user data as JSON.
-- Returns: JSON string containing:
-  - Wallet data
-  - Stealth keys
-  - Gun key pair
-  - Timestamp
-  - Version
-- Throws error if user not authenticated
-
-```typescript
-async importAllData(jsonData: string): Promise<void>
-```
-Imports user data from JSON export.
-- `jsonData`: Previously exported JSON data
-- Validates data format and version
-- Imports Gun pair, wallet, and stealth keys
-- Throws error if import fails
-
-### WebAuthn Integration
-
-```typescript
-async createAccountWithWebAuthn(alias: string): Promise<WalletResult>
-```
-Creates an account using WebAuthn authentication.
-- `alias`: Username
-- Returns: Wallet result object
-- Throws `WebAuthnError` if WebAuthn not supported
-- Throws `NetworkError` for other failures
-
-### ActivityPub Integration
-
-```typescript
-async getPrivateKey(username: string): Promise<string>
-```
-Retrieves ActivityPub private key for a user.
-- `username`: User to get key for
-- Returns: Private key string
-
-```typescript
-async saveActivityPubKeys(keys: ActivityPubKeys): Promise<void>
-```
-Saves ActivityPub key pair.
-- `keys`: ActivityPub key pair to save
-
-```typescript
-async getActivityPubKeys(): Promise<ActivityPubKeys | null>
-```
-Retrieves stored ActivityPub keys.
-- Returns: ActivityPub keys or null if not found
-
-```typescript
-async deleteActivityPubKeys(): Promise<void>
-```
-Deletes stored ActivityPub keys.
-
-```typescript
-async signActivityPubData(stringToSign: string, username: string): Promise<{ signature: string; signatureHeader: string }>
-```
-Signs data for ActivityPub.
-- `stringToSign`: Data to sign
-- `username`: User performing signing
-- Returns: Signature and signature header
-
-### Key Management
-
-```typescript
-async exportGunKeyPair(): Promise<string>
-```
-Exports current user's Gun key pair.
-- Returns: JSON string of key pair
-
-```typescript
-async importGunKeyPair(keyPairJson: string): Promise<string>
-```
-Imports a Gun key pair.
-- `keyPairJson`: JSON string of key pair
-- Returns: Public key of imported pair
-
-### Profile Management
-
-```typescript
-async updateProfile(displayName: string): Promise<void>
-```
-Updates user profile.
-- `displayName`: New display name to set
-
-```typescript
-async changePassword(oldPassword: string, newPassword: string): Promise<void>
-```
-Changes user password.
-- `oldPassword`: Current password
-- `newPassword`: New password to set
-
-## 📦 Interfaces
-
-### WalletResult
-```typescript
-interface WalletResult {
-  walletObj: {
-    address: string;
-    privateKey: string;
-    entropy: string;
-  };
-  entropy: string;
-}
-```
-
-### ActivityPubKeys
-```typescript
-interface ActivityPubKeys {
-  publicKey: string;
-  privateKey: string;
+interface UserKeys {
+  pair: GunKeyPair;
+  wallet: Wallet;
+  stealthKey: StealthKeyPair;
+  activityPubKey: ActivityPubKeys;
 }
 ```
 
 ### GunKeyPair
 ```typescript
 interface GunKeyPair {
-  pub: string;
-  priv: string;
-  epub?: string;
-  epriv?: string;
+  pub: string;    // Chiave pubblica
+  priv: string;   // Chiave privata
+  epub: string;   // Chiave pubblica di cifratura
+  epriv: string;  // Chiave privata di cifratura
 }
 ```
 
-## 🔒 Error Types
+### StealthKeyPair
+```typescript
+interface StealthKeyPair {
+  pub: string;    // Chiave pubblica stealth
+  priv: string;   // Chiave privata stealth
+  epub: string;   // Chiave pubblica di cifratura stealth
+  epriv: string;  // Chiave privata di cifratura stealth
+}
+```
 
-- `ValidationError`: Input validation failures
-- `WebAuthnError`: WebAuthn-specific errors
-- `NetworkError`: Network and communication errors
-- `AuthenticationError`: Authentication-related failures
+## 🔒 Struttura Dati Gun
 
-## 🔐 Security Notes
-
-1. Private keys are never stored in plain text
-2. Entropy is used for deterministic wallet derivation
-3. Web Crypto API used in browser, Node crypto in Node.js
-4. Comprehensive validation for addresses and keys
-5. Secure password change mechanism
-
-## 🌐 Gun Data Structure
-
-### Wallets
+### Utenti
 ```
 gun/
 └── users/
     └── [publicKey]/
-        └── wallet/
-            ├── address
-            ├── privateKey (encrypted)
-            └── entropy
-```
-
-### ActivityPub Keys
-```
-gun/
-└── users/
-    └── [publicKey]/
-        └── activityPubKeys/
+        ├── wallet/
+        │   ├── address
+        │   └── privateKey (cifrata)
+        ├── stealth/
+        │   ├── pub
+        │   ├── priv (cifrata)
+        │   ├── epub
+        │   └── epriv (cifrata)
+        └── activityPub/
             ├── publicKey
-            └── privateKey (encrypted)
+            └── privateKey (cifrata)
 ```
 
-### Profiles
-```
-gun/
-└── users/
-    └── [publicKey]/
-        └── profile/
-            └── displayName
-```
+## 🔐 Note sulla Sicurezza
 
-## 🔄 Best Practices
+1. Le chiavi private non vengono mai memorizzate in chiaro
+2. Tutte le operazioni crittografiche utilizzano le librerie standard
+3. L'autenticazione è gestita tramite Gun.js SEA
+4. Le chiavi stealth forniscono privacy aggiuntiva per le transazioni
+5. Supporto per autenticazione biometrica tramite WebAuthn
 
-1. Always validate input data
-2. Handle all async operations with try-catch
-3. Clean up sensitive data after use
-4. Use appropriate error types
-5. Verify authentication state before operations
-6. Implement proper error handling
-7. Use secure key storage methods
-8. Regular data backups using export/import 
+## �� Best Practices
+
+1. Validare sempre i dati in input
+2. Gestire tutte le operazioni asincrone con try-catch
+3. Pulire i dati sensibili dopo l'uso
+4. Utilizzare i tipi appropriati per le chiavi
+5. Verificare lo stato di autenticazione prima delle operazioni
+6. Implementare una corretta gestione degli errori
+7. Utilizzare metodi sicuri per la memorizzazione delle chiavi
+8. Effettuare backup regolari utilizzando export/import 

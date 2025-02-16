@@ -202,9 +202,17 @@ export class StealthChain extends BaseManager<StealthKeyPair> {
     if (!publicKey) {
       throw new Error("Invalid public key");
     }
-    const data = await this.getPublicData(publicKey, this.storagePrefix);
-    return data?.epub || null;
-
+    const formattedPubKey = this.formatPublicKey(publicKey);
+    try {
+      const data = await this.getPublicData(formattedPubKey, this.storagePrefix);
+      if (!data || !data.epub) {
+        return null;
+      }
+      return data.epub;
+    } catch (error) {
+      console.error("Error retrieving stealth keys:", error);
+      return null;
+    }
   }
 
   /**

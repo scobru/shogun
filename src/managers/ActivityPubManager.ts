@@ -78,30 +78,47 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
       
       while (retryCount < maxRetries) {
         try {
-          await this.savePrivateData(keys, "activitypub/keys");
-          await this.savePublicData({ publicKey: keys.publicKey }, "activitypub");
+          console.log("Tentativo di salvataggio chiavi private...");
+          await this.savePrivateData(keys, this.storagePrefix);
+          
+          console.log("Tentativo di salvataggio chiave pubblica...");
+          await this.savePublicData({ publicKey: keys.publicKey }, this.storagePrefix);
+          
+          // Aggiungi un delay per permettere a Gun di sincronizzare
+          await new Promise(resolve => setTimeout(resolve, 2000));
           
           // Verifica il salvataggio
-          const savedKeys = await this.getPrivateData("activitypub/keys");
-          if (savedKeys && savedKeys.publicKey === keys.publicKey && savedKeys.privateKey === keys.privateKey) {
-            return;
+          console.log("Verifica del salvataggio...");
+          const savedKeys = await this.getPrivateData(this.storagePrefix);
+          console.log("Chiavi salvate:", savedKeys ? "presenti" : "assenti");
+          
+          if (savedKeys) {
+            const keysMatch = savedKeys.publicKey === keys.publicKey && 
+                            savedKeys.privateKey === keys.privateKey;
+            console.log("Corrispondenza chiavi:", keysMatch ? "OK" : "Non corrispondenti");
+            
+            if (keysMatch) {
+              console.log("Salvataggio completato con successo");
+              return;
+            }
           }
           
+          console.log(`Retry ${retryCount + 1}: Verifica fallita, riprovo...`);
           retryCount++;
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 2000));
         } catch (error) {
-          console.error(`Retry ${retryCount + 1} failed:`, error);
+          console.error(`Retry ${retryCount + 1} fallito:`, error);
           retryCount++;
           if (retryCount === maxRetries) {
             throw error;
           }
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
       
-      throw new Error("Failed to verify saved keys");
+      throw new Error("Impossibile verificare il salvataggio delle chiavi dopo " + maxRetries + " tentativi");
     } catch (error) {
-      console.error("Error saving keys:", error);
+      console.error("Errore nel salvataggio delle chiavi:", error);
       throw error;
     }
   }
@@ -111,17 +128,13 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
    */
   public async getKeys(): Promise<ActivityPubKeys> {
     this.checkAuthentication();
-    const keys = await this.getPrivateData("activitypub/keys");
-    
-    if (!keys || !keys.publicKey || !keys.privateKey) {
-      throw new Error("Keys not found");
-    }
+    const keys = await this.getPrivateData(this.storagePrefix);
 
     // Rimuovi i metadati di Gun
     const cleanKeys: ActivityPubKeys = {
-      publicKey: keys.publicKey,
-      privateKey: keys.privateKey,
-      createdAt: keys.createdAt || Date.now()
+      publicKey: keys?.publicKey || "",
+      privateKey: keys?.privateKey || "",
+      createdAt: keys?.createdAt || Date.now()
     };
 
     return cleanKeys;
@@ -133,7 +146,7 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
   public async getPub(): Promise<string> {
     this.checkAuthentication();
     const publicKey = this.getCurrentPublicKey();
-    const data = await this.getPublicData(publicKey, "activitypub");
+    const data = await this.getPublicData(publicKey, this.storagePrefix);
     return data?.publicKey;
   }
 
@@ -144,29 +157,34 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
     this.checkAuthentication();
     
     try {
+      const publicKey = this.getCurrentPublicKey();
+      
       // Prima eliminiamo i dati pubblici
-      await this.deletePublicData("activitypub");
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await this.deletePublicData(this.storagePrefix);
       
       // Poi eliminiamo i dati privati
-      await this.deletePrivateData("activitypub/keys");
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await this.deletePrivateData(this.storagePrefix);
       
-      // Verifica con timeout più lungo e intervalli più frequenti
-      const startTime = Date.now();
-      const timeout = 30000; // Aumentato a 30 secondi
+      // Attendi un po' prima di iniziare la verifica
+      await new Promise(resolve => setTimeout(resolve, 5000));
       
       const verifyDeletion = async (): Promise<boolean> => {
         try {
-          const privateData = await this.getPrivateData("activitypub/keys");
-          if (privateData) return false;
+          // Verifica dati privati
+          const privateData = await this.getPrivateData(this.storagePrefix);
+          if (privateData && Object.keys(privateData).length > 0) {
+            return false;
+          }
           
-          const publicKey = this.getCurrentPublicKey();
-          const publicData = await this.getPublicData(publicKey, "activitypub");
-          if (publicData) return false;
+          // Verifica dati pubblici
+          const publicData = await this.getPublicData(publicKey, this.storagePrefix);
+          if (publicData && Object.keys(publicData).length > 0) {
+            return false;
+          }
           
           return true;
         } catch (error) {
+          // Se otteniamo un errore "Keys not found", consideriamo la cancellazione riuscita
           if (error.message === "Keys not found") {
             return true;
           }
@@ -174,16 +192,16 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
         }
       };
 
+      // Verifica con timeout più lungo
+      const startTime = Date.now();
+      const timeout = 60000; // 60 secondi
+      const interval = 2000; // 2 secondi tra i tentativi
+
       while (Date.now() - startTime < timeout) {
         if (await verifyDeletion()) {
           return;
         }
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-      
-      // Verifica finale
-      if (await verifyDeletion()) {
-        return;
+        await new Promise(resolve => setTimeout(resolve, interval));
       }
       
       throw new Error("Failed to verify keys deletion");
@@ -291,11 +309,18 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
    */
   public async sign(stringToSign: string, username: string): Promise<{ signature: string; signatureHeader: string }> {
     try {
-      // Recupera la chiave privata
-      const privateKey = await this.getPk(username);
+      // Verifica formato username
+      if (!username || !/^[a-zA-Z0-9_]{3,30}$/.test(username)) {
+        throw new Error(`Username "${username}" non valido`);
+      }
+
+      // Verifichiamo solo che l'utente sia autenticato
+      this.checkAuthentication();
       
-      if (!privateKey) {
-        throw new Error("Private key not found for user " + username);
+      // Recuperiamo le chiavi direttamente
+      const keys = await this.getKeys();
+      if (!keys || !keys.privateKey) {
+        throw new Error(`Username "${username}" non valido`);
       }
 
       let signature: string;
@@ -304,10 +329,10 @@ export class ActivityPubManager extends BaseManager<ActivityPubKeys> {
       if (typeof window === "undefined" && cryptoModule) {
         const signer = cryptoModule.createSign("RSA-SHA256");
         signer.update(stringToSign);
-        signature = signer.sign(privateKey, "base64");
+        signature = signer.sign(keys.privateKey, "base64");
       } else {
         // Se siamo nel browser
-        const privateKeyObject = await this.importPk(privateKey);
+        const privateKeyObject = await this.importPk(keys.privateKey);
         const encoder = new TextEncoder();
         const data = encoder.encode(stringToSign);
         const signatureBuffer = await window.crypto.subtle.sign(

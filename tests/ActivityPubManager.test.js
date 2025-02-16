@@ -143,22 +143,30 @@ describe("ActivityPubManager", function () {
 
       console.log("Starting key deletion process...");
       
-      // Pulizia diretta dei dati
-      await activityPubManager.user.get('private').get('activitypub/keys').put(null);
-      await waitForOperation(8000);
-      
       // Chiamata al metodo deleteKeys
       await activityPubManager.deleteKeys();
-      await waitForOperation(8000);
+      await waitForOperation(10000);
 
-      try {
-        const keysAfterDelete = await activityPubManager.getKeys();
-        throw new Error("Keys still exist after deletion");
-      } catch (error) {
-        expect(error.message).to.equal("Keys not found");
+      // Verifica la cancellazione con retry
+      let verificationAttempts = 0;
+      const maxVerificationAttempts = 5;
+      
+      while (verificationAttempts < maxVerificationAttempts) {
+        try {
+          const keysAfterDelete = await activityPubManager.getKeys();
+          console.log("Keys still exist, retrying verification...");
+          verificationAttempts++;
+          await waitForOperation(5000);
+        } catch (error) {
+          if (error.message === "Keys not found") {
+            console.log("Keys successfully deleted");
+            return;
+          }
+          throw error;
+        }
       }
       
-      console.log("Delete keys test completed successfully");
+      throw new Error("Keys still exist after deletion");
     });
 
     it("should fail to sign with invalid username", async function () {
@@ -166,14 +174,41 @@ describe("ActivityPubManager", function () {
       
       console.log("Testing sign with invalid username...");
       
+      let error;
       try {
         await activityPubManager.sign(testData, "invalid_user");
-        throw new Error("Should have thrown error for invalid username");
-      } catch (error) {
-        expect(error.message).to.equal('Username "invalid_user" non valido');
+      } catch (err) {
+        error = err;
       }
       
+      expect(error).to.exist;
+      expect(error.message).to.equal('Username "invalid_user" non valido');
+      
       console.log("Invalid username test completed successfully");
+    });
+
+    it("should sign with any username if authenticated", async function () {
+      const testData = "Test message";
+      
+      console.log("Testing sign with any username...");
+      
+      // Prima creiamo e salviamo le chiavi
+      const keys = await activityPubManager.createAccount();
+      await activityPubManager.saveKeys(keys);
+      await waitForOperation(5000);
+      
+      // Ora proviamo a firmare con un username qualsiasi
+      const { signature, signatureHeader } = await activityPubManager.sign(
+        testData,
+        "any_username"
+      );
+
+      expect(signature).to.be.a("string");
+      expect(signatureHeader).to.be.a("string");
+      expect(signatureHeader).to.include("any_username");
+      expect(signatureHeader).to.include("rsa-sha256");
+      
+      console.log("Sign test completed successfully");
     });
   });
 

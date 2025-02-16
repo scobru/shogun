@@ -7,6 +7,7 @@ export abstract class BaseManager<T> {
   protected gun: IGunInstance;
   protected user: IGunUserInstance;
   protected abstract storagePrefix: string;
+  private appPrefix: string;
   protected APP_KEY_PAIR: ISEAPair;
   protected nodesPath: { private: string; public: string } = {
     private: "",
@@ -17,6 +18,7 @@ export abstract class BaseManager<T> {
     this.gun = gun;
     this.user = this.gun.user();
     this.APP_KEY_PAIR = APP_KEY_PAIR;
+    this.appPrefix = this.APP_KEY_PAIR.pub;
   }
 
   /**
@@ -221,8 +223,7 @@ export abstract class BaseManager<T> {
 
       const node = this.gun
         .get(`~${publicKey}`)
-        .get("private")
-        .get(this.storagePrefix)
+        .get(this.appPrefix)
         .get(path || "");
 
       node.put(null, (ack: any) => {
@@ -295,8 +296,7 @@ export abstract class BaseManager<T> {
 
       const node = this.gun
         .get(`~${publicKey}`)
-        .get("public")
-        .get(this.storagePrefix)
+        .get(this.appPrefix)
         .get(path || "");
 
       node.put(null, (ack: any) => {
@@ -381,7 +381,7 @@ export abstract class BaseManager<T> {
    * Imposta il percorso del nodo privato
    */
   protected setPrivateNodePath(path: string): void {
-    this.nodesPath.private = `private/${this.storagePrefix}/${path}`.replace(
+    this.nodesPath.private = `private/${this.appPrefix}/${path}`.replace(
       /\/+/g,
       "/"
     );
@@ -391,7 +391,7 @@ export abstract class BaseManager<T> {
    * Imposta il percorso del nodo pubblico
    */
   protected setPublicNodePath(path: string): void {
-    this.nodesPath.public = `public/${this.storagePrefix}/${path}`.replace(
+    this.nodesPath.public = `public/${this.appPrefix}/${path}`.replace(
       /\/+/g,
       "/"
     );
@@ -404,7 +404,7 @@ export abstract class BaseManager<T> {
     path: string = ""
   ): IGunChain<any, any, IGunInstance, string> {
     this.setPrivateNodePath(path);
-    return this.user.get(this.storagePrefix).get(path);
+    return this.user.get(this.appPrefix).get(path);
   }
 
   /**
@@ -416,6 +416,6 @@ export abstract class BaseManager<T> {
     this.setPublicNodePath(path);
     const publicKey = this.user.is?.pub;
     if (!publicKey) throw new Error("Public key not found");
-    return this.gun.get(`~${publicKey}`).get(this.storagePrefix).get(path);
+    return this.gun.get(`~${publicKey}`).get(this.appPrefix).get(path);
   }
 }
