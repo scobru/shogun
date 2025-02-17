@@ -6,7 +6,7 @@ const port = 8765
 const server = require('http').createServer().listen(port)
 const gun = Gun({
   web: server,
-  file: 'radata',  // Disabilitiamo il file storage per i test
+  file: './tests/radata',  // Disabilitiamo il file storage per i test
   radisk: true, // Disabilitiamo radisk per i test
   axe: true // Disabilitiamo axe per ridurre la complessità
 })

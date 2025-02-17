@@ -8,7 +8,8 @@
     "build": "tsc",
     "test": "mocha -r ts-node/register tests/**/*.test.js --timeout 180000",
     "lint": "eslint . --ext .ts",
-    "format": "prettier --write \"src/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\"",
+    "start-server": "node ./tests/gun-server.js"
   },
   "dependencies": {
     "ethers": "^6.9.0",

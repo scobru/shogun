@@ -1,4 +1,0 @@
-/**
- * Source: "amark/gun"
- */
-export {};

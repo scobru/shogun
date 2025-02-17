@@ -48,14 +48,10 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
         await this.savePrivateDataWithRetry(mnemonicData, EthereumHDKeyVault.MNEMONIC_PATH);
       }
 
-      // Creiamo il nodo HD specificando "m" per forzare il nodo master
-      let node = HDNodeWallet.fromPhrase(phrase, "m");
-
-      // Se il nodo non è a depth 0, risaliamo tramite .parent fino a raggiungere la radice
-      while (node.depth > 0 && node.parent) {
-        node = node.parent;
-      }
-      this.hdNode = node;
+      // Creiamo il nodo HD master direttamente dalla frase mnemonica
+      const mnemonic = Mnemonic.fromPhrase(phrase);
+      this.hdNode = HDNodeWallet.fromMnemonic(mnemonic);
+      
       return this.hdNode;
     } catch (error) {
       console.error("Error in getHdRoot:", error);
@@ -69,7 +65,9 @@ export class EthereumHDKeyVault extends GunStorage<WalletData> {
    */
   private deriveHDPath(root: HDNodeWallet, index: number): HDNodeWallet {
     try {
-      return root.derivePath(`m/44'/60'/0'/0/${index}`);
+      // Deriviamo il percorso completo in una sola volta
+      const path = `44'/60'/0'/0/${index}`;
+      return root.derivePath(path);
     } catch (error) {
       console.error("Error deriving HD path:", error);
       throw error;
