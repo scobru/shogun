@@ -2,7 +2,7 @@ const chai = require("chai");
 const { expect } = chai;
 const Gun = require("gun");
 require("gun/sea");
-const { EthereumHDKeyVault } = require("../dist/blockchain/wallets/ethereumHDKeyVault");
+const { EthereumHDKeyVault } = require("../dist/blockchain/wallets/EthereumHDKeyVault");
 const { ethers } = require("ethers");
 
 describe("EthereumHDKeyVault", function () {

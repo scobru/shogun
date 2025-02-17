@@ -3,9 +3,9 @@ const { expect } = chai;
 const Gun = require("gun");
 require("gun/sea");
 const { ethers } = require("ethers");
-const { EthereumConnector } = require("../dist/connector/EthereumConnector");
+const { JsonRpcConnector } = require("../dist/blockchain/connectors/JsonRpcConnector");
 
-describe("EthereumConnector", function () {
+describe("JsonRpcConnector", function () {
   let ethereumConnector;
   let APP_KEY_PAIR;
   let gun;
@@ -31,7 +31,7 @@ describe("EthereumConnector", function () {
       testWallet = ethers.Wallet.createRandom();
 
       // Inizializza EthereumManager
-      ethereumConnector = new EthereumConnector(gun, APP_KEY_PAIR);
+      ethereumConnector = new JsonRpcConnector(gun, APP_KEY_PAIR);
       
       // Configura il provider personalizzato per i test
       ethereumConnector.setCustomProvider(TEST_RPC_URL, testWallet.privateKey);

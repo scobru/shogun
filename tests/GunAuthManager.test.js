@@ -2,9 +2,9 @@ const chai = require("chai");
 const { expect } = chai;
 const Gun = require("gun");
 require("gun/sea");
-const { GunAuthManager } = require("../dist/managers/GunAuthManager");
+const { GunAuth } = require("../dist/core/auth/GunAuth");
 
-describe("GunAuthManager", function () {
+describe("GunAuth", function () {
   // Aumentato timeout totale a 5 minuti
 
   let gunAuthManager;
@@ -33,8 +33,8 @@ describe("GunAuthManager", function () {
         axe: false,
       });
 
-      // Inizializza GunAuthManager
-      gunAuthManager = new GunAuthManager(gun, APP_KEY_PAIR);
+      // Inizializza GunAuth
+      gunAuthManager = new GunAuth(gun, APP_KEY_PAIR);
 
       // Inizializza il listener di autenticazione
       await gunAuthManager.authListener();

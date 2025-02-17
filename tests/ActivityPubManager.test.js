@@ -2,9 +2,9 @@ const chai = require("chai");
 const { expect } = chai;
 const Gun = require("gun");
 require("gun/sea");
-const { ActivityPubManager } = require("../dist/managers/ActivityPubManager");
+const { ActivityPub } = require("../dist/protocol/activitypub/ActivityPub");
 
-describe("ActivityPubManager", function () {
+describe("ActivityPub", function () {
   let activityPubManager;
   let APP_KEY_PAIR;
   let gun;
@@ -30,8 +30,8 @@ describe("ActivityPubManager", function () {
         axe: false,
       });
 
-      // Inizializza ActivityPubManager
-      activityPubManager = new ActivityPubManager(gun, APP_KEY_PAIR);
+      // Inizializza ActivityPub
+      activityPubManager = new ActivityPub(gun, APP_KEY_PAIR);
 
       // Crea un utente di test
       testUser = gun.user();
