@@ -3,8 +3,8 @@ import { IGunChain, IGunInstance, IGunUserInstance, ISEAPair } from "gun";
 export abstract class GunStorage<T> {
   protected gun: IGunInstance;
   protected user: IGunUserInstance;
-  protected abstract storagePrefix: string;
-  private appPrefix: string;
+  protected storagePrefix: string;
+  protected appPrefix: string;
   protected APP_KEY_PAIR: ISEAPair;
   protected nodesPath: { private: string; public: string } = {
     private: "",
