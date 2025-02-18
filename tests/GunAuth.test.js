@@ -7,9 +7,9 @@ const { GunAuth } = require("../dist/core/auth/GunAuth");
 describe("GunAuth", function () {
   // Aumentato timeout totale a 5 minuti
 
-  let gunAuthManager;
-  let APP_KEY_PAIR;
   let gun;
+  let gunAuth;
+  let APP_KEY_PAIR;
   let server;
   const TEST_PORT = 8766; // Cambiata la porta per evitare conflitti
 
@@ -34,10 +34,10 @@ describe("GunAuth", function () {
       });
 
       // Inizializza GunAuth
-      gunAuthManager = new GunAuth(gun, APP_KEY_PAIR);
+      gunAuth = new GunAuth(gun, APP_KEY_PAIR);
 
       // Inizializza il listener di autenticazione
-      await gunAuthManager.authListener();
+      await gunAuth.authListener();
 
       // Attendi che Gun si stabilizzi
     } catch (error) {
@@ -48,10 +48,10 @@ describe("GunAuth", function () {
 
   after(async function () {
     try {
-      if (gunAuthManager) {
+      if (gunAuth) {
         try {
-          if (gunAuthManager.isAuthenticated()) {
-            await gunAuthManager.logout();
+          if (gunAuth.isAuthenticated()) {
+            await gunAuth.logout();
           }
         } catch (error) {
           console.warn("Logout error during cleanup:", error);
@@ -71,8 +71,8 @@ describe("GunAuth", function () {
   describe("Account Creation and Authentication", function () {
     beforeEach(async function () {
       try {
-        if (gunAuthManager.isAuthenticated()) {
-          await gunAuthManager.logout();
+        if (gunAuth.isAuthenticated()) {
+          await gunAuth.logout();
         }
       } catch (error) {
         console.warn("Logout error in beforeEach:", error);
@@ -83,11 +83,11 @@ describe("GunAuth", function () {
       // Aumentato timeout totale a 5 minuti
 
       // Assicuriamoci di essere disconnessi
-      if (gunAuthManager.isAuthenticated()) {
-        await gunAuthManager.logout();
+      if (gunAuth.isAuthenticated()) {
+        await gunAuth.logout();
       }
 
-      const keyPair = await gunAuthManager.createAccount(
+      const keyPair = await gunAuth.createAccount(
         testUser.username,
         testUser.password
       );
@@ -99,15 +99,15 @@ describe("GunAuth", function () {
       expect(keyPair).to.have.property("epriv").that.is.a("string");
 
       // Verifichiamo che l'utente sia effettivamente autenticato
-      expect(gunAuthManager.isAuthenticated()).to.be.true;
+      expect(gunAuth.isAuthenticated()).to.be.true;
     });
 
     it("should not create duplicate user accounts", async function () {
       // Aumentato timeout totale a 5 minuti
       try {
         // Assicuriamoci di essere disconnessi
-        if (gunAuthManager.isAuthenticated()) {
-          await gunAuthManager.logout();
+        if (gunAuth.isAuthenticated()) {
+          await gunAuth.logout();
         }
 
         // Creiamo un nuovo utente con un username univoco
@@ -117,13 +117,13 @@ describe("GunAuth", function () {
         };
 
         // Prima creazione - dovrebbe avere successo
-        await gunAuthManager.createAccount(
+        await gunAuth.createAccount(
           duplicateUser.username,
           duplicateUser.password
         );
 
         // Seconda creazione - dovrebbe fallire
-        await gunAuthManager.createAccount(
+        await gunAuth.createAccount(
           duplicateUser.username,
           duplicateUser.password
         );
@@ -136,9 +136,9 @@ describe("GunAuth", function () {
 
     it("should login with valid credentials", async function () {
       // Aumentato timeout totale a 5 minuti
-      gunAuthManager.logout();
+      gunAuth.logout();
 
-      const pubKey = await gunAuthManager.login(
+      const pubKey = await gunAuth.login(
         testUser.username,
         testUser.password
       )
@@ -157,12 +157,12 @@ describe("GunAuth", function () {
 
       try {
         // Prima assicuriamoci di essere disconnessi
-        if (gunAuthManager.isAuthenticated()) {
-          await gunAuthManager.logout();
+        if (gunAuth.isAuthenticated()) {
+          await gunAuth.logout();
         }
 
         // Impostiamo un timeout più breve per il login non valido
-        const result = await gunAuthManager.login(
+        const result = await gunAuth.login(
           testUser.username,
           "wrongPassword"
         );
@@ -180,7 +180,7 @@ describe("GunAuth", function () {
       }
 
       expect(authFailed).to.be.true;
-      expect(gunAuthManager.isAuthenticated()).to.be.false;
+      expect(gunAuth.isAuthenticated()).to.be.false;
     });
   });
 
@@ -205,7 +205,7 @@ describe("GunAuth", function () {
 
         while (!created && attempts < 3) {
           try {
-            userKeyPair = await gunAuthManager.createAccount(
+            userKeyPair = await gunAuth.createAccount(
               testDataUser.username,
               testDataUser.password
             );
@@ -227,7 +227,7 @@ describe("GunAuth", function () {
       // Aumentato timeout totale a 5 minuti
       try {
         // Reset completo con ritardo
-        await gunAuthManager._hardReset();
+        await gunAuth._hardReset();
 
         // Tentativo di login con backoff esponenziale
         let loggedIn = false;
@@ -236,14 +236,14 @@ describe("GunAuth", function () {
         while (!loggedIn && loginAttempts < 5) {
           try {
             console.log(`Login attempt ${loginAttempts + 1}`);
-            await gunAuthManager.login(
+            await gunAuth.login(
               testDataUser.username,
               testDataUser.password
             );
             loggedIn = true;
 
             // Verifica aggiuntiva dello stato
-            if (!gunAuthManager.isAuthenticated()) {
+            if (!gunAuth.isAuthenticated()) {
               throw new Error("Authentication state mismatch");
             }
           } catch (error) {
@@ -252,7 +252,7 @@ describe("GunAuth", function () {
 
             // Reset aggiuntivo dopo 2 tentativi falliti
             if (loginAttempts >= 2) {
-              await gunAuthManager._hardReset();
+              await gunAuth._hardReset();
             }
           }
         }
@@ -267,19 +267,19 @@ describe("GunAuth", function () {
     });
 
     it("should save and retrieve private data", async function () {
-      this.timeout(300000); // 5 minuti
+      this.timeout(5000); // 5 minuti
       
       const data = { secret: "This is private data" };
       const path = "secrets/data1";
 
       // Verifichiamo lo stato di autenticazione
-      expect(gunAuthManager.isAuthenticated(), "User should be authenticated").to.be.true;
+      expect(gunAuth.isAuthenticated(), "User should be authenticated").to.be.true;
 
       console.log("Starting save operation...");
       
       // Prima proviamo a pulire eventuali dati residui
       try {
-        await gunAuthManager.deletePrivateData(path);
+        await gunAuth.deletePrivateData(path);
         await new Promise(resolve => setTimeout(resolve, 5000));
       } catch (error) {
         console.log("Pre-cleanup warning:", error);
@@ -296,15 +296,15 @@ describe("GunAuth", function () {
           
           // Reset dello stato prima di ogni tentativo
           if (saveAttempts > 0) {
-            await gunAuthManager._hardReset();
+            await gunAuth._hardReset();
             await new Promise(resolve => setTimeout(resolve, 5000));
           }
           
-          await gunAuthManager.savePrivateData(data, path);
+          await gunAuth.savePrivateData(data, path);
           await new Promise(resolve => setTimeout(resolve, 8000));
           
           // Verifica immediata del salvataggio
-          const verifyData = await gunAuthManager.getPrivateData(path);
+          const verifyData = await gunAuth.getPrivateData(path);
           if (verifyData && verifyData.secret === data.secret) {
             console.log("Save verified immediately");
             saved = true;
@@ -335,11 +335,11 @@ describe("GunAuth", function () {
           
           // Reset dello stato prima di ogni tentativo di recupero
           if (retrieveAttempts > 0) {
-            await gunAuthManager._hardReset();
+            await gunAuth._hardReset();
             await new Promise(resolve => setTimeout(resolve, 5000));
           }
           
-          const result = await gunAuthManager.getPrivateData(path);
+          const result = await gunAuth.getPrivateData(path);
           
           if (result && result.secret === data.secret) {
             retrievedData = result;

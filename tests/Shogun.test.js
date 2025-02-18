@@ -165,7 +165,7 @@ describe("Shogun Data Management", function () {
 
   describe("Error Handling", function() {
     it("should handle invalid user creation", async function() {
-      const authManager = shogun.getGunAuthManager();
+      const authManager = shogun.getGunAuth();
       try {
         // Usa una password più lunga ma comunque invalida
         await authManager.createAccount("", "invalidpass");
@@ -177,7 +177,7 @@ describe("Shogun Data Management", function () {
     });
 
     it("should handle authentication errors", async function() {
-      const authManager = shogun.getGunAuthManager();
+      const authManager = shogun.getGunAuth();
       try {
         // Impostiamo un timeout più breve per il login non valido
         const loginPromise = authManager.login("nonexistent_user", "wrong_password");

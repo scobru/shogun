@@ -1,5 +1,5 @@
 import Gun, { IGunInstance, ISEAPair } from "gun";
-import type { GunKeyPair } from "../../types/GunKeyPair";
+import type { GunKeyPair } from "../../types/Gun";
 import { GunStorage } from "../storage/GunStorage";
 import { log } from "../../utils/log";
 
@@ -394,6 +394,8 @@ export class GunAuth extends GunStorage<GunKeyPair> {
         
         await super.savePrivateData(processedData, path);
         
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
         const savedData = await this.getPrivateData(path);
         
         if (processedData && Object.keys(processedData).length === 0) {
@@ -406,13 +408,13 @@ export class GunAuth extends GunStorage<GunKeyPair> {
         
         attempts++;
         if (attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 2000 * attempts));
         }
       } catch (error) {
         lastError = error;
         attempts++;
         console.error(`Save attempt ${attempts} failed:`, error);
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        await new Promise(resolve => setTimeout(resolve, 3000 * attempts));
       }
     }
     
@@ -437,28 +439,62 @@ export class GunAuth extends GunStorage<GunKeyPair> {
 
   public async getPrivateData(path: string): Promise<any> {
     if (!this.user._.sea) throw new Error("Utente non autenticato");
-    const user = this.gun.user();
+    
     return new Promise((resolve, reject) => {
-      user
+      const timeoutId = setTimeout(() => {
+        reject(new Error("Timeout getting private data"));
+      }, 15000);
+
+      this.user
         .get("private")
         .get(this.storagePrefix)
         .get(path)
         .once((data: any) => {
+          clearTimeout(timeoutId);
+          
           if (data === undefined || data === null) {
             resolve(null);
-          } else {
+            return;
+          }
+
+          try {
             const cleanedData = this.cleanGunMetadata(data);
             
             if (typeof cleanedData === 'object') {
-              resolve(JSON.stringify(cleanedData));
-            } else if (typeof cleanedData === 'string') {
               resolve(cleanedData);
+            } else if (typeof cleanedData === 'string') {
+              try {
+                resolve(JSON.parse(cleanedData));
+              } catch {
+                resolve(cleanedData);
+              }
             } else {
-              resolve(JSON.stringify(cleanedData));
+              resolve(cleanedData);
             }
+          } catch (error) {
+            console.error("Error processing private data:", error);
+            resolve(null);
           }
         });
     });
+  }
+
+  protected cleanGunMetadata(data: any): any {
+    if (!data || typeof data !== 'object') return data;
+    
+    const cleaned = { ...data };
+    delete cleaned._;
+    
+    Object.keys(cleaned).forEach(key => {
+      if (cleaned[key] && typeof cleaned[key] === 'object') {
+        cleaned[key] = this.cleanGunMetadata(cleaned[key]);
+        if (Object.keys(cleaned[key]).length === 0) {
+          delete cleaned[key];
+        }
+      }
+    });
+    
+    return cleaned;
   }
 
   /**

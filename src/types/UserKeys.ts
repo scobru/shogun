@@ -1,6 +1,6 @@
 import { Wallet } from "ethers";
-import { ActivityPubKeys } from "./ActivityPubKeys";
-import { GunKeyPair } from "./GunKeyPair";
+import { ActivityPubKeys } from "./ActivityPubTypes";
+import { GunKeyPair } from "./Gun";
 import { StealthKeyPair } from "./StealthKeyPair";
 
 export interface UserKeys {

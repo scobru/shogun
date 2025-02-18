@@ -7,7 +7,7 @@ import type {
 } from "../../types/WebAuthnResult";
 import { GunStorage } from "../storage/GunStorage";
 import jsSha256 from "js-sha256";
-import { GunKeyPair } from "../../types/GunKeyPair";
+import { GunKeyPair } from "../../types/Gun";
 import "gun/sea";
 
 const sha256 = jsSha256.sha256;

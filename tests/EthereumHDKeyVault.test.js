@@ -13,9 +13,9 @@ describe("EthereumHDKeyVault", function () {
   let testUsername;
   let testPassword;
 
-  this.timeout(180000);
+  this.timeout(30000);
 
-  const waitForSync = async (ms = 5000) => {
+  const waitForSync = async (ms = 2000) => {
     await new Promise(resolve => setTimeout(resolve, ms));
   };
 
@@ -25,7 +25,7 @@ describe("EthereumHDKeyVault", function () {
         testUser.auth(testUsername, testPassword, async (ack) => {
           if (ack.err) reject(new Error(ack.err));
           else {
-            await waitForSync(5000);
+            await waitForSync(2000);
             resolve();
           }
         });
@@ -33,7 +33,19 @@ describe("EthereumHDKeyVault", function () {
     }
   };
 
+  const clearData = async () => {
+    if (testUser.is) {
+      await new Promise(resolve => {
+        testUser.get('wallets').put(null);
+        testUser.get('hd_mnemonic').put(null);
+        testUser.get('hd_accounts').put(null);
+        setTimeout(resolve, 1000);
+      });
+    }
+  };
+
   before(async function () {
+    this.timeout(60000);
     try {
       APP_KEY_PAIR = await Gun.SEA.pair();
       gun = Gun({
@@ -51,18 +63,20 @@ describe("EthereumHDKeyVault", function () {
       testUsername = `testUser_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
       testPassword = "password123";
 
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       let created = false;
       for (let i = 0; i < 3; i++) {
         try {
           await new Promise((resolve, reject) => {
             testUser.create(testUsername, testPassword, async (ack) => {
-              if (ack.err) reject(ack.err);
+              if (ack.err) reject(new Error(ack.err));
               else {
-                await waitForSync(5000);
+                await waitForSync(2000);
                 testUser.auth(testUsername, testPassword, async (authAck) => {
-                  if (authAck.err) reject(authAck.err);
+                  if (authAck.err) reject(new Error(authAck.err));
                   else {
-                    await waitForSync(5000);
+                    await waitForSync(2000);
                     resolve();
                   }
                 });
@@ -73,16 +87,17 @@ describe("EthereumHDKeyVault", function () {
           break;
         } catch (error) {
           console.log(`Attempt ${i + 1} failed:`, error);
-          await waitForSync(5000);
+          await waitForSync(2000);
           if (i === 2) throw error;
         }
       }
 
-      if (!testUser.is) {
-        throw new Error("Failed to authenticate user after creation");
+      if (!created || !testUser.is) {
+        throw new Error("Failed to create and authenticate user");
       }
 
       hdKeyVault.user = testUser;
+      await clearData();
 
     } catch (error) {
       console.error("Setup error:", error);
@@ -92,15 +107,16 @@ describe("EthereumHDKeyVault", function () {
 
   beforeEach(async function() {
     await ensureAuthenticated();
-    await waitForSync(5000);
+    await clearData();
   });
 
   afterEach(async function() {
-    await ensureAuthenticated();
+    await clearData();
   });
 
   after(async function () {
     try {
+      await clearData();
       if (testUser && testUser.leave) {
         testUser.leave();
       }

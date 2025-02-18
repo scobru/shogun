@@ -116,24 +116,38 @@ export class JsonRpcConnector extends GunStorage<GunKeyPair> {
         const password = await this.generatePassword(signature);
         const username = address.toLowerCase();
 
-        this.user.create(username, password, async (ack: any) => {
-          clearTimeout(timeoutId);
+        let retryCount = 0;
+        const maxRetries = 3;
 
-          if (ack.err) {
-            reject(new Error(ack.err));
-            return;
-          }
+        const attemptCreate = async (): Promise<void> => {
+          return new Promise((resolveCreate, rejectCreate) => {
+            this.user.create(username, password, async (ack: any) => {
+              if (ack.err) {
+                if (retryCount < maxRetries) {
+                  retryCount++;
+                  console.log(`Retry create attempt ${retryCount}/${maxRetries}`);
+                  await new Promise(r => setTimeout(r, 2000));
+                  return resolveCreate(attemptCreate());
+                }
+                return rejectCreate(new Error(ack.err));
+              }
 
-          try {
-            await this.login();
-            const pair = this.user._.sea;
-            await this.savePrivateData(pair, "ethereum");
-            await this.savePublicData({ address }, "ethereum");
-            resolve(pair);
-          } catch (error) {
-            reject(error);
-          }
-        });
+              try {
+                await this.login();
+                const pair = this.user._.sea;
+                await this.savePrivateData(pair, "ethereum");
+                await this.savePublicData({ address }, "ethereum");
+                resolveCreate();
+              } catch (error) {
+                rejectCreate(error);
+              }
+            });
+          });
+        };
+
+        await attemptCreate();
+        clearTimeout(timeoutId);
+        resolve(this.user._.sea);
       } catch (error) {
         clearTimeout(timeoutId);
         reject(error);
@@ -162,20 +176,42 @@ export class JsonRpcConnector extends GunStorage<GunKeyPair> {
       const password = await this.generatePassword(signature);
       const username = address.toLowerCase();
 
-      return new Promise((resolve, reject) => {
-        this.user.auth(username, password, (ack: any) => {
-          if (ack.err) {
-            reject(new Error(ack.err));
-            return;
-          }
-          resolve(this.getCurrentPublicKey());
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      const attemptLogin = async (): Promise<string> => {
+        return new Promise((resolve, reject) => {
+          const timeoutId = setTimeout(() => {
+            reject(new Error("Login timeout"));
+          }, 15000);
+
+          this.user.auth(username, password, async (ack: any) => {
+            clearTimeout(timeoutId);
+            
+            if (ack.err) {
+              if (ack.err.includes("Wrong user or password") && retryCount < maxRetries) {
+                retryCount++;
+                console.log(`Retry login attempt ${retryCount}/${maxRetries}`);
+                await new Promise(r => setTimeout(r, 2000));
+                return resolve(await attemptLogin());
+              }
+              reject(new Error(ack.err));
+              return;
+            }
+            
+            if (!ack.sea) {
+              reject(new Error("Invalid authentication response"));
+              return;
+            }
+            
+            resolve(this.user.is?.pub || "");
+          });
         });
-      });
+      };
+
+      return attemptLogin();
     } catch (error) {
-      if (
-        error instanceof AuthenticationError ||
-        error instanceof ValidationError
-      ) {
+      if (error instanceof AuthenticationError || error instanceof ValidationError) {
         throw error;
       }
       throw new AuthenticationError(

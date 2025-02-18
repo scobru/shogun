@@ -4,9 +4,11 @@ const Gun = require("gun");
 require("gun/sea");
 const { ethers } = require("ethers");
 const { JsonRpcConnector } = require("../dist/blockchain/connectors/JsonRpcConnector");
+const { EthereumHDKeyVault } = require("../dist/blockchain/wallets/EthereumHDKeyVault");
 
 describe("JsonRpcConnector", function () {
   let ethereumConnector;
+  let hdKeyVault;
   let APP_KEY_PAIR;
   let gun;
   let testWallet;
@@ -32,6 +34,7 @@ describe("JsonRpcConnector", function () {
 
       // Inizializza EthereumManager
       ethereumConnector = new JsonRpcConnector(gun, APP_KEY_PAIR);
+      hdKeyVault = new EthereumHDKeyVault(gun, APP_KEY_PAIR);
       
       // Configura il provider personalizzato per i test
       ethereumConnector.setCustomProvider(TEST_RPC_URL, testWallet.privateKey);
@@ -79,7 +82,7 @@ describe("JsonRpcConnector", function () {
     });
 
     it("should create an Ethereum account", async function () {
-      const account = await ethereumConnector.createAccount();
+      const account = await hdKeyVault.createAccount();
       expect(account).to.be.an("object");
       expect(account).to.have.property("pub").that.is.a("string");
       expect(account).to.have.property("priv").that.is.a("string");

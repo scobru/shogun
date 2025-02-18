@@ -1,11 +1,11 @@
 import { Shogun } from "./Shogun";
-import { StealthChain } from "./protocol/stealth/StealthChain";
+import { StealthChain } from "./extensions/stealth/StealthChain";
 import { JsonRpcConnector } from "./blockchain/connectors/JsonRpcConnector";
 import { GunAuth } from "./core/auth/GunAuth";
-import { ActivityPub } from "./protocol/activitypub/ActivityPub";
+import { ActivityPub } from "./extensions/activitypub/ActivityPub";
 import { WebauthnAuth } from "./core/auth/WebauthnAuth";
 import { EthereumHDKeyVault } from "./blockchain/wallets/EthereumHDKeyVault";
-import UnstoppableChat from "./protocol/messages/unstoppable";
+import UnstoppableChat from "./extensions/messages/unstoppable";
 
 import {
   EthereumProvider,
@@ -23,14 +23,12 @@ import {
   StealthAddressResult,
   StealthKeyPairWrapper,
 } from "./types";
+
 import { SEA } from "gun";
-
-export { Shogun };
-
-// export services
 
 // export managers
 export {
+  Shogun,
   StealthChain,
   JsonRpcConnector,
   GunAuth,

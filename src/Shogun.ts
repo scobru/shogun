@@ -3,13 +3,12 @@
  * @module Shogun
  */
 
-import Gun, { IGunInstance, IGunUserInstance } from "gun";
-import "gun/sea";
+import { IGunInstance, IGunUserInstance } from "gun";
 import { JsonRpcConnector } from "./blockchain/connectors/JsonRpcConnector";
-import { StealthChain } from "./protocol/stealth/StealthChain";
-import type { GunKeyPair } from "./types/GunKeyPair";
+import { StealthChain } from "./extensions/stealth/StealthChain";
+import type { GunKeyPair } from "./types/Gun";
 import { GunAuth } from "./core/auth/GunAuth";
-import { ActivityPub } from "./protocol/activitypub/ActivityPub";
+import { ActivityPub } from "./extensions/activitypub/ActivityPub";
 import { WebauthnAuth } from "./core/auth/WebauthnAuth";
 import { EthereumHDKeyVault } from "./blockchain/wallets/EthereumHDKeyVault";
 import { UserKeys } from "./types/UserKeys";
@@ -293,5 +292,13 @@ export class Shogun {
         resolve(data !== undefined);
       });
     });
+  }
+
+  /**
+   * Returns the GunAuthManager instance (alias for getGunAuth)
+   * @returns {GunAuth} The GunAuthManager instance
+   */
+  public getGunAuthManager(): GunAuth {
+    return this.getGunAuth();
   }
 }

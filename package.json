@@ -1,12 +1,12 @@
 {
-  "name": "hedgehog",
-  "version": "1.0.0",
+  "name": "@scobru/shogun",
+  "version": "0.0.19b",
   "description": "Decentralized identity and wallet management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "test": "mocha -r ts-node/register tests/**/*.test.js --timeout 180000",
+    "test": "tsc && mocha --require ts-node/register \"tests/**/*.test.js\" --timeout 60000 --exit --serial",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "start-server": "node ./tests/gun-server.js"
