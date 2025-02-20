@@ -135,6 +135,9 @@ describe("EthereumHDKeyVault", function () {
       console.log("Starting create HD key test");
       
       const walletData = await hdKeyVault.createAccount();
+
+      console.log("Wallet data:", walletData);
+      
       await waitForSync();
       
       expect(walletData).to.be.an("object");

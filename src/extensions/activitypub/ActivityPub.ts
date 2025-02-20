@@ -168,7 +168,7 @@ export class ActivityPub extends GunStorage<ActivityPubKeys> {
         this.getPrivateData(this.storagePrefix).catch(() => null)
       ]);
       
-      if (finalPublicData || finalPrivateData) {
+      if (finalPublicData !== null && finalPrivateData !== null) {
         throw new Error("Keys still exist after deletion");
       }
     } catch (error) {

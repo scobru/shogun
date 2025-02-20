@@ -235,12 +235,13 @@ export abstract class GunStorage<T> {
     return new Promise((resolve, reject) => {
       let resolved = false;
       let verifyAttempts = 0;
-      const maxVerifyAttempts = 5;
+      const maxVerifyAttempts = 3;
       let verifyInterval: NodeJS.Timeout;
 
       const cleanup = () => {
         clearTimeout(timeoutId);
         clearInterval(verifyInterval);
+        node.off();
       };
 
       const timeoutId = setTimeout(() => {
@@ -249,42 +250,39 @@ export abstract class GunStorage<T> {
           resolved = true;
           reject(new Error("Delete operation timed out"));
         }
-      }, 30000);
+      }, 15000);
 
       const node = this.gun
         .get(`~${publicKey}`)
         .get(this.appPrefix)
         .get(path || "");
 
+      const verifyDeletion = () => {
+        node.once((data: any) => {
+          if (!data || (typeof data === 'object' && Object.keys(data).filter(k => k !== '_').length === 0)) {
+            cleanup();
+            if (!resolved) {
+              resolved = true;
+              resolve();
+            }
+          }
+        });
+      };
+
       node.put(null, (ack: any) => {
         if (ack.err) {
           cleanup();
           reject(new Error(ack.err));
         } else {
-          verifyInterval = setInterval(async () => {
+          verifyInterval = setInterval(() => {
             verifyAttempts++;
             if (verifyAttempts > maxVerifyAttempts) {
               cleanup();
-              reject(
-                new Error("Data verification failed - max attempts reached")
-              );
+              reject(new Error("Data verification failed - max attempts reached"));
               return;
             }
-
-            node.once((data: any) => {
-              if (data === null) {
-                cleanup();
-                if (!resolved) {
-                  resolved = true;
-                  resolve();
-                }
-              } else {
-                console.warn(
-                  `Attempt ${verifyAttempts}: Data still exists, waiting...`
-                );
-              }
-            });
-          }, 2000);
+            verifyDeletion();
+          }, 1000);
         }
       });
     });

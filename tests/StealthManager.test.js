@@ -2,7 +2,7 @@ const chai = require("chai");
 const { expect } = chai;
 const Gun = require("gun");
 require("gun/sea");
-const { StealthChain } = require("../dist/protocol/stealth/StealthChain");
+const { StealthChain } = require("../dist/extensions/stealth/StealthChain");
 const { ethers } = require("ethers");
 
 describe("StealthManager", function () {

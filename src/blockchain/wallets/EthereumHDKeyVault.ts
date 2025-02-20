@@ -71,7 +71,7 @@ export class EthereumHDKeyVault extends GunStorage<StoredWalletData> {
 
     try {
       const encryptedData = await this.getPrivateData(EthereumHDKeyVault.MASTER_WALLET_PATH) as EncryptedHDWalletData | null;
-      
+
       if (encryptedData?.mnemonic) {
         // Creiamo il nodo master direttamente dalla mnemonic
         const node = ethers.HDNodeWallet.fromMnemonic(
@@ -88,10 +88,10 @@ export class EthereumHDKeyVault extends GunStorage<StoredWalletData> {
         // Salviamo il nodo master
         const encryptedJson = await this.masterWallet.encrypt(this.getEncryptionPassword());
         await this.savePrivateDataWithRetry(
-          { 
+          {
             encryptedJson,
             mnemonic: mnemonic.phrase,
-            timestamp: Date.now() 
+            timestamp: Date.now()
           },
           EthereumHDKeyVault.MASTER_WALLET_PATH,
           10 // Aumentiamo i tentativi per il master wallet
@@ -112,7 +112,7 @@ export class EthereumHDKeyVault extends GunStorage<StoredWalletData> {
 
   private async deriveWallet(index: number): Promise<Wallet> {
     const master = await this.getMasterWallet();
-    
+
     try {
       if (master.depth !== 0) {
         throw new Error("Il nodo master deve essere il nodo root (depth 0)");
@@ -120,7 +120,7 @@ export class EthereumHDKeyVault extends GunStorage<StoredWalletData> {
 
       const fullPath = `${EthereumHDKeyVault.BASE_PATH}/${index}`;
       const derived = master.derivePath(fullPath);
-      
+
       return new Wallet(derived.privateKey);
     } catch (error) {
       console.error(`Errore nella derivazione del wallet all'indice ${index}:`, error);
@@ -130,30 +130,30 @@ export class EthereumHDKeyVault extends GunStorage<StoredWalletData> {
 
   private async getNextAccountIndex(): Promise<number> {
     await this.ensureAuthenticated();
-    
+
     const accounts = (await this.getPrivateData(EthereumHDKeyVault.ACCOUNTS_PATH) as unknown as AddressesMap) || {};
     const indices = Object.values(accounts).map(meta => meta.index);
-    
+
     if (indices.length === 0) return 0;
     return Math.max(...indices) + 1;
   }
 
   public async createAccount(): Promise<WalletData> {
     await this.ensureAuthenticated();
-    
+
     const index = await this.getNextAccountIndex();
     const wallet = await this.deriveWallet(index);
-    
+
     const encryptedJson = await wallet.encrypt(this.getEncryptionPassword());
     const data: EncryptedWalletData = {
       encryptedJson,
       index,
       timestamp: Date.now()
     };
-    
+
     await this.saveWalletMetadata(data);
     await this.savePrivateDataWithRetry(data, `${this.storagePrefix}/${wallet.address.toLowerCase()}`);
-    
+
     return {
       address: wallet.address,
       privateKey: wallet.privateKey,
@@ -179,7 +179,7 @@ export class EthereumHDKeyVault extends GunStorage<StoredWalletData> {
       const addressesPath = `${EthereumHDKeyVault.ACCOUNTS_PATH}/addresses`;
       const rawAddresses = await this.getPrivateData(addressesPath);
       const existingAddresses: StoredAddressesMap = (rawAddresses as unknown as StoredAddressesMap) || { addresses: {} };
-      
+
       if (!existingAddresses.addresses) {
         existingAddresses.addresses = {};
       }
@@ -214,48 +214,24 @@ export class EthereumHDKeyVault extends GunStorage<StoredWalletData> {
     maxRetries: number = 5,
     forceNewObject: boolean = false
   ): Promise<void> {
-    let lastError;
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        await this.ensureAuthenticated();
-        
-        // Se richiesto, creiamo una copia pulita dell'oggetto
-        const dataToSave = forceNewObject ? JSON.parse(JSON.stringify(data)) : data;
-        
-        // Salviamo i dati
-        await this.savePrivateData(dataToSave, path);
-        
-        // Attendiamo che Gun sincronizzi
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Verifichiamo il salvataggio
-        const saved = await this.getPrivateData(path);
-        if (saved) {
-          // Confrontiamo gli oggetti in modo più robusto
-          if (this.areObjectsEquivalent(saved, dataToSave)) {
-            console.log(`Salvataggio verificato con successo al tentativo ${i + 1}`);
-            return;
-          }
-          
-          console.log(`Dati salvati non corrispondenti al tentativo ${i + 1}, riprovo...`);
-          console.log('Atteso:', JSON.stringify(dataToSave));
-          console.log('Ricevuto:', JSON.stringify(saved));
-        } else {
-          console.log(`Nessun dato trovato dopo il salvataggio al tentativo ${i + 1}`);
-        }
-        
-        // Aumentiamo il tempo di attesa ad ogni tentativo
-        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-      } catch (error) {
-        console.error(`Errore nel tentativo ${i + 1}:`, error);
-        lastError = error;
-        // Aumentiamo il tempo di attesa ad ogni errore
-        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-      }
-    }
+
+    await this.ensureAuthenticated();
+
+    // Se richiesto, creiamo una copia pulita dell'oggetto
+    const dataToSave = forceNewObject ? JSON.parse(JSON.stringify(data)) : data;
+
     
-    throw lastError || new Error(`Impossibile salvare i dati dopo ${maxRetries} tentativi`);
+    await this.savePrivateData(dataToSave, path).catch((error) => {
+      console.error("Error saving private data:", error);
+      throw error;
+    }).then(() => {
+      console.log("Data saved successfully");
+    });
+
+
   }
+
+
 
   private areObjectsEquivalent(obj1: any, obj2: any): boolean {
     // Ignora i riferimenti Gun
@@ -295,7 +271,7 @@ export class EthereumHDKeyVault extends GunStorage<StoredWalletData> {
     try {
       const addressesPath = `${EthereumHDKeyVault.ACCOUNTS_PATH}/addresses`;
       const rawAddresses = await this.getPrivateData(addressesPath);
-      
+
       if (!rawAddresses || typeof rawAddresses !== 'object') {
         console.log('No addresses found in storage');
         return [];
@@ -308,7 +284,7 @@ export class EthereumHDKeyVault extends GunStorage<StoredWalletData> {
       }
 
       const wallets: ExtendedWallet[] = [];
-      
+
       for (const [address, metadata] of Object.entries(storedAddresses.addresses)) {
         try {
           if (!metadata || !metadata.index) {
@@ -358,7 +334,7 @@ export class EthereumHDKeyVault extends GunStorage<StoredWalletData> {
         walletData.encryptedJson,
         this.getEncryptionPassword()
       );
-      
+
       return new Wallet(wallet.privateKey);
     } catch (error) {
       console.error(`Error decrypting wallet ${address}:`, error);
@@ -402,7 +378,7 @@ export class EthereumHDKeyVault extends GunStorage<StoredWalletData> {
     if (!this.user || !this.user.is) {
       throw new Error("Utente non autenticato");
     }
-    
+
     if (!this.user._.sea) {
       throw new Error("Chiavi SEA non trovate");
     }

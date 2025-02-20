@@ -2,7 +2,7 @@ const chai = require("chai");
 const { expect } = chai;
 const Gun = require("gun");
 require("gun/sea");
-const { ActivityPub } = require("../dist/protocol/activitypub/ActivityPub");
+const { ActivityPub } = require("../dist/extensions/activitypub/ActivityPub");
 
 describe("ActivityPub", function () {
   let activityPubManager;
