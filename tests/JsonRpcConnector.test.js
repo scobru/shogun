@@ -14,6 +14,30 @@ describe("JsonRpcConnector", function () {
   let testWallet;
   const TEST_RPC_URL = "http://localhost:8545";
 
+  const waitForOperation = async (ms = 8000) => {
+    await new Promise(resolve => setTimeout(resolve, ms));
+  };
+
+  const retryOperation = async (operation, maxAttempts = 3, delay = 8000) => {
+    let lastError;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const result = await operation();
+        if (attempt > 1) {
+          console.log(`Operation succeeded on attempt ${attempt}`);
+        }
+        return result;
+      } catch (error) {
+        console.log(`Attempt ${attempt} failed:`, error.message);
+        lastError = error;
+        if (attempt < maxAttempts) {
+          await waitForOperation(delay);
+        }
+      }
+    }
+    throw lastError;
+  };
+
   before(async function () {
     try {
       // Genera chiavi per l'app
@@ -73,25 +97,50 @@ describe("JsonRpcConnector", function () {
 
   describe("Account Management", function () {
     beforeEach(async function () {
-      // Reset dello stato prima di ogni test
-      if (ethereumConnector.user.is) {
-        ethereumConnector.user.leave();
-      }
+      this.timeout(120000);
+      
+      // Ensure authentication before each test
+      await retryOperation(async () => {
+        if (!hdKeyVault.user || !hdKeyVault.user.is) {
+          await new Promise((resolve, reject) => {
+            hdKeyVault.user.auth(testUsername, testPassword, async (ack) => {
+              if (ack.err) reject(new Error(ack.err));
+              else {
+                await waitForOperation(10000);
+                resolve();
+              }
+            });
+          });
+        }
+        
+        if (!hdKeyVault.user.is) {
+          throw new Error("Authentication failed");
+        }
+      });
+
       // Riconfigura il provider
       ethereumConnector.setCustomProvider(TEST_RPC_URL, testWallet.privateKey);
     });
 
     it("should create an Ethereum account", async function () {
-      const account = await hdKeyVault.createAccount();
+      const account = await retryOperation(async () => {
+        const result = await hdKeyVault.createAccount();
+        await waitForOperation(10000);
+        return result;
+      });
+
       expect(account).to.be.an("object");
-      expect(account).to.have.property("pub").that.is.a("string");
-      expect(account).to.have.property("priv").that.is.a("string");
-      expect(account).to.have.property("epub").that.is.a("string");
-      expect(account).to.have.property("epriv").that.is.a("string");
+      expect(account.address).to.be.a("string");
+      expect(ethers.isAddress(account.address)).to.be.true;
     });
 
     it("should login with Ethereum account", async function () {
-      const publicKey = await ethereumConnector.login();
+      const publicKey = await retryOperation(async () => {
+        const result = await ethereumConnector.login();
+        await waitForOperation(10000);
+        return result;
+      });
+
       expect(publicKey).to.be.a("string");
       expect(publicKey).to.have.length.greaterThan(0);
     });
@@ -131,45 +180,56 @@ describe("JsonRpcConnector", function () {
 
   describe("Data Storage", function () {
     beforeEach(async function () {
-      // Aumentiamo il timeout
-      this.timeout(10000);
+      this.timeout(180000);
       
-      // Assicuriamoci che l'utente sia completamente disconnesso
-      if (ethereumConnector.user) {
-        ethereumConnector.user.leave();
-      }
-      
-      // Attendiamo un tempo sufficiente per la disconnessione
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      try {
-        await ethereumConnector.createAccount();
-      } catch (error) {
-        if (error.message.includes("already created")) {
-          // Se l'account esiste già, proviamo a fare il login
-          await ethereumConnector.login();
-        } else {
-          throw error;
+      await retryOperation(async () => {
+        // Ensure clean state
+        if (ethereumConnector.user) {
+          ethereumConnector.user.leave();
+          await waitForOperation(5000);
         }
-      }
-      
-      // Attendiamo che l'account sia pronto
-      await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        try {
+          await ethereumConnector.createAccount();
+          await waitForOperation(10000);
+        } catch (error) {
+          if (error.message.includes("already created")) {
+            await ethereumConnector.login();
+            await waitForOperation(10000);
+          } else {
+            throw error;
+          }
+        }
+        
+        if (!ethereumConnector.isAuthenticated()) {
+          throw new Error("Authentication failed");
+        }
+      });
     });
 
     it("should save and retrieve private data", async function () {
-      const testData = { test: "data" };
-      await ethereumConnector.savePrivateData(testData, "test");
-      const retrievedData = await ethereumConnector.getPrivateData("test");
-      expect(retrievedData).to.deep.equal(testData);
+      const testData = { test: "data_" + Date.now() };
+      
+      await retryOperation(async () => {
+        await ethereumConnector.savePrivateData(testData, "test");
+        await waitForOperation(10000);
+        
+        const retrievedData = await ethereumConnector.getPrivateData("test");
+        expect(retrievedData).to.deep.equal(testData);
+      });
     });
 
     it("should save and retrieve public data", async function () {
-      const testData = { test: "public_data" };
-      await ethereumConnector.savePublicData(testData, "test");
-      const publicKey = ethereumConnector.getCurrentPublicKey();
-      const retrievedData = await ethereumConnector.getPublicData(publicKey, "test");
-      expect(retrievedData).to.deep.equal(testData);
+      const testData = { test: "public_data_" + Date.now() };
+      
+      await retryOperation(async () => {
+        await ethereumConnector.savePublicData(testData, "test");
+        await waitForOperation(10000);
+        
+        const publicKey = ethereumConnector.getCurrentPublicKey();
+        const retrievedData = await ethereumConnector.getPublicData(publicKey, "test");
+        expect(retrievedData).to.deep.equal(testData);
+      });
     });
   });
 

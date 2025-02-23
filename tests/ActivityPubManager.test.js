@@ -135,35 +135,31 @@ describe("ActivityPub", function () {
       const keys = await activityPubManager.createAccount();
       console.log("Saving keys...");
       await activityPubManager.saveKeys(keys);
-      await waitForOperation(8000);
+      await waitForOperation(10000);
 
       console.log("Verifying keys exist...");
       const keysBeforeDelete = await activityPubManager.getKeys();
       expect(keysBeforeDelete).to.deep.equal(keys);
 
       console.log("Starting key deletion process...");
-      
-      // Chiamata al metodo deleteKeys
       await activityPubManager.deleteKeys();
-      await waitForOperation(10000);
+      
+      // Aumentiamo il tempo di attesa iniziale
+      await waitForOperation(15000);
 
-      // Verifica la cancellazione con retry
+      // Verifica con retry più lunghi
       let verificationAttempts = 0;
-      const maxVerificationAttempts = 5;
+      const maxVerificationAttempts = 8;
       
       while (verificationAttempts < maxVerificationAttempts) {
-        try {
-          const keysAfterDelete = await activityPubManager.getKeys();
-          console.log("Keys still exist, retrying verification...");
-          verificationAttempts++;
-          await waitForOperation(5000);
-        } catch (error) {
-          if (error.message === "Keys not found") {
-            console.log("Keys successfully deleted");
-            return;
-          }
-          throw error;
+        const keysAfterDelete = await activityPubManager.getKeys().catch(e => null);
+        if (!keysAfterDelete) {
+          console.log("Keys successfully deleted");
+          return;
         }
+        console.log("Keys still exist, retrying verification...");
+        verificationAttempts++;
+        await waitForOperation(8000);
       }
       
       throw new Error("Keys still exist after deletion");

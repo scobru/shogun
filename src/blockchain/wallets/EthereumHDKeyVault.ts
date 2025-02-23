@@ -13,6 +13,7 @@ interface StoredWalletData {
   encryptedJson: string;
   index?: number;
   timestamp?: number;
+  addresses?: { [key: string]: AddressMetadata };
 }
 
 interface WalletMetadata {
@@ -40,7 +41,7 @@ interface AddressesMap {
 }
 
 interface StoredAddressesMap {
-  addresses: AddressesMap;
+  addresses: { [key: string]: AddressMetadata };
 }
 
 export class EthereumHDKeyVault extends GunStorage<StoredWalletData> {
@@ -67,42 +68,57 @@ export class EthereumHDKeyVault extends GunStorage<StoredWalletData> {
   }
 
   private async getMasterWallet(): Promise<HDNodeWallet> {
-    if (this.masterWallet) return this.masterWallet;
+    console.log('getMasterWallet: Iniziando recupero master wallet');
+    if (this.masterWallet) {
+      console.log('getMasterWallet: Ritorno master wallet dalla cache');
+      return this.masterWallet;
+    }
 
     try {
-      const encryptedData = await this.getPrivateData(EthereumHDKeyVault.MASTER_WALLET_PATH) as EncryptedHDWalletData | null;
+      const masterPath = EthereumHDKeyVault.MASTER_WALLET_PATH;
+      console.log(`getMasterWallet: Tentativo di recupero da ${masterPath}`);
+      const encryptedData = await this.getPrivateData(masterPath) as EncryptedHDWalletData | null;
+      console.log('getMasterWallet: Dati recuperati:', encryptedData);
 
       if (encryptedData?.mnemonic) {
-        // Creiamo il nodo master direttamente dalla mnemonic
+        console.log('getMasterWallet: Creazione nodo da mnemonic esistente');
         const node = ethers.HDNodeWallet.fromMnemonic(
           ethers.Mnemonic.fromPhrase(encryptedData.mnemonic),
           `m`
         );
         this.masterWallet = node;
       } else {
-        // Creiamo un nuovo nodo master con una nuova mnemonic
+        console.log('getMasterWallet: Creazione nuovo nodo master');
         const mnemonic = ethers.Mnemonic.fromEntropy(ethers.randomBytes(16));
         const node = ethers.HDNodeWallet.fromMnemonic(mnemonic, `m`);
         this.masterWallet = node;
 
-        // Salviamo il nodo master
-        const encryptedJson = await this.masterWallet.encrypt(this.getEncryptionPassword());
-        await this.savePrivateDataWithRetry(
-          {
-            encryptedJson,
-            mnemonic: mnemonic.phrase,
-            timestamp: Date.now()
-          },
-          EthereumHDKeyVault.MASTER_WALLET_PATH,
-          10 // Aumentiamo i tentativi per il master wallet
+        const data = {
+          mnemonic: mnemonic.phrase,
+          timestamp: Date.now()
+        };
+
+        console.log('getMasterWallet: Salvataggio nuovo master wallet');
+        await super.savePrivateDataWithRetry(
+          data,
+          masterPath,
+          10,
+          true
         );
+
+        console.log('getMasterWallet: Verifica salvataggio');
+        const savedData = await this.getPrivateData(masterPath) as EncryptedHDWalletData;
+        if (!savedData?.mnemonic) {
+          throw new Error("Failed to save master wallet mnemonic");
+        }
+        console.log('getMasterWallet: Verifica completata con successo');
       }
 
-      // Verifica finale che il wallet sia un nodo root
       if (this.masterWallet.depth !== 0) {
         throw new Error("Il master wallet non è un nodo root dopo l'inizializzazione");
       }
 
+      console.log('getMasterWallet: Master wallet pronto');
       return this.masterWallet;
     } catch (error) {
       console.error("Errore in getMasterWallet:", error);
@@ -129,20 +145,84 @@ export class EthereumHDKeyVault extends GunStorage<StoredWalletData> {
   }
 
   private async getNextAccountIndex(): Promise<number> {
+    console.log('getNextAccountIndex: Inizio recupero prossimo indice');
     await this.ensureAuthenticated();
 
-    const accounts = (await this.getPrivateData(EthereumHDKeyVault.ACCOUNTS_PATH) as unknown as AddressesMap) || {};
-    const indices = Object.values(accounts).map(meta => meta.index);
+    try {
+        const addressesPath = `${EthereumHDKeyVault.ACCOUNTS_PATH}/addresses`;
+        let maxIndex = -1;
+        let retryCount = 0;
+        const maxRetries = 5;
 
-    if (indices.length === 0) return 0;
-    return Math.max(...indices) + 1;
+        while (retryCount < maxRetries) {
+            try {
+                console.log(`getNextAccountIndex: Tentativo ${retryCount + 1} di lettura`);
+                await this.ensureAuthenticated();
+
+                // Leggiamo direttamente dal nodo addresses
+                const addresses = await new Promise<any>((resolve) => {
+                    const node = this.getPrivateNode(addressesPath);
+                    let foundData = false;
+                    let result: { [key: string]: AddressMetadata } = {};
+
+                    node.map().once((data: any, key: string) => {
+                        if (key !== '_' && key !== '#' && data && typeof data === 'object') {
+                            foundData = true;
+                            console.log(`getNextAccountIndex: Trovato indirizzo ${key} con dati:`, data);
+                            result[key] = data;
+                            if (data.index !== undefined && typeof data.index === 'number') {
+                                maxIndex = Math.max(maxIndex, data.index);
+                                console.log(`getNextAccountIndex: Aggiornato maxIndex a ${maxIndex}`);
+                            }
+                        }
+                    });
+
+                    setTimeout(() => {
+                        console.log(`getNextAccountIndex: Dati trovati:`, result);
+                        resolve(result);
+                    }, 5000);
+                });
+
+                if (maxIndex >= 0) {
+                    console.log(`getNextAccountIndex: Trovato indice massimo ${maxIndex}`);
+                    break;
+                }
+
+                console.log(`getNextAccountIndex: Nessun indice valido trovato al tentativo ${retryCount + 1}`);
+                retryCount++;
+                if (retryCount < maxRetries) {
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                }
+            } catch (error) {
+                console.error(`getNextAccountIndex: Errore al tentativo ${retryCount + 1}:`, error);
+                retryCount++;
+                if (retryCount < maxRetries) {
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                }
+            }
+        }
+
+        const nextIndex = maxIndex + 1;
+        console.log('getNextAccountIndex: Prossimo indice calcolato:', nextIndex);
+        return nextIndex;
+    } catch (error) {
+        console.error("getNextAccountIndex: Errore:", error);
+        return 0;
+    }
   }
 
   public async createAccount(): Promise<WalletData> {
+    console.log('createAccount: Inizio creazione nuovo account');
     await this.ensureAuthenticated();
 
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    console.log('createAccount: Recupero prossimo indice');
     const index = await this.getNextAccountIndex();
+    console.log('createAccount: Indice ottenuto:', index);
+
+    console.log('createAccount: Derivazione wallet');
     const wallet = await this.deriveWallet(index);
+    console.log('createAccount: Wallet derivato:', { address: wallet.address, index });
 
     const encryptedJson = await wallet.encrypt(this.getEncryptionPassword());
     const data: EncryptedWalletData = {
@@ -150,178 +230,119 @@ export class EthereumHDKeyVault extends GunStorage<StoredWalletData> {
       index,
       timestamp: Date.now()
     };
+    console.log('createAccount: Dati wallet preparati:', { address: wallet.address, index, timestamp: data.timestamp });
 
+    console.log('createAccount: Salvataggio metadati');
     await this.saveWalletMetadata(data);
-    await this.savePrivateDataWithRetry(data, `${this.storagePrefix}/${wallet.address.toLowerCase()}`);
+    console.log('createAccount: Metadati salvati con successo');
 
-    return {
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    console.log('createAccount: Verifica finale indici');
+    const allWallets = await this.getWallets();
+    console.log('createAccount: Wallet esistenti:', allWallets.map(w => ({ address: w.address, index: w.index })));
+
+    const result = {
       address: wallet.address,
       privateKey: wallet.privateKey,
       entropy: `${EthereumHDKeyVault.BASE_PATH}/${index}`,
       index,
       timestamp: data.timestamp
     };
+    console.log('createAccount: Ritorno risultato:', { address: result.address, index: result.index });
+    return result;
   }
 
   private async saveWalletMetadata(data: EncryptedWalletData): Promise<void> {
+    console.log('saveWalletMetadata: Inizio salvataggio metadati');
     try {
-      const wallet = await Wallet.fromEncryptedJson(data.encryptedJson, this.getEncryptionPassword());
-      const address = wallet.address.toLowerCase();
+        await this.ensureAuthenticated();
+        
+        const wallet = await Wallet.fromEncryptedJson(data.encryptedJson, this.getEncryptionPassword());
+        const address = wallet.address.toLowerCase();
+        console.log(`saveWalletMetadata: Processando wallet ${address} con indice ${data.index}`);
 
-      // Salviamo il wallet completo con i suoi metadati
-      await this.savePrivateDataWithRetry(
-        data,
-        `${this.storagePrefix}/${address}`,
-        5
-      );
+        // Salviamo prima il wallet completo
+        const walletPath = `${EthereumHDKeyVault.ACCOUNTS_PATH}/${address}`;
+        await super.savePrivateDataWithRetry(data, walletPath, 5, true);
 
-      // Aggiorniamo la mappa degli indirizzi
-      const addressesPath = `${EthereumHDKeyVault.ACCOUNTS_PATH}/addresses`;
-      const rawAddresses = await this.getPrivateData(addressesPath);
-      const existingAddresses: StoredAddressesMap = (rawAddresses as unknown as StoredAddressesMap) || { addresses: {} };
+        // Attendiamo per la propagazione
+        await new Promise(resolve => setTimeout(resolve, 3000));
 
-      if (!existingAddresses.addresses) {
-        existingAddresses.addresses = {};
-      }
+        // Salviamo l'indirizzo direttamente nel nodo addresses
+        const addressesPath = `${EthereumHDKeyVault.ACCOUNTS_PATH}/addresses/${address}`;
+        const addressData: AddressMetadata = {
+            index: data.index,
+            timestamp: data.timestamp
+        };
 
-      existingAddresses.addresses[address] = {
-        index: data.index,
-        timestamp: data.timestamp
-      };
+        // Salviamo i dati dell'indirizzo
+        await super.savePrivateDataWithRetry(addressData, addressesPath, 5, true);
 
-      // Salviamo la mappa aggiornata degli indirizzi
-      await this.savePrivateDataWithRetry(
-        existingAddresses,
-        addressesPath,
-        5
-      );
+        // Verifica finale
+        const savedWallet = await this.getPrivateData(walletPath);
+        const savedAddress = await this.getPrivateData(addressesPath);
 
-      // Salviamo anche nel percorso degli account HD
-      await this.savePrivateDataWithRetry(
-        data,
-        `${EthereumHDKeyVault.ACCOUNTS_PATH}/${address}`,
-        5
-      );
+        if (!savedWallet || !savedAddress) {
+            throw new Error(`Verifica del salvataggio fallita per ${address}`);
+        }
+
+        console.log('saveWalletMetadata: Salvataggio completato con successo');
     } catch (error) {
-      console.error("Error saving wallet metadata:", error);
-      throw error;
+        console.error("saveWalletMetadata: Errore:", error);
+        throw error;
     }
-  }
-
-  private async savePrivateDataWithRetry(
-    data: any,
-    path: string,
-    maxRetries: number = 5,
-    forceNewObject: boolean = false
-  ): Promise<void> {
-
-    await this.ensureAuthenticated();
-
-    // Se richiesto, creiamo una copia pulita dell'oggetto
-    const dataToSave = forceNewObject ? JSON.parse(JSON.stringify(data)) : data;
-
-    
-    await this.savePrivateData(dataToSave, path).catch((error) => {
-      console.error("Error saving private data:", error);
-      throw error;
-    }).then(() => {
-      console.log("Data saved successfully");
-    });
-
-
-  }
-
-
-
-  private areObjectsEquivalent(obj1: any, obj2: any): boolean {
-    // Ignora i riferimenti Gun
-    if (obj1?.['#'] || obj2?.['#']) {
-      return true;
-    }
-
-    // Se uno dei due è null o undefined, confronta direttamente
-    if (obj1 == null || obj2 == null) {
-      return obj1 === obj2;
-    }
-
-    // Se non sono oggetti, confronta direttamente
-    if (typeof obj1 !== 'object' || typeof obj2 !== 'object') {
-      return obj1 === obj2;
-    }
-
-    // Se sono array, controlla la lunghezza e ogni elemento
-    if (Array.isArray(obj1) && Array.isArray(obj2)) {
-      if (obj1.length !== obj2.length) return false;
-      return obj1.every((item, index) => this.areObjectsEquivalent(item, obj2[index]));
-    }
-
-    // Se sono oggetti, confronta le chiavi e i valori
-    const keys1 = Object.keys(obj1).filter(k => k !== '#').sort();
-    const keys2 = Object.keys(obj2).filter(k => k !== '#').sort();
-
-    if (keys1.length !== keys2.length) return false;
-    if (!keys1.every((key, index) => key === keys2[index])) return false;
-
-    return keys1.every(key => this.areObjectsEquivalent(obj1[key], obj2[key]));
   }
 
   public async getWallets(): Promise<ExtendedWallet[]> {
     await this.ensureAuthenticated();
 
     try {
-      const addressesPath = `${EthereumHDKeyVault.ACCOUNTS_PATH}/addresses`;
-      const rawAddresses = await this.getPrivateData(addressesPath);
+        const addressesPath = `${EthereumHDKeyVault.ACCOUNTS_PATH}/addresses`;
+        const wallets: ExtendedWallet[] = [];
+        
+        // Recuperiamo tutti gli indirizzi
+        await new Promise<void>((resolve) => {
+            this.getPrivateNode(addressesPath).map().once(async (data: any, key: string) => {
+                try {
+                    if (key === '_' || key === '#' || !data || typeof data !== 'object') {
+                        return;
+                    }
 
-      if (!rawAddresses || typeof rawAddresses !== 'object') {
-        console.log('No addresses found in storage');
-        return [];
-      }
+                    console.log(`Processing wallet data for address ${key}:`, data);
+                    
+                    const walletData = await this.getPrivateData(`${EthereumHDKeyVault.ACCOUNTS_PATH}/${key}`);
+                    if (!walletData?.encryptedJson) {
+                        console.log(`No encrypted data found for address ${key}`);
+                        return;
+                    }
 
-      const storedAddresses = rawAddresses as unknown as StoredAddressesMap;
-      if (!storedAddresses.addresses) {
-        console.log('No addresses map found in storage');
-        return [];
-      }
+                    const wallet = await Wallet.fromEncryptedJson(
+                        walletData.encryptedJson,
+                        this.getEncryptionPassword()
+                    );
 
-      const wallets: ExtendedWallet[] = [];
+                    const extendedWallet = {
+                        ...wallet,
+                        entropy: `${EthereumHDKeyVault.BASE_PATH}/${data.index}`,
+                        index: data.index,
+                        timestamp: data.timestamp || Date.now()
+                    } as ExtendedWallet;
 
-      for (const [address, metadata] of Object.entries(storedAddresses.addresses)) {
-        try {
-          if (!metadata || !metadata.index) {
-            console.log(`Skipping invalid metadata for address ${address}`);
-            continue;
-          }
+                    wallets.push(extendedWallet);
+                    console.log(`Successfully loaded wallet for address ${key} with index ${data.index}`);
+                } catch (error) {
+                    console.error(`Error loading wallet ${key}:`, error);
+                }
+            });
 
-          const walletData = await this.getPrivateData(`${EthereumHDKeyVault.ACCOUNTS_PATH}/${address}`);
-          if (!walletData?.encryptedJson) {
-            console.log(`No encrypted data found for address ${address}`);
-            continue;
-          }
+            // Diamo tempo per caricare tutti i wallet
+            setTimeout(resolve, 10000);
+        });
 
-          const wallet = await Wallet.fromEncryptedJson(
-            walletData.encryptedJson,
-            this.getEncryptionPassword()
-          );
-
-          const extendedWallet = {
-            ...wallet,
-            entropy: `${EthereumHDKeyVault.BASE_PATH}/${metadata.index}`,
-            index: metadata.index,
-            timestamp: metadata.timestamp || Date.now()
-          } as ExtendedWallet;
-
-          wallets.push(extendedWallet);
-          console.log(`Successfully loaded wallet for address ${address} with index ${metadata.index}`);
-        } catch (error) {
-          console.error(`Error loading wallet ${address}:`, error);
-          continue;
-        }
-      }
-
-      return wallets.sort((a, b) => a.index - b.index);
+        return wallets.sort((a, b) => a.index - b.index);
     } catch (error) {
-      console.error("Error getting wallets:", error);
-      throw error;
+        console.error("Error getting wallets:", error);
+        throw error;
     }
   }
 
@@ -374,13 +395,18 @@ export class EthereumHDKeyVault extends GunStorage<StoredWalletData> {
     return new Wallet(wallets[0].privateKey);
   }
 
-  private async ensureAuthenticated(): Promise<void> {
+  protected async ensureAuthenticated(): Promise<void> {
     if (!this.user || !this.user.is) {
-      throw new Error("Utente non autenticato");
+        throw new Error("Utente non autenticato");
     }
 
     if (!this.user._.sea) {
-      throw new Error("Chiavi SEA non trovate");
+        throw new Error("Chiavi SEA non trovate");
+    }
+
+    // Verifica aggiuntiva delle chiavi necessarie
+    if (!this.user._.sea.priv || !this.user._.sea.epub) {
+        throw new Error("Chiavi di crittografia non disponibili");
     }
   }
 
@@ -410,5 +436,107 @@ export class EthereumHDKeyVault extends GunStorage<StoredWalletData> {
       console.error("Error deleting wallet:", error);
       throw error;
     }
+  }
+
+  protected async savePrivateDataWithRetry(
+    data: any,
+    path: string,
+    maxRetries: number = 5,
+    forceNewObject: boolean = false
+  ): Promise<void> {
+    await this.ensureAuthenticated();
+
+    const dataToSave = forceNewObject ? JSON.parse(JSON.stringify(data)) : data;
+    let attempts = 0;
+    let lastError: Error | null = null;
+
+    const verifyData = async (): Promise<boolean> => {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                const node = this.getPrivateNode(path);
+                let resolved = false;
+
+                const handler = (savedData: any) => {
+                    if (!resolved) {
+                        resolved = true;
+                        node.off();
+
+                        if (!savedData) {
+                            resolve(false);
+                            return;
+                        }
+
+                        const cleanedSaved = this.cleanGunMetadata(savedData);
+                        const isEquivalent = this.areObjectsEquivalent(cleanedSaved, dataToSave);
+                        resolve(isEquivalent);
+                    }
+                };
+
+                node.once(handler);
+
+                // Timeout di sicurezza
+                setTimeout(() => {
+                    if (!resolved) {
+                        resolved = true;
+                        node.off();
+                        resolve(false);
+                    }
+                }, 5000);
+            }, 2000);
+        });
+    };
+
+    while (attempts < maxRetries) {
+        try {
+            // Salviamo i dati
+            await new Promise<void>((resolve, reject) => {
+                const node = this.getPrivateNode(path);
+                let resolved = false;
+
+                const saveHandler = (ack: any) => {
+                    if (!resolved) {
+                        resolved = true;
+                        if (ack.err) {
+                            reject(new Error(ack.err));
+                        } else {
+                            resolve();
+                        }
+                    }
+                };
+
+                node.put(dataToSave, saveHandler);
+
+                // Timeout di sicurezza
+                setTimeout(() => {
+                    if (!resolved) {
+                        resolved = true;
+                        reject(new Error("Save operation timed out"));
+                    }
+                }, 10000);
+            });
+
+            // Attendiamo per la propagazione
+            await new Promise(resolve => setTimeout(resolve, Math.max(3000, 2000 * attempts)));
+
+            // Verifichiamo il salvataggio
+            if (await verifyData()) {
+                return;
+            }
+
+            attempts++;
+            if (attempts < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, Math.max(3000, 2000 * attempts)));
+            }
+        } catch (error) {
+            console.error(`Tentativo ${attempts + 1} fallito:`, error);
+            lastError = error as Error;
+            attempts++;
+            if (attempts < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, Math.max(3000, 2000 * attempts)));
+            }
+        }
+    }
+
+    throw new Error(`Impossibile salvare i dati dopo ${maxRetries} tentativi${lastError ? `: ${lastError.message}` : ''}`);
   }
 }

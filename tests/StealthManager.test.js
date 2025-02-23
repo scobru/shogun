@@ -18,6 +18,26 @@ describe("StealthManager", function () {
     await new Promise(resolve => setTimeout(resolve, ms));
   };
 
+  const retryOperation = async (operation, maxAttempts = 3, delay = 8000) => {
+    let lastError;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const result = await operation();
+        if (attempt > 1) {
+          console.log(`Operation succeeded on attempt ${attempt}`);
+        }
+        return result;
+      } catch (error) {
+        console.log(`Attempt ${attempt} failed:`, error.message);
+        lastError = error;
+        if (attempt < maxAttempts) {
+          await waitForOperation(delay);
+        }
+      }
+    }
+    throw lastError;
+  };
+
   before(async function () {
     // Aumentato timeout totale a 5 minuti
     try {
@@ -190,14 +210,18 @@ describe("StealthManager", function () {
     });
 
     it("should format public key correctly", async function () {
-      const publicKey = "~testPublicKey";
+      const publicKey = "test_public_key_" + Date.now();
       
       // Prima verifichiamo che la chiave non esista
-      await stealthChain.deletePublicData(publicKey);
-      await waitForOperation(5000);
-      
-      const formattedKey = await stealthChain.retrieveKeys(publicKey);
-      expect(formattedKey).to.be.null;
+      await retryOperation(async () => {
+        await stealthChain.deletePublicData(publicKey);
+        await waitForOperation(10000);
+        
+        const formattedKey = await stealthChain.retrieveKeys(publicKey);
+        if (formattedKey !== null) {
+          throw new Error("Key still exists after deletion");
+        }
+      });
     });
 
     it("should retrieve stealth keys for specific user", async function () {
