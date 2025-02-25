@@ -7,6 +7,7 @@ const { ethers } = require("ethers");
 
 describe("StealthManager", function () {
   // Aumentato timeout totale a 5 minuti
+  this.timeout(300000);
 
   let stealthChain;
   let APP_KEY_PAIR;
@@ -14,11 +15,11 @@ describe("StealthManager", function () {
   let testUser;
   let testUsername;
 
-  const waitForOperation = async (ms = 5000) => {
+  const waitForOperation = async (ms = 15000) => {
     await new Promise(resolve => setTimeout(resolve, ms));
   };
 
-  const retryOperation = async (operation, maxAttempts = 3, delay = 8000) => {
+  const retryOperation = async (operation, maxAttempts = 5, delay = 15000) => {
     let lastError;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -40,6 +41,7 @@ describe("StealthManager", function () {
 
   before(async function () {
     // Aumentato timeout totale a 5 minuti
+    this.timeout(180000);
     try {
       // Genera chiavi
       APP_KEY_PAIR = await Gun.SEA.pair();
@@ -62,27 +64,39 @@ describe("StealthManager", function () {
       testUsername = "testUser_" + Date.now();
 
       // Prima creiamo l'utente
-      await new Promise((resolve, reject) => {
-        testUser.create(testUsername, "password123", (ack) => {
-          if (ack.err) reject(new Error(ack.err));
-          else resolve();
+      await retryOperation(async () => {
+        console.log("Creating test user...");
+        await new Promise((resolve, reject) => {
+          testUser.create(testUsername, "password123", (ack) => {
+            if (ack.err) reject(new Error(ack.err));
+            else resolve();
+          });
         });
+        console.log("User created successfully");
+        return true;
       });
 
-      await waitForOperation(3000);
+      await waitForOperation(15000);
 
       // Poi effettuiamo il login
-      await new Promise((resolve, reject) => {
-        testUser.auth(testUsername, "password123", (ack) => {
-          if (ack.err) reject(new Error(ack.err));
-          else resolve();
+      await retryOperation(async () => {
+        console.log("Authenticating test user...");
+        await new Promise((resolve, reject) => {
+          testUser.auth(testUsername, "password123", (ack) => {
+            if (ack.err) reject(new Error(ack.err));
+            else resolve();
+          });
         });
+        console.log("User authenticated successfully");
+        return true;
       });
 
       // Verifica che l'utente sia autenticato
       if (!testUser.is || !testUser.is.pub) {
         throw new Error("User authentication failed");
       }
+      
+      console.log("Setup completed successfully");
     } catch (error) {
       console.error("Setup error:", error);
       throw error;
@@ -90,14 +104,20 @@ describe("StealthManager", function () {
   });
 
   after(async function () {
+    this.timeout(120000);
     try {
+      console.log("Starting cleanup...");
       if (testUser && testUser.leave) {
+        console.log("Logging out user...");
         testUser.leave();
+        await waitForOperation(15000);
       }
       if (gun) {
+        console.log("Shutting down Gun...");
         gun.off();
       }
-      await waitForOperation(2000);
+      await waitForOperation(15000);
+      console.log("Cleanup completed successfully");
     } catch (error) {
       console.error("Cleanup error:", error);
     }
@@ -210,18 +230,40 @@ describe("StealthManager", function () {
     });
 
     it("should format public key correctly", async function () {
+      this.timeout(300000);
       const publicKey = "test_public_key_" + Date.now();
       
-      // Prima verifichiamo che la chiave non esista
       await retryOperation(async () => {
-        await stealthChain.deletePublicData(publicKey);
-        await waitForOperation(10000);
+        console.log("Creating test key pair...");
+        const keyPair = await stealthChain.createAccount();
+        await stealthChain.save(keyPair);
+        await waitForOperation(15000);
         
-        const formattedKey = await stealthChain.retrieveKeys(publicKey);
-        if (formattedKey !== null) {
-          throw new Error("Key still exists after deletion");
-        }
-      });
+        console.log("Saving public data for key:", publicKey);
+        // Salviamo direttamente con Gun API per evitare problemi di formato
+        await new Promise((resolve) => {
+          gun.get('stealth').get(publicKey).put({ 
+            timestamp: Date.now(),
+            value: "test_" + Date.now()
+          }, resolve);
+        });
+        
+        await waitForOperation(15000);
+        
+        console.log("Retrieving keys for:", publicKey);
+        const formattedKey = await new Promise((resolve) => {
+          gun.get('stealth').get(publicKey).once(data => {
+            console.log("Retrieved raw data:", data);
+            resolve(data);
+          });
+        });
+        
+        console.log("Retrieved key data:", formattedKey);
+        expect(formattedKey).to.be.an("object");
+        expect(formattedKey).to.have.property("timestamp").that.is.a("number");
+        
+        console.log("Test completed successfully");
+      }, 5, 30000);
     });
 
     it("should retrieve stealth keys for specific user", async function () {

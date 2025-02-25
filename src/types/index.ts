@@ -15,3 +15,5 @@ export type {
 export type { GunAck } from "./Gun";
 export type { Callback } from "./Callback";
 export type { ActivityPubKeys } from "./ActivityPubTypes";
+export type { ISEAPair, ISEA } from "./sea";
+export type { IGunChain, IGunInstance, IGunUserInstance } from "gun";

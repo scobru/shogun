@@ -1,8 +1,12 @@
-import { IGunChain, IGunInstance, IGunUserInstance, ISEAPair } from "gun";
+import SEA from "../../sea/sea";
+import { IGunUserInstance, ISEAPair, ISEA } from "gun";
+import { IGunChain } from "gun";
+import { IGunInstance } from "gun";
 
 export abstract class GunStorage<T> {
   protected gun: IGunInstance;
   protected user: IGunUserInstance;
+  protected SEA: typeof SEA;
   protected storagePrefix: string;
   protected appPrefix: string;
   protected APP_KEY_PAIR: ISEAPair;
@@ -14,6 +18,7 @@ export abstract class GunStorage<T> {
   constructor(gun: IGunInstance, APP_KEY_PAIR: ISEAPair) {
     this.gun = gun;
     this.user = this.gun.user();
+    this.SEA = SEA;
     this.APP_KEY_PAIR = APP_KEY_PAIR;
     this.appPrefix = this.APP_KEY_PAIR.pub;
   }
@@ -478,7 +483,7 @@ export abstract class GunStorage<T> {
       try {
         // Prima puliamo i dati esistenti
         await clearExistingData();
-        
+
         // Poi salviamo i nuovi dati
         await new Promise<void>((resolve, reject) => {
           const node = this.getPrivateNode(path);
@@ -505,14 +510,14 @@ export abstract class GunStorage<T> {
             }
           }, 10000);
         });
-        
+
         // Attendiamo un tempo più lungo per la propagazione
         await new Promise(resolve => setTimeout(resolve, Math.max(5000, 3000 * (attempts + 1))));
-        
+
         // Verifichiamo più volte per essere sicuri
         let verificationAttempts = 0;
         const maxVerificationAttempts = 3;
-        
+
         while (verificationAttempts < maxVerificationAttempts) {
           if (await verifyData()) {
             return;

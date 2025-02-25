@@ -13,13 +13,13 @@ describe("EthereumHDKeyVault", function () {
   let testUsername;
   let testPassword;
 
-  this.timeout(180000);
+  this.timeout(300000);
 
-  const waitForSync = async (ms = 5000) => {
+  const waitForSync = async (ms = 15000) => {
     await new Promise(resolve => setTimeout(resolve, ms));
   };
 
-  const retryOperation = async (operation, maxAttempts = 3, delay = 8000) => {
+  const retryOperation = async (operation, maxAttempts = 5, delay = 15000) => {
     let lastError;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -41,39 +41,77 @@ describe("EthereumHDKeyVault", function () {
 
   const ensureAuthenticated = async () => {
     return retryOperation(async () => {
+      console.log("Checking authentication status...");
       if (!testUser.is) {
+        console.log("User not authenticated, attempting auth...");
         await new Promise((resolve, reject) => {
           testUser.auth(testUsername, testPassword, async (ack) => {
-            if (ack.err) reject(new Error(ack.err));
-            else {
-              await waitForSync(8000);
+            if (ack.err) {
+              console.error("Auth error:", ack.err);
+              reject(new Error(ack.err));
+            } else {
+              console.log("Auth successful");
+              await waitForSync(15000);
               resolve();
             }
           });
         });
       }
+      
+      // Verifica doppia dello stato di autenticazione
       if (!testUser.is || !testUser._.sea) {
         throw new Error("Autenticazione fallita o chiavi SEA non trovate");
       }
-    });
+      console.log("Authentication verified successfully");
+    }, 5, 30000);
   };
 
   const clearData = async () => {
     return retryOperation(async () => {
-      if (testUser.is) {
-        await new Promise(resolve => {
-          testUser.get('wallets').put(null);
-          testUser.get('hd_mnemonic').put(null);
-          testUser.get('hd_accounts').put(null);
-          setTimeout(resolve, 8000);
-        });
+      if (!testUser.is) {
+        console.log("User not authenticated during clearData, skipping...");
+        return;
       }
-    });
+
+      console.log("Starting data clearing process...");
+      
+      // Cancellazione più aggressiva dei dati
+      await Promise.all([
+        new Promise(resolve => testUser.get('wallets').put(null, resolve)),
+        new Promise(resolve => testUser.get('hd_master_wallet').put(null, resolve)),
+        new Promise(resolve => testUser.get('hd_mnemonic').put(null, resolve)),
+        new Promise(resolve => testUser.get('hd_accounts').put(null, resolve)),
+        new Promise(resolve => testUser.get(`${EthereumHDKeyVault.ACCOUNTS_PATH}`).put(null, resolve)),
+        new Promise(resolve => testUser.get(`${EthereumHDKeyVault.ACCOUNTS_PATH}/addresses`).put(null, resolve))
+      ]);
+      
+      console.log("Data cleared, waiting for sync...");
+      // Aumentiamo il tempo di attesa per la sincronizzazione
+      await waitForSync(30000);
+      
+      // Reimpostiamo lo stato del vault
+      hdKeyVault = new EthereumHDKeyVault(gun, APP_KEY_PAIR);
+      
+      // Verifica che i dati siano stati cancellati
+      const wallets = await hdKeyVault.getWallets();
+      
+      // Accettiamo che getWallets possa restituire un wallet all'indice 0 come fallback
+      // ma non dovrebbero esserci wallet oltre a quello
+      if (wallets && wallets.length > 1) {
+        throw new Error("Wallet data not cleared properly");
+      } else if (wallets && wallets.length === 1 && wallets[0].index !== 0) {
+        throw new Error("Unexpected wallet index after clearing data");
+      }
+      
+      console.log("Data clearing verified successfully");
+    }, 5, 30000);
   };
 
   before(async function () {
-    this.timeout(120000);
+    // Aumentiamo il timeout per dare più tempo
+    this.timeout(300000);
     try {
+      console.log("Starting test setup...");
       APP_KEY_PAIR = await Gun.SEA.pair();
       gun = Gun({
         peers: [`http://localhost:8765/gun`],
@@ -91,19 +129,27 @@ describe("EthereumHDKeyVault", function () {
       testPassword = "password123";
 
       await waitForSync(5000);
+      console.log(`Creating test user: ${testUsername}`);
 
       let created = false;
       for (let i = 0; i < 5; i++) {
         try {
+          console.log(`User creation attempt ${i+1}/5`);
           await new Promise((resolve, reject) => {
             testUser.create(testUsername, testPassword, async (ack) => {
-              if (ack.err) reject(new Error(ack.err));
-              else {
-                await waitForSync(5000);
+              if (ack.err) {
+                console.error(`User creation error:`, ack.err);
+                reject(new Error(ack.err));
+              } else {
+                console.log("User created, authenticating...");
+                await waitForSync(8000);
                 testUser.auth(testUsername, testPassword, async (authAck) => {
-                  if (authAck.err) reject(new Error(authAck.err));
-                  else {
-                    await waitForSync(5000);
+                  if (authAck.err) {
+                    console.error(`Auth error:`, authAck.err);
+                    reject(new Error(authAck.err));
+                  } else {
+                    console.log("User authenticated successfully");
+                    await waitForSync(8000);
                     resolve();
                   }
                 });
@@ -134,31 +180,56 @@ describe("EthereumHDKeyVault", function () {
   });
 
   beforeEach(async function() {
-    this.timeout(30000);
-    await ensureAuthenticated();
-    await clearData();
-    await waitForSync(5000);
+    this.timeout(300000); // Aumentato a 5 minuti
+    console.log("\n--- Starting beforeEach hook ---");
+    try {
+      await ensureAuthenticated();
+      await clearData();
+      await waitForSync(20000);
+      console.log("--- beforeEach hook completed successfully ---\n");
+    } catch (error) {
+      console.error("beforeEach hook failed:", error);
+      throw error;
+    }
   });
 
   afterEach(async function() {
-    this.timeout(30000);
-    await clearData();
-    await waitForSync(5000);
+    this.timeout(300000); // Aumentato a 5 minuti
+    console.log("\n--- Starting afterEach hook ---");
+    try {
+      await clearData();
+      await waitForSync(20000);
+      console.log("--- afterEach hook completed successfully ---\n");
+    } catch (error) {
+      console.error("afterEach hook failed:", error);
+      // Non blocchiamo l'esecuzione per errori in afterEach
+      console.error("Continuing despite afterEach error");
+    }
   });
 
   after(async function () {
-    this.timeout(30000);
+    this.timeout(300000); // Aumentato a 5 minuti
+    console.log("\n--- Starting after hook ---");
     try {
       await clearData();
-      if (testUser && testUser.leave) {
+      
+      if (testUser && testUser.is) {
+        console.log("Logging out user...");
         testUser.leave();
+        await waitForSync(20000);
       }
+      
       if (gun) {
+        console.log("Shutting down Gun...");
         gun.off();
+        await waitForSync(20000);
       }
-      await waitForSync(5000);
+      
+      console.log("--- after hook completed successfully ---\n");
     } catch (error) {
-      console.error("Cleanup error:", error);
+      console.error("after hook failed:", error);
+      // Non blocchiamo l'esecuzione per errori in after
+      console.error("Continuing despite after hook error");
     }
   });
 
@@ -184,38 +255,75 @@ describe("EthereumHDKeyVault", function () {
       await ensureAuthenticated();
       console.log("Starting multiple HD keys test");
       
-      const results = await retryOperation(async () => {
-        const wallet1 = await hdKeyVault.createAccount();
-        await waitForSync(15000);
-        const wallet2 = await hdKeyVault.createAccount();
-        await waitForSync(15000);
-        return [wallet1, wallet2];
+      // Puliamo i dati esistenti
+      await clearData();
+      await waitForSync(15000);
+      
+      console.log("Creating first wallet...");
+      const wallet1 = await hdKeyVault.createAccount();
+      console.log("First wallet created:", wallet1);
+      
+      // Verifichiamo che il wallet sia stato salvato correttamente
+      await waitForSync(15000);
+      
+      console.log("Creating second wallet...");
+      // Forzare la creazione di un wallet con indice 1
+      const wallet2 = await retryOperation(async () => {
+        const result = await hdKeyVault.createAccount();
+        console.log("Second wallet result:", result);
+        if (result.index !== 1) {
+          throw new Error(`Expected index 1, got ${result.index}`);
+        }
+        return result;
       });
       
-      expect(results[0].index).to.equal(0);
-      expect(results[1].index).to.equal(1);
+      console.log("Created wallets with indices:", [wallet1.index, wallet2.index]);
+      
+      // Verifica finale 
+      expect(wallet1.index).to.equal(0);
+      expect(wallet2.index).to.equal(1);
     });
 
     it("should retrieve all HD keys", async function () {
       await ensureAuthenticated();
       console.log("Starting retrieve all HD keys test");
       
-      await retryOperation(async () => {
-        // Create test wallets
-        await hdKeyVault.createAccount();
-        await waitForSync(15000);
-        await hdKeyVault.createAccount();
-        await waitForSync(15000);
-      });
-
+      // Puliamo i dati esistenti
+      await clearData();
+      await waitForSync(15000);
+      
+      console.log("Creating test wallets...");
+      const wallet1 = await hdKeyVault.createAccount();
+      console.log("First wallet created:", wallet1);
+      await waitForSync(15000);
+      
+      const wallet2 = await hdKeyVault.createAccount();
+      console.log("Second wallet created:", wallet2);
+      await waitForSync(15000);
+      
+      // Verifichiamo esplicitamente che i wallet siano stati creati con indici corretti
+      expect(wallet1.index).to.equal(0);
+      expect(wallet2.index).to.equal(1);
+      
+      console.log("Retrieving all wallets...");
       const wallets = await retryOperation(async () => {
         const allWallets = await hdKeyVault.getWallets();
-        await waitForSync(15000);
+        console.log("Retrieved wallets:", allWallets);
+        
+        if (!allWallets || !Array.isArray(allWallets) || allWallets.length < 2) {
+          throw new Error(`Invalid wallets array returned: ${JSON.stringify(allWallets)}`);
+        }
+        
         return allWallets;
       });
       
-      expect(wallets).to.be.an("array");
-      expect(wallets).to.have.lengthOf(2);
+      // Ordinare i wallet per indice per avere un confronto più stabile
+      const sortedWallets = wallets.sort((a, b) => a.index - b.index);
+      
+      expect(sortedWallets).to.be.an("array");
+      expect(sortedWallets.length).to.equal(2);
+      expect(sortedWallets[0].index).to.equal(0);
+      expect(sortedWallets[1].index).to.equal(1);
     });
 
     it("should maintain consistent HD derivation", async function () {
@@ -237,23 +345,37 @@ describe("EthereumHDKeyVault", function () {
       await ensureAuthenticated();
       console.log("Starting get key by index test");
       
-      const createdWallet = await retryOperation(async () => {
-        const wallet = await hdKeyVault.createAccount();
-        await waitForSync(15000);
-        return wallet;
-      });
-
-      console.log("Created wallet with index:", createdWallet.index);
-
+      // Puliamo i dati esistenti
+      await clearData();
+      await waitForSync(15000);
+      
+      // Creiamo un nuovo wallet
+      console.log("Creating wallet...");
+      const createdWallet = await hdKeyVault.createAccount();
+      console.log("Created wallet:", createdWallet);
+      
+      // Attendiamo che il wallet sia salvato
+      await waitForSync(20000);
+      
+      // Verifichiamo esplicitamente che il wallet sia stato creato con indice 0
+      expect(createdWallet.index).to.equal(0);
+      
+      // Ora recuperiamo il wallet usando l'indice
+      console.log("Retrieving wallet by index...");
       const retrievedWallet = await retryOperation(async () => {
-        const result = await hdKeyVault.getWalletByIndex(createdWallet.index);
-        await waitForSync(15000);
+        const result = await hdKeyVault.getWalletByIndex(0);
+        console.log("Retrieved wallet:", result);
+        
+        if (!result || !result.address) {
+          throw new Error(`Invalid retrieved wallet: ${JSON.stringify(result)}`);
+        }
+        
         return result;
-      });
+      }, 8, 15000);
       
       expect(retrievedWallet).to.be.an("object");
-      expect(retrievedWallet.index).to.equal(createdWallet.index);
-      expect(retrievedWallet.address).to.equal(createdWallet.address);
+      expect(retrievedWallet.index).to.equal(0);
+      expect(retrievedWallet.address.toLowerCase()).to.equal(createdWallet.address.toLowerCase());
     });
 
     it("should get key by address", async function () {

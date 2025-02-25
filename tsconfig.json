@@ -14,7 +14,8 @@
     "strict": false,
     "allowSyntheticDefaultImports": true,
     "stripInternal": true,
-    "strictNullChecks": true
+    "strictNullChecks": true,
+    "allowJs": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "tests"]
